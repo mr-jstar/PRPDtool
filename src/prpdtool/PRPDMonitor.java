@@ -43,13 +43,13 @@ public class PRPDMonitor extends JFrame {
     // Data
     private List<Sample> tu;
     private double[][] pulses;
-    private DynamicPRPDImageV1 prpd;
+    private DynamicPRPDImage prpd;
 
     public PRPDMonitor() {
         super("PRPDtool");
 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1600, 1280);
+        setSize(1600, 1024);
         setLocationRelativeTo(null);
 
         createMenuBar();
@@ -100,7 +100,7 @@ public class PRPDMonitor extends JFrame {
                 super.paintComponent(g);
 
                 if (prpd != null) {
-                    g.drawImage(prpd, 0, 0, this);
+                    g.drawImage(prpd.getImage(), 0, 0, this);
                 }
             }
         };
@@ -227,7 +227,7 @@ public class PRPDMonitor extends JFrame {
                             tu = null;
                         }
                         System.err.println("Have " + pulses.length + " pulses");
-                        prpd = new DynamicPRPDImageV1(pulses, center.getWidth(), center.getHeight());
+                        prpd = new DynamicPRPDImage(pulses, center.getWidth(), center.getHeight());
                         center.repaint();
                         System.err.println("PRPD " + prpd.getWidth() + "x" + prpd.getHeight() + " created.");
                         return null;

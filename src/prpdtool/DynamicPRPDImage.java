@@ -6,38 +6,29 @@ package prpdtool;
  */
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.util.List;
 import java.util.Locale;
 
-public class DynamicPRPDImageV1 {
+public class DynamicPRPDImage {
 
-    private final int width;
-    private final int height;
-    private final double f0;
-
+    private final int width, height;
     private final int marginLeft = 70;
     private final int marginRight = 20;
     private final int marginTop = 30;
     private final int marginBottom = 55;
 
-    private final int plotW;
-    private final int plotH;
+    private final int plotW, plotH;
+    private final int phaseBins, ampBins;
 
-    private final int phaseBins;
-    private final int ampBins;
+    private final double uMin, uMax;
 
     private final int[][] hist;
     private int maxCount = 0;
 
-    private final double uMin;
-    private final double uMax;
+    private final BufferedImage image;
 
-    private BufferedImage image;
-
-    public DynamicPRPDImageV1(List<Sample> samples, int width, int height, double f0) {
+    public DynamicPRPDImage(double[][] pulses, int width, int height) {
         this.width = width;
         this.height = height;
-        this.f0 = f0;
 
         this.plotW = width - marginLeft - marginRight;
         this.plotH = height - marginTop - marginBottom;
@@ -49,12 +40,13 @@ public class DynamicPRPDImageV1 {
         double min = Double.POSITIVE_INFINITY;
         double max = Double.NEGATIVE_INFINITY;
 
-        for (Sample s : samples) {
-            min = Math.min(min, s.s[1]);
-            max = Math.max(max, s.s[1]);
+        for (double[] p : pulses) {
+            double a = p[2];              // albo Math.abs(p[2]), jeśli chcesz PRPD modułowe
+            min = Math.min(min, a);
+            max = Math.max(max, a);
         }
 
-        if (min == Double.POSITIVE_INFINITY || max == Double.NEGATIVE_INFINITY) {
+        if (!Double.isFinite(min) || !Double.isFinite(max)) {
             min = -1.0;
             max = 1.0;
         }
@@ -73,53 +65,35 @@ public class DynamicPRPDImageV1 {
         this.hist = new int[phaseBins][ampBins];
         this.image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
 
-        drawStaticLayout();
-        addSamples(samples);
-    }
-
-    public BufferedImage getImage(int width, int height) {
-        if (image == null || image.getWidth() != width || image.getHeight() != height) {
-            this.image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-        }
-        return image;
+        drawBase();
+        addSamples(pulses);
     }
 
     public BufferedImage getImage() {
         return image;
     }
 
-    public void addSamples(List<Sample> samples) {
-        boolean changed = false;
+    public int getWidth() {
+        return image.getWidth();
+    }
 
-        for (Sample s : samples) {
-            int x = phaseBin(s.s[0]);
-            int y = ampBin(s.s[1]);
-
-            if (x < 0 || x >= phaseBins || y < 0 || y >= ampBins) {
-                continue;
-            }
-
-            hist[x][y]++;
-
-            if (hist[x][y] > maxCount) {
-                maxCount = hist[x][y];
-            }
-
-            changed = true;
-        }
-
-        if (changed) {
-            redrawHistogramArea();
-            drawAxesAndLabels();
-        }
+    public int getHeight() {
+        return image.getHeight();
     }
     
-    public void addSamples(int [][] samples) {
-        boolean changed = false;
+    public void addSamples(double[][] pulses) {
+        boolean maxChanged = false;
 
-        for (int i= 0; i < samples.length; i++) {
-            int x = samples[i][0];
-            int y = samples[i][0];
+        for (double[] p : pulses) {
+            if (p == null || p.length < 3) {
+                continue;
+            }
+
+            double phase = p[1];
+            double amp = p[2];            // albo Math.abs(p[2])
+
+            int x = phaseBin(phase);
+            int y = ampBin(amp);
 
             if (x < 0 || x >= phaseBins || y < 0 || y >= ampBins) {
                 continue;
@@ -129,40 +103,22 @@ public class DynamicPRPDImageV1 {
 
             if (hist[x][y] > maxCount) {
                 maxCount = hist[x][y];
+                maxChanged = true;
             }
-
-            changed = true;
         }
 
-        if (changed) {
-            redrawHistogramArea();
-            drawAxesAndLabels();
-        }
-    }
-
-    public void addSample(double t, double u) {
-        int x = phaseBin(t);
-        int y = ampBin(u);
-
-        if (x < 0 || x >= phaseBins || y < 0 || y >= ampBins) {
-            return;
-        }
-
-        hist[x][y]++;
-
-        if (hist[x][y] > maxCount) {
-            maxCount = hist[x][y];
-            redrawHistogramArea();
+        if (maxChanged) {
+            redrawHistogram();
         } else {
-            drawSingleBin(x, y);
+            redrawHistogram(); // prościej; można optymalizować do zmienionych binów
         }
 
         drawAxesAndLabels();
     }
 
-    private int phaseBin(double t) {
-        double phase = (360.0 * f0 * t) % 360.0;
-        if (phase < 0.0) {
+    private int phaseBin(double phase) {
+        phase %= 360.0;
+        if (phase < 0) {
             phase += 360.0;
         }
 
@@ -178,8 +134,8 @@ public class DynamicPRPDImageV1 {
         return x;
     }
 
-    private int ampBin(double u) {
-        int y = (int) Math.floor((u - uMin) / (uMax - uMin) * ampBins);
+    private int ampBin(double amp) {
+        int y = (int) Math.floor((amp - uMin) / (uMax - uMin) * ampBins);
 
         if (y < 0) {
             y = 0;
@@ -191,57 +147,44 @@ public class DynamicPRPDImageV1 {
         return y;
     }
 
-    private void drawStaticLayout() {
+    private void drawBase() {
         Graphics2D g = image.createGraphics();
 
         g.setColor(Color.WHITE);
         g.fillRect(0, 0, width, height);
 
-        g.setRenderingHint(
-                RenderingHints.KEY_ANTIALIASING,
-                RenderingHints.VALUE_ANTIALIAS_ON
-        );
-
         g.setColor(Color.BLACK);
         g.fillRect(marginLeft, marginTop, plotW, plotH);
 
         g.dispose();
-
-        drawAxesAndLabels();
     }
 
-    private void redrawHistogramArea() {
+    private void redrawHistogram() {
         for (int x = 0; x < phaseBins; x++) {
             for (int y = 0; y < ampBins; y++) {
-                drawSingleBin(x, y);
+                int c = hist[x][y];
+
+                int px = marginLeft + x;
+                int py = marginTop + plotH - 1 - y;
+
+                if (c == 0 || maxCount <= 0) {
+                    image.setRGB(px, py, Color.BLACK.getRGB());
+                    continue;
+                }
+
+                double v = Math.log1p(c) / Math.log1p(maxCount);
+                image.setRGB(px, py, heatColor(v).getRGB());
             }
         }
-    }
-
-    private void drawSingleBin(int x, int y) {
-        int c = hist[x][y];
-
-        int px = marginLeft + x;
-        int py = marginTop + plotH - 1 - y;
-
-        if (c == 0 || maxCount <= 0) {
-            image.setRGB(px, py, Color.BLACK.getRGB());
-            return;
-        }
-
-        double v = Math.log1p(c) / Math.log1p(maxCount);
-        image.setRGB(px, py, heatColor(v).getRGB());
     }
 
     private void drawAxesAndLabels() {
         Graphics2D g = image.createGraphics();
 
-        g.setRenderingHint(
-                RenderingHints.KEY_ANTIALIASING,
-                RenderingHints.VALUE_ANTIALIAS_ON
-        );
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                RenderingHints.VALUE_ANTIALIAS_ON);
 
-        // wyczyść marginesy, ale nie ruszaj pola histogramu
+        // czyścimy tylko marginesy
         g.setColor(Color.WHITE);
         g.fillRect(0, 0, width, marginTop);
         g.fillRect(0, marginTop + plotH, width, height - marginTop - plotH);
