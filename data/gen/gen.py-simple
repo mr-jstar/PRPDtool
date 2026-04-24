@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+import argparse
+import csv
+import numpy as np
+
+
+def add_pulse(u, idx, amp, fs, pulse_us=20.0, tau_us=3.0):
+    L = max(1, int(pulse_us * 1e-6 * fs))
+    tau = max(1.0, tau_us * 1e-6 * fs)
+    shape = np.exp(-np.arange(L) / tau)
+
+    end = min(len(u), idx + L)
+    u[idx:end] += amp * shape[:end - idx]
+
+
+def generate(filename, duration, fs, f0, seed):
+    rng = np.random.default_rng(seed)
+
+    n = int(duration * fs)
+    t = np.arange(n) / fs
+
+    # napięcie bazowe / zakłócenie wolnozmienne
+    u = 0.03 * np.sin(2 * np.pi * f0 * t)
+    u += rng.normal(0, 0.002, n)
+
+    cycles = int(duration * f0)
+
+    for c in range(cycles):
+        T = 1.0 / f0
+
+        # lewa chmura
+        for _ in range(rng.poisson(30)):
+            ph = rng.normal(45, 18) % 360
+            ti = c * T + ph / 360 * T
+            if ti >= duration:
+                continue
+            amp = rng.normal(0.035, 0.015)
+            amp *= 1 if rng.random() < 0.75 else -1
+            add_pulse(u, int(ti * fs), amp, fs)
+
+        # prawa, mocniejsza chmura
+        for _ in range(rng.poisson(70)):
+            ph = rng.normal(205, 8) % 360
+            ti = c * T + ph / 360 * T
+            if ti >= duration:
+                continue
+            amp = rng.normal(0.060, 0.020)
+            amp *= -1 if rng.random() < 0.65 else 1
+            add_pulse(u, int(ti * fs), amp, fs)
+
+        # niski „dywan”
+        for _ in range(rng.poisson(80)):
+            ph = rng.uniform(0, 360)
+            ti = c * T + ph / 360 * T
+            if ti >= duration:
+                continue
+            amp = rng.normal(0.008, 0.003)
+            amp *= 1 if rng.random() < 0.5 else -1
+            add_pulse(u, int(ti * fs), amp, fs, pulse_us=10, tau_us=2)
+
+    with open(filename, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["t", "u"])
+        for ti, ui in zip(t, u):
+            w.writerow([f"{ti:.9f}", f"{ui:.9f}"])
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("-o", "--output", default="pd_stream.csv")
+    p.add_argument("-d", "--duration", type=float, default=5.0)
+    p.add_argument("--fs", type=float, default=1_000_000)
+    p.add_argument("--f0", type=float, default=50.0)
+    p.add_argument("--seed", type=int, default=123)
+    args = p.parse_args()
+
+    generate(args.output, args.duration, args.fs, args.f0, args.seed)
+
+
+if __name__ == "__main__":
+    main()

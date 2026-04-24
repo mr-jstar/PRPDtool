@@ -1,0 +1,50 @@
+python gen.py -o pd_stream.csv --duration 10 --fs 1000000
+python extract.py pd_stream.csv -o pulses.csv --threshold 0.012
+python prpd.py pulses.csv -o prpd.png
+
+
+xgen.py:
+
+usage: xgen.py [-h] [-o OUTPUT]
+               [--defect {corona_negative,corona_positive,floating,noise,surface,void}]
+               [-d DURATION] [--fs FS] [--f0 F0] [--seed SEED] [--noise NOISE]
+               [--baseline-amp BASELINE_AMP] [--pulse-us PULSE_US]
+               [--tau-us TAU_US] [--background-rate BACKGROUND_RATE]
+               [--background-amp BACKGROUND_AMP]
+
+Generator syntetycznego strumienia WNZ: t,u
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -o OUTPUT, --output OUTPUT
+  --defect {corona_negative,corona_positive,floating,noise,surface,void}    - rodzaj defektu
+  -d DURATION, --duration DURATION                                          - czas "rejestracji"
+  --fs FS                                                                   - f próbkowania
+  --f0 F0                                                                   - f zasilania
+  --seed SEED                                                               - inicjalizacja generatora pseudolosowego
+  --noise NOISE                                                             - poziom szumu 
+  --baseline-amp BASELINE_AMP                                               - amplituda napięcia f0
+  --pulse-us PULSE_US                                                       - szerokość impulsów 5-20 (10-30)
+  --tau-us TAU_US                                                           - stała czasowa zaniku impulsu (2-5)
+  --background-rate BACKGROUND_RATE                                         - liczba losowych impulsów tła / cykl (20-60-100+)
+  --background-amp BACKGROUND_AMP                                           - amplituda tła 0.004-0.01
+
+Domyślnie:
+--noise 0.003
+--baseline-amp 0.03
+--background-rate 80
+--background-amp 0.006
+--pulse-us 20
+--tau-us 3
+
+Czysto:
+--noise 0.001
+--baseline-amp 0.0
+--background-rate 10
+--background-amp 0.00
+
+Trudne:
+--noise 0.001
+--baseline-amp 0.0
+--background-rate 10
+--background-amp 0.00

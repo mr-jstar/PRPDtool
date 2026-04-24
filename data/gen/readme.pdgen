@@ -1,0 +1,45 @@
+Symulator strumienia z rejestratora WNZ:
+
+usage: pdgen.py [-h] [-o OUTPUT] [--pulses-output PULSES_OUTPUT] [-d DURATION] [--fs FS] [--f0 F0] [--noise NOISE]
+                [--sine-amp SINE_AMP] [--defect {corona_negative,corona_positive,noise,surface,void}] [--seed SEED]
+                [--chunk-size CHUNK_SIZE] [--pulse-us PULSE_US] [--decay-us DECAY_US] [--prpd-image PRPD_IMAGE]
+                [--prpd-max-rows PRPD_MAX_ROWS]
+
+Synthetic PD / PRPD stream generator
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -o OUTPUT, --output OUTPUT
+  --pulses-output PULSES_OUTPUT
+  -d DURATION, --duration DURATION
+  --fs FS
+  --f0 F0
+  --noise NOISE
+  --sine-amp SINE_AMP
+  --defect {corona_negative,corona_positive,noise,surface,void}
+  --seed SEED
+  --chunk-size CHUNK_SIZE
+  --pulse-us PULSE_US
+  --decay-us DECAY_US
+  --prpd-image PRPD_IMAGE
+  --prpd-max-rows PRPD_MAX_ROWS
+
+
+python pdgen.py -o void.csv --defect void --duration 5 --fs 1000000
+
+python pdgen.py -o surface.csv --defect surface --duration 10 --fs 500000 --prpd-image surface.png
+
+python pdgen.py -o corona.csv --defect corona_positive --pulses-output pulses.csv --prpd-image prpd.png
+
+Typy defektów:
+ - void   = brak
+ - surface  = ślizgowe
+ - corona_positive  = ulot +
+ - corona_negative  = ulot -
+ - noise  = szu,
+
+Plik pulses.csv zawiera zdarzenia WNZ:
+                                       t,phase_deg,amplitude
+
+pd_stream.csv pełny tekstowy strumień:
+																			 t,u

@@ -1,0 +1,288 @@
+#!/usr/bin/env python3
+import argparse
+import numpy as np
+import csv
+import math
+
+
+DEFECTS = {
+    "void": {
+        "regions": [(35, 95), (215, 285)],
+        "prob": 2.0e-4,
+        "amp_mean": -1.5,
+        "amp_sigma": 0.6,
+        "polarity": "both",
+    },
+    "surface": {
+        "regions": [(10, 120), (190, 330)],
+        "prob": 1.2e-4,
+        "amp_mean": -1.2,
+        "amp_sigma": 0.8,
+        "polarity": "both",
+    },
+    "corona_positive": {
+        "regions": [(40, 120)],
+        "prob": 3.0e-4,
+        "amp_mean": -1.8,
+        "amp_sigma": 0.5,
+        "polarity": "positive",
+    },
+    "corona_negative": {
+        "regions": [(220, 320)],
+        "prob": 3.0e-4,
+        "amp_mean": -1.8,
+        "amp_sigma": 0.5,
+        "polarity": "negative",
+    },
+    "noise": {
+        "regions": [(0, 360)],
+        "prob": 2.0e-5,
+        "amp_mean": -2.0,
+        "amp_sigma": 1.0,
+        "polarity": "both",
+    },
+}
+
+
+def in_phase_regions(phase_deg, regions):
+    mask = np.zeros_like(phase_deg, dtype=bool)
+    for a, b in regions:
+        if a <= b:
+            mask |= (phase_deg >= a) & (phase_deg <= b)
+        else:
+            mask |= (phase_deg >= a) | (phase_deg <= b)
+    return mask
+
+
+def generate_chunk(
+    t0,
+    n,
+    fs,
+    f0,
+    noise_std,
+    sine_amp,
+    defect,
+    rng,
+    pulse_us,
+    decay_us,
+):
+    t = t0 + np.arange(n) / fs
+
+    u = sine_amp * np.sin(2 * np.pi * f0 * t)
+    u += rng.normal(0.0, noise_std, n)
+
+    phase = (360.0 * f0 * t) % 360.0
+
+    cfg = DEFECTS[defect]
+    mask = in_phase_regions(phase, cfg["regions"])
+
+    pulse_flags = mask & (rng.random(n) < cfg["prob"])
+    pulse_indices = np.where(pulse_flags)[0]
+
+    pulse_len = max(1, int(pulse_us * 1e-6 * fs))
+    decay = max(1.0, decay_us * 1e-6 * fs)
+    pulse_shape = np.exp(-np.arange(pulse_len) / decay)
+
+    pulse_records = []
+
+    for idx in pulse_indices:
+        amp = rng.lognormal(mean=cfg["amp_mean"], sigma=cfg["amp_sigma"])
+
+        if cfg["polarity"] == "positive":
+            sign = 1.0
+        elif cfg["polarity"] == "negative":
+            sign = -1.0
+        else:
+            sign = 1.0 if rng.random() < 0.5 else -1.0
+
+        amp *= sign
+
+        end = min(idx + pulse_len, n)
+        u[idx:end] += amp * pulse_shape[:end - idx]
+
+        pulse_records.append((t[idx], phase[idx], amp))
+
+    return t, u, phase, pulse_records
+
+
+def write_stream_csv(
+    output,
+    duration,
+    fs,
+    f0,
+    noise_std,
+    sine_amp,
+    defect,
+    seed,
+    chunk_size,
+    pulse_us,
+    decay_us,
+    pulses_output=None,
+):
+    rng = np.random.default_rng(seed)
+
+    total_n = int(duration * fs)
+    written = 0
+
+    pulse_file = None
+    pulse_writer = None
+
+    if pulses_output:
+        pulse_file = open(pulses_output, "w", newline="", encoding="utf-8")
+        pulse_writer = csv.writer(pulse_file)
+        pulse_writer.writerow(["t", "phase_deg", "amplitude"])
+
+    with open(output, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["t", "u"])
+
+        while written < total_n:
+            n = min(chunk_size, total_n - written)
+            t0 = written / fs
+
+            t, u, phase, pulses = generate_chunk(
+                t0=t0,
+                n=n,
+                fs=fs,
+                f0=f0,
+                noise_std=noise_std,
+                sine_amp=sine_amp,
+                defect=defect,
+                rng=rng,
+                pulse_us=pulse_us,
+                decay_us=decay_us,
+            )
+
+            for ti, ui in zip(t, u):
+                writer.writerow([f"{ti:.9f}", f"{ui:.9f}"])
+
+            if pulse_writer:
+                for ti, ph, amp in pulses:
+                    pulse_writer.writerow([f"{ti:.9f}", f"{ph:.3f}", f"{amp:.9f}"])
+
+            written += n
+
+    if pulse_file:
+        pulse_file.close()
+
+
+def make_prpd_from_stream(
+    csv_file,
+    image_file,
+    f0,
+    bins_phase=180,
+    bins_amp=120,
+    amp_min=None,
+    amp_max=None,
+    max_rows=None,
+):
+    import matplotlib.pyplot as plt
+
+    phases = []
+    amps = []
+
+    with open(csv_file, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+
+        for i, row in enumerate(reader):
+            if max_rows is not None and i >= max_rows:
+                break
+
+            t = float(row["t"])
+            u = float(row["u"])
+
+            phase = (360.0 * f0 * t) % 360.0
+            phases.append(phase)
+            amps.append(u)
+
+    phases = np.asarray(phases)
+    amps = np.asarray(amps)
+
+    if amp_min is None:
+        amp_min = np.percentile(amps, 1)
+
+    if amp_max is None:
+        amp_max = np.percentile(amps, 99)
+
+    hist, xedges, yedges = np.histogram2d(
+        phases,
+        amps,
+        bins=[bins_phase, bins_amp],
+        range=[[0, 360], [amp_min, amp_max]],
+    )
+
+    hist = np.log1p(hist.T)
+
+    plt.figure(figsize=(8, 4.5))
+    plt.imshow(
+        hist,
+        origin="lower",
+        aspect="auto",
+        extent=[0, 360, amp_min, amp_max],
+    )
+    plt.xlabel("Phase [deg]")
+    plt.ylabel("Amplitude")
+    plt.title("Synthetic PRPD")
+    plt.tight_layout()
+    plt.savefig(image_file, dpi=200)
+    plt.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Synthetic PD / PRPD stream generator"
+    )
+
+    parser.add_argument("-o", "--output", default="pd_stream.csv")
+    parser.add_argument("--pulses-output", default=None)
+
+    parser.add_argument("-d", "--duration", type=float, default=5.0)
+    parser.add_argument("--fs", type=float, default=1_000_000)
+    parser.add_argument("--f0", type=float, default=50.0)
+
+    parser.add_argument("--noise", type=float, default=0.01)
+    parser.add_argument("--sine-amp", type=float, default=0.05)
+
+    parser.add_argument(
+        "--defect",
+        choices=sorted(DEFECTS.keys()),
+        default="void",
+    )
+
+    parser.add_argument("--seed", type=int, default=123)
+    parser.add_argument("--chunk-size", type=int, default=100_000)
+
+    parser.add_argument("--pulse-us", type=float, default=30.0)
+    parser.add_argument("--decay-us", type=float, default=5.0)
+
+    parser.add_argument("--prpd-image", default=None)
+    parser.add_argument("--prpd-max-rows", type=int, default=None)
+
+    args = parser.parse_args()
+
+    write_stream_csv(
+        output=args.output,
+        duration=args.duration,
+        fs=args.fs,
+        f0=args.f0,
+        noise_std=args.noise,
+        sine_amp=args.sine_amp,
+        defect=args.defect,
+        seed=args.seed,
+        chunk_size=args.chunk_size,
+        pulse_us=args.pulse_us,
+        decay_us=args.decay_us,
+        pulses_output=args.pulses_output,
+    )
+
+    if args.prpd_image:
+        make_prpd_from_stream(
+            csv_file=args.output,
+            image_file=args.prpd_image,
+            f0=args.f0,
+            max_rows=args.prpd_max_rows,
+        )
+
+
+if __name__ == "__main__":
+    main()
