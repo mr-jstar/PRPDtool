@@ -9,7 +9,7 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.Locale;
 
-public class DynamicPRPDImage {
+public class DynamicPRPDImage1 {
 
     private final int width, height;
     private final int marginLeft = 70;
@@ -27,7 +27,7 @@ public class DynamicPRPDImage {
 
     private final BufferedImage image;
 
-    public DynamicPRPDImage(double[][] pulses, int width, int height) {
+    public DynamicPRPDImage1(double[][] pulses, int width, int height) {
         this.width = width;
         this.height = height;
 
