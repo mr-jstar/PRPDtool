@@ -43,7 +43,7 @@ public class PRPDMonitor extends JFrame {
     // Data
     private List<Sample> tu;
     private double[][] pulses;
-    private DynamicPRPDImage prpd;
+    private DynamicPRPDImage1 prpd;
 
     public PRPDMonitor() {
         super("PRPDtool");
@@ -227,7 +227,7 @@ public class PRPDMonitor extends JFrame {
                             tu = null;
                         }
                         System.err.println("Have " + pulses.length + " pulses");
-                        prpd = new DynamicPRPDImage(pulses, center.getWidth(), center.getHeight());
+                        prpd = new DynamicPRPDImage1(pulses, center.getWidth(), center.getHeight());
                         center.repaint();
                         System.err.println("PRPD " + prpd.getWidth() + "x" + prpd.getHeight() + " created.");
                         return null;
