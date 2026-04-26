@@ -74,7 +74,7 @@ public class DynamicEnvelopeImage {
 
         for (int i = 0; i < b.size; i++) {
             double t = b.t[i];
-            double u = b.u[i];
+            double u = Math.abs(b.u[i]);
 
             int x = timeToPixel(t);
             if (x < 0 || x >= plotW) continue;
@@ -169,12 +169,16 @@ public class DynamicEnvelopeImage {
 
             int ya = Math.min(y1, y2);
             int yb = Math.max(y1, y2);
+            
+            image.setRGB(px, ya, Color.BLUE.getRGB());
 
+            /*
             if (ya == yb) {
                 image.setRGB(px, ya, Color.BLUE.getRGB());
             } else {
                 g.drawLine(px, ya, px, yb);
             }
+            */
         }
 
         g.dispose();
