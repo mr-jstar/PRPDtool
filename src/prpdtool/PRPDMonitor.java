@@ -218,7 +218,7 @@ public class PRPDMonitor extends JFrame {
                 SwingWorker<Void, Void> worker = new SwingWorker<>() {
                     @Override
                     protected Void doInBackground() throws Exception {
-                        tu = PRPDTools.readCsv(circuitFile.getAbsolutePath());
+                        PRPDTools.readCsvParallel(circuitFile.getAbsolutePath(), tu);
                         if (tu.get(0).s.length == 2) {
                             System.err.println("Read " + tu.size() + " samples");
                             pulses = PRPDTools.extractPulses(tu, f0, threshold, deadUs, smoothUs);

@@ -5,8 +5,11 @@ package prpdtool;
  * @author jstar
  */
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -19,7 +22,7 @@ public class PRPDTools {
             double deadUs,
             double smoothUs
     ) {
-        if (stream == null || stream.size() < 3 || stream.get(0).s.length != 2 ) {
+        if (stream == null || stream.size() < 3 || stream.get(0).s.length != 2) {
             return new double[0][3];
         }
 
@@ -192,6 +195,86 @@ public class PRPDTools {
             }
 
             return samples;
+        }
+    }
+
+    public static void readCsvParallel(String filename, List<Sample> samples) throws IOException {
+        //? samples.clear();
+
+        try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
+            String line = br.readLine();
+            String[] parts = line.trim().split("[,;\\s]+");
+            int lgt = parts.length;
+
+            if (lgt < 2 || lgt > 3) {
+                throw new IOException(" bad file content -- the number of columns should be 2 or 3");
+            }
+
+            while ((line = br.readLine()) != null) {
+                parts = line.trim().split("[,;\\s]+");
+
+                if (parts.length != lgt) {
+                    continue;
+                }
+
+                try {
+                    double[] s = new double[lgt];
+                    for (int i = 0; i < s.length; i++) {
+                        s[i] = Double.parseDouble(parts[i]);
+                    }
+
+                    samples.add(new Sample(s));
+                } catch (NumberFormatException e) {
+                    continue;
+                }
+            }
+        }
+    }
+
+    public static String readLastLineUtf8(String file) throws Exception {
+        try (RandomAccessFile raf = new RandomAccessFile(file, "r")) {
+
+            long len = raf.length();
+            long pos = len - 1;
+
+            if (pos < 0) {
+                return "";
+            }
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+
+            // pomiń końcowe newline
+            while (pos >= 0) {
+                raf.seek(pos);
+                int c = raf.read();
+                if (c != '\n' && c != '\r') {
+                    break;
+                }
+                pos--;
+            }
+
+            while (pos >= 0) {
+                raf.seek(pos);
+                int c = raf.read();
+
+                if (c == '\n' || c == '\r') {
+                    break;
+                }
+
+                baos.write(c);
+                pos--;
+            }
+
+            byte[] bytes = baos.toByteArray();
+
+            // odwrócenie bajtów
+            for (int i = 0; i < bytes.length / 2; i++) {
+                byte tmp = bytes[i];
+                bytes[i] = bytes[bytes.length - 1 - i];
+                bytes[bytes.length - 1 - i] = tmp;
+            }
+
+            return new String(bytes, StandardCharsets.UTF_8);
         }
     }
 }
