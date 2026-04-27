@@ -4,9 +4,9 @@ package parallelprpd.pipeline;
  *
  * @author jstar
  */
+import prpdtool.ImagePanel;
 import javax.swing.*;
 import java.awt.*;
-import java.awt.image.BufferedImage;
 import java.io.File;
 
 public class PRPDFrame extends JFrame {
@@ -100,7 +100,7 @@ public class PRPDFrame extends JFrame {
         File file = chooser.getSelectedFile();
 
         try {
-            String[] lasttu = prpdtool.PRPDTools.readLastLineUtf8(file.getAbsolutePath()).trim().split("[,;\\s]+");
+            String[] lasttu = prpdtool.Utils.readLastLineUtf8(file.getAbsolutePath()).trim().split("[,;\\s]+");
 
             stopPipeline();
 
@@ -178,32 +178,6 @@ public class PRPDFrame extends JFrame {
         if (pipeline != null) {
             pipeline.close();
             pipeline = null;
-        }
-    }
-
-    static class ImagePanel extends JPanel {
-
-        private BufferedImage image;
-
-        public ImagePanel(BufferedImage image) {
-            this.image = image;
-            setBackground(Color.WHITE);
-        }
-
-        public void setImage(BufferedImage image) {
-            this.image = image;
-            repaint();
-        }
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-
-            if (image == null) {
-                return;
-            }
-
-            g.drawImage(image, 0, 0, getWidth(), getHeight(), this);
         }
     }
 

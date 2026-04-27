@@ -10,8 +10,12 @@ import java.util.Locale;
 
 public class DynamicPRPDHistogram {
 
-    private final int width, height;
+    private int width, height;
     private final int left = 70, right = 25, top = 30, bottom = 55;
+    
+    public int [] padding() {
+        return new int[]{left+right,top+bottom};
+    }
 
     private final int plotW, plotH;
     private final int binsPhase, binsAmp;
@@ -79,6 +83,12 @@ public class DynamicPRPDHistogram {
             }
         }
 
+        redraw();
+    }
+    
+    public void resize(int w, int h ) {
+        this.width = w;
+        this.height = h;
         redraw();
     }
 

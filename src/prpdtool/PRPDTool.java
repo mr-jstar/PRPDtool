@@ -6,13 +6,20 @@ package prpdtool;
  */
 import javax.swing.*;
 import java.awt.*;
-import java.awt.image.BufferedImage;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.io.File;
 import java.io.IOException;
-import java.util.Locale;
 import java.util.List;
+import parallelprpd.pipeline.Buffer;
+import parallelprpd.pipeline.DynamicEnvelopeImage;
+import parallelprpd.pipeline.DynamicPRPDHistogram;
+import parallelprpd.pipeline.PRPDExtractorCore;
+import parallelprpd.pipeline.PRPDPipeline;
+import parallelprpd.pipeline.PRPDPipelineListener;
+import parallelprpd.pipeline.Pulses;
 
-public class PRPDMonitor extends JFrame {
+public class PRPDTool extends JFrame {
 
     // GUI config
     private final static Font[] fonts = {
@@ -36,16 +43,20 @@ public class PRPDMonitor extends JFrame {
 
     // PRPD config
     private double f0 = 50;
+    private double t0 = 0;
     private double threshold = 0.012; //próg detekcji impulsu po odjęciu tła
     private double deadUs = 30; //martwy czas po wykryciu impulsu [µs]
     private double smoothUs = 200; // szerokość okna wygładzania tła [µs]
 
     // Data
-    private List<Sample> tu;
-    private double[][] pulses;
-    private DynamicPRPDImage1 prpd;
+    private ImagePanel prpdPanel;
+    private ImagePanel envelopePanel;
 
-    public PRPDMonitor() {
+    private DynamicPRPDHistogram histogram;
+    private DynamicEnvelopeImage envelope;
+    private PRPDPipeline pipeline;
+
+    public PRPDTool() {
         super("PRPDtool");
 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -94,26 +105,8 @@ public class PRPDMonitor extends JFrame {
         left = new JPanel();
         right = new JPanel();
         bottom = new JPanel();
-        center = new JPanel() {
-            @Override
-            protected void paintComponent(Graphics g) {
-                super.paintComponent(g);
+        center = new JPanel();
 
-                if (prpd != null) {
-                    g.drawImage(prpd.getImage(), 0, 0, this);
-                }
-            }
-        };
-
-        right.add(status);
-        right.add(progress);
-
-        // kolory poglądowe
-        /*left.setBackground(Color.LIGHT_GRAY);
-        center.setBackground(Color.WHITE);
-        right.setBackground(Color.GRAY);
-        bottom.setBackground(Color.DARK_GRAY);*/
-        // --- środek + prawy (80% / 15%) ---
         JSplitPane splitCenterRight = new JSplitPane(
                 JSplitPane.HORIZONTAL_SPLIT,
                 center,
@@ -146,9 +139,44 @@ public class PRPDMonitor extends JFrame {
 
         // ustawienie początkowych proporcji
         SwingUtilities.invokeLater(() -> {
-            verticalSplit.setDividerLocation(0.80);
+            verticalSplit.setDividerLocation(0.75);
             splitLeft.setDividerLocation(0.05);
-            splitCenterRight.setDividerLocation(0.85);
+            splitCenterRight.setDividerLocation(0.8);
+
+            histogram = new DynamicPRPDHistogram(
+                    center.getWidth(), center.getHeight(),
+                    360, 200,
+                    0.0, 0.12
+            );
+
+            envelope = new DynamicEnvelopeImage(
+                    bottom.getWidth() / 2, bottom.getHeight(),
+                    0.0, 10.0
+            );
+
+            prpdPanel = new ImagePanel(histogram.getImage());
+            int[] padding = histogram.padding();
+            prpdPanel.setPreferredSize(new Dimension(center.getWidth() - padding[0], center.getHeight() - padding[1]));
+            center.add(prpdPanel);
+
+            envelopePanel = new ImagePanel(envelope.getImage());
+            envelopePanel.setPreferredSize(new Dimension(bottom.getWidth() / 2, bottom.getHeight()));
+            envelopePanel.setBorder(BorderFactory.createTitledBorder("Envelope"));
+            bottom.add(envelopePanel);
+
+            right.add(status);
+            right.add(progress);
+        });
+
+        addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                histogram.resize(center.getWidth(), center.getHeight());
+                envelope.resize(bottom.getWidth() / 2, bottom.getHeight());
+                int[] padding = histogram.padding();
+                prpdPanel.setPreferredSize(new Dimension(center.getWidth() - padding[0], center.getHeight() - padding[1]));
+                envelopePanel.setPreferredSize(new Dimension(bottom.getWidth() / 2, bottom.getHeight()));
+            }
         });
     }
 
@@ -206,58 +234,98 @@ public class PRPDMonitor extends JFrame {
         setFontRecursively(fileChooser, currentFont, 0);
         int result = fileChooser.showOpenDialog(this);
         if (result == JFileChooser.APPROVE_OPTION) {
-            File circuitFile = fileChooser.getSelectedFile();
+            File file = fileChooser.getSelectedFile();
             try {
-                progress.setVisible(true);
-                progress.setIndeterminate(true);
-                progress.setVisible(true);
-                progress.revalidate();
-                progress.repaint();
-                status.setText("Reading...");
-                setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-                SwingWorker<Void, Void> worker = new SwingWorker<>() {
+                String[] lasttu = prpdtool.Utils.readLastLineUtf8(file.getAbsolutePath()).trim().split("[,;\\s]+");
+
+                stopPipeline();
+
+                histogram = new DynamicPRPDHistogram(
+                        center.getWidth(), center.getHeight(),
+                        360, 200,
+                        0.0, 0.12
+                );
+
+                // Na razie zakres czasu przykładowy.
+                // Docelowo tMax możesz wziąć z ostatniej linii pliku.
+                envelope = new DynamicEnvelopeImage(
+                        bottom.getWidth() / 2, center.getHeight(),
+                        0.0, Double.parseDouble(lasttu[0])
+                );
+
+                prpdPanel.setImage(histogram.getImage());
+                envelopePanel.setImage(envelope.getImage());
+
+                prpdPanel.repaint();
+                envelopePanel.repaint();
+
+                PRPDExtractorCore extractor = new PRPDExtractorCore(
+                        f0,
+                        t0,
+                        threshold,
+                        deadUs,
+                        smoothUs
+                );
+
+                pipeline = new PRPDPipeline(
+                        file.getAbsolutePath(),
+                        500_000,
+                        2,
+                        extractor,
+                        new PRPDPipelineListener() {
                     @Override
-                    protected Void doInBackground() throws Exception {
-                        PRPDTools.readCsvParallel(circuitFile.getAbsolutePath(), tu);
-                        if (tu.get(0).s.length == 2) {
-                            System.err.println("Read " + tu.size() + " samples");
-                            pulses = PRPDTools.extractPulses(tu, f0, threshold, deadUs, smoothUs);
-                        } else {
-                            pulses = listOfSamplesToArray(tu);
-                            tu = null;
-                        }
-                        System.err.println("Have " + pulses.length + " pulses");
-                        prpd = new DynamicPRPDImage1(pulses, center.getWidth(), center.getHeight());
-                        center.repaint();
-                        System.err.println("PRPD " + prpd.getWidth() + "x" + prpd.getHeight() + " created.");
-                        return null;
+                    public void bufferRead(Buffer buffer) {
+                        envelope.addBuffer(buffer);
+                        envelopePanel.repaint();
                     }
 
                     @Override
-                    protected void done() {
-                        progress.setVisible(false);
-                        setCursor(Cursor.getDefaultCursor());
-
-                        try {
-                            get(); // odbiera wyjątki z doInBackground()
-                            status.setText("Done!");
-                        } catch (Exception ex) {
-                            status.setText("Error: " + ex.getMessage());
-                        }
+                    public void pulsesReady(Pulses pulses) {
+                        histogram.addPulses(pulses);
+                        prpdPanel.repaint();
                     }
-                };
 
-                worker.execute();
-                saveLastUsedDirectory(circuitFile.getParent());
-                //message.setText("Circuit loaded from: " + circuitFile.getAbsolutePath() + "\n" + circ.noNodes() + " nodes");
-            } catch (Exception e) {
-                tu = null;
-                pulses = null;
-                JOptionPane.showMessageDialog(this, "Unable to load data from: " + circuitFile.getAbsolutePath());
+                    @Override
+                    public void finished() {
+                        setTitle("PRPD Viewer - finished: " + file.getName());
+                    }
+
+                    @Override
+                    public void error(Exception ex) {
+                        ex.printStackTrace();
+                        JOptionPane.showMessageDialog(
+                                PRPDTool.this,
+                                ex.getMessage(),
+                                "Error",
+                                JOptionPane.ERROR_MESSAGE
+                        );
+                    }
+                }
+                );
+
+                setTitle("PRPD Viewer - " + file.getName());
+                pipeline.start();
+                saveLastUsedDirectory(file.getParentFile().getAbsolutePath());
+            } catch (Exception ex) {
+                System.err.println("Bad file");
             }
         }
     }
 
+    private void stopPipeline() {
+        if (pipeline != null) {
+            pipeline.close();
+            pipeline = null;
+        }
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            new PRPDTool().setVisible(true);
+        });
+    }
+}
+/*
     //---------------- PRPD ------
     public static BufferedImage createPrpdImage(double[][] pulses, int width, int height) {
         int left = 70;
@@ -448,10 +516,4 @@ public class PRPDMonitor extends JFrame {
 
         return new Color(r, g, b);
     }
-
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            new PRPDMonitor().setVisible(true);
-        });
-    }
-}
+ */

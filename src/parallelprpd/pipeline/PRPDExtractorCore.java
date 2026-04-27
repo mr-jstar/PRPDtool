@@ -1,5 +1,7 @@
 package parallelprpd.pipeline;
 
+import prpdtool.DigitalFilters;
+
 /**
  *
  * @author jstar
@@ -37,10 +39,11 @@ public class PRPDExtractorCore {
 
         double fs = estimateFs(b.t, n);
 
-        int smoothN = Math.max(3, (int) Math.round(smoothUs * 1e-6 * fs));
         int deadN = Math.max(1, (int) Math.round(deadUs * 1e-6 * fs));
 
-        double[] bg = movingAverageCentered(b.u, n, smoothN);
+        //int smoothN = Math.max(3, (int) Math.round(smoothUs * 1e-6 * fs));
+        //double[] bg = movingAverageCentered(b.u, n, smoothN);
+        double [] bg = DigitalFilters.highpassIIRZeroPhase(b.u, fs, 50*f0, 0.707, 4);
 
         double[] pt = new double[n];
         double[] pp = new double[n];
@@ -76,7 +79,8 @@ public class PRPDExtractorCore {
                 }
 
                 double tp = b.t[best];
-                double amp = b.u[best] - bg[best];
+                //double amp = b.u[best] - bg[best];
+                double amp = bg[best];
 
                 pt[count] = tp;
                 pp[count] = phase(tp);
