@@ -122,13 +122,15 @@ public class PRPDFrame extends JFrame {
 
             prpdPanel.repaint();
             envelopePanel.repaint();
+            
+            Filter filter = new HighPassFilter(1e6, 10000, 0.707, 4);
 
             PRPDExtractorCore extractor = new PRPDExtractorCore(
                     50.0,
                     0.0,
                     0.012,
                     30.0,
-                    200.0
+                    filter
             );
 
             pipeline = new PRPDPipeline(

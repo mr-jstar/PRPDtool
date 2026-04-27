@@ -12,7 +12,7 @@ public class PRPDExtractorCore {
     private final double t0;
     private final double threshold;
     private final double deadUs;
-    private final double smoothUs;
+    private final Filter filter;
 
     private double lastT = Double.NaN;
 
@@ -21,13 +21,13 @@ public class PRPDExtractorCore {
             double t0,
             double threshold,
             double deadUs,
-            double smoothUs
+            Filter filter
     ) {
         this.f0 = f0;
         this.t0 = t0;
         this.threshold = threshold;
         this.deadUs = deadUs;
-        this.smoothUs = smoothUs;
+        this.filter = filter;
     }
 
     public Pulses extract(Buffer b) {
@@ -38,12 +38,11 @@ public class PRPDExtractorCore {
         }
 
         double fs = estimateFs(b.t, n);
+        filter.setFs(fs);
 
         int deadN = Math.max(1, (int) Math.round(deadUs * 1e-6 * fs));
 
-        //int smoothN = Math.max(3, (int) Math.round(smoothUs * 1e-6 * fs));
-        //double[] bg = movingAverageCentered(b.u, n, smoothN);
-        double [] bg = DigitalFilters.highpassIIRZeroPhase(b.u, fs, 50*f0, 0.707, 4);
+        double [] filtered = filter.filter(b.u);
 
         double[] pt = new double[n];
         double[] pp = new double[n];
@@ -60,17 +59,17 @@ public class PRPDExtractorCore {
                 continue;
             }
 
-            double x = b.u[i] - bg[i];
+            double x = b.u[i] - filtered[i];
 
             if (Math.abs(x) >= threshold) {
                 int j0 = i;
                 int j1 = Math.min(n, i + deadN);
 
                 int best = j0;
-                double bestAbs = Math.abs(b.u[j0] - bg[j0]);
+                double bestAbs = Math.abs(b.u[j0] - filtered[j0]);
 
                 for (int j = j0 + 1; j < j1; j++) {
-                    double a = Math.abs(b.u[j] - bg[j]);
+                    double a = Math.abs(b.u[j] - filtered[j]);
 
                     if (a > bestAbs) {
                         bestAbs = a;
@@ -79,8 +78,8 @@ public class PRPDExtractorCore {
                 }
 
                 double tp = b.t[best];
-                //double amp = b.u[best] - bg[best];
-                double amp = bg[best];
+                //double amp = b.u[best] - filtered[best];
+                double amp = filtered[best];
 
                 pt[count] = tp;
                 pp[count] = phase(tp);

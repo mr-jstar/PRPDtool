@@ -14,6 +14,8 @@ import java.util.List;
 import parallelprpd.pipeline.Buffer;
 import parallelprpd.pipeline.DynamicEnvelopeImage;
 import parallelprpd.pipeline.DynamicPRPDHistogram;
+import parallelprpd.pipeline.Filter;
+import parallelprpd.pipeline.HighPassFilter;
 import parallelprpd.pipeline.PRPDExtractorCore;
 import parallelprpd.pipeline.PRPDPipeline;
 import parallelprpd.pipeline.PRPDPipelineListener;
@@ -46,7 +48,8 @@ public class PRPDTool extends JFrame {
     private double t0 = 0;
     private double threshold = 0.012; //próg detekcji impulsu po odjęciu tła
     private double deadUs = 30; //martwy czas po wykryciu impulsu [µs]
-    private double smoothUs = 200; // szerokość okna wygładzania tła [µs]
+    private double filterQ = 0.707; // Q filtra
+    private int filterOrder = 4; // rząd filtra
 
     // Data
     private ImagePanel prpdPanel;
@@ -258,13 +261,15 @@ public class PRPDTool extends JFrame {
 
                 prpdPanel.repaint();
                 envelopePanel.repaint();
+                
+                Filter filter = new HighPassFilter(1_000_000, 20*f0, filterQ, filterOrder);
 
                 PRPDExtractorCore extractor = new PRPDExtractorCore(
                         f0,
                         t0,
                         threshold,
                         deadUs,
-                        smoothUs
+                        filter
                 );
 
                 pipeline = new PRPDPipeline(

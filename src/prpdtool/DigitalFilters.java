@@ -336,9 +336,9 @@ public final class DigitalFilters {
     // ============================================================
 
     private static void validate(double fs, double fc, double q) {
-        if (fs <= 0) throw new IllegalArgumentException("fs must be > 0");
-        if (fc <= 0 || fc >= fs / 2.0) throw new IllegalArgumentException("Require 0 < fc < fs/2");
-        if (q <= 0) throw new IllegalArgumentException("Q must be > 0");
+        if (fs <= 0) throw new IllegalArgumentException("fs must be > 0, but is " + fs);
+        if (fc <= 0 || fc >= fs / 2.0) throw new IllegalArgumentException("Require 0 < fc < fs/2,, but got fc=" + fc + " fs="+fs);
+        if (q <= 0) throw new IllegalArgumentException("Q must be > 0 but is " + q);
     }
 
     private static void reverse(double[] a) {
