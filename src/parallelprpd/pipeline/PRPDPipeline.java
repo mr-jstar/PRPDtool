@@ -9,6 +9,7 @@ import java.io.*;
 import java.util.Locale;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
+import java.util.function.Consumer;
 
 public class PRPDPipeline implements AutoCloseable {
 
@@ -18,11 +19,11 @@ public class PRPDPipeline implements AutoCloseable {
     private final AtomicBoolean readerFinished = new AtomicBoolean(false);
     private final AtomicInteger queuedBuffers = new AtomicInteger(0);
 
-    private final ExecutorService readerExecutor =
-            Executors.newSingleThreadExecutor();
+    private final ExecutorService readerExecutor
+            = Executors.newSingleThreadExecutor();
 
-    private final ExecutorService extractorExecutor =
-            Executors.newSingleThreadExecutor();
+    private final ExecutorService extractorExecutor
+            = Executors.newSingleThreadExecutor();
 
     private final String filename;
     private final int bufferSize;
@@ -30,6 +31,10 @@ public class PRPDPipeline implements AutoCloseable {
 
     private final PRPDExtractorCore extractor;
     private final PRPDPipelineListener listener;
+
+    private final AtomicInteger readLoops = new AtomicInteger();
+    private Consumer<Integer> onReaderProgress = n -> {
+    };
 
     public PRPDPipeline(
             String filename,
@@ -43,6 +48,11 @@ public class PRPDPipeline implements AutoCloseable {
         this.maxQueuedBuffers = maxQueuedBuffers;
         this.extractor = extractor;
         this.listener = listener;
+    }
+
+    public void setOnReaderProgress(Consumer<Integer> callback) {
+        this.onReaderProgress = callback != null ? callback : n -> {
+        };
     }
 
     public void start() {
@@ -63,6 +73,8 @@ public class PRPDPipeline implements AutoCloseable {
             skipHeaderIfPresent(br);
 
             while (running.get()) {
+                int n = readLoops.incrementAndGet();
+                onReaderProgress.accept(n);
 
                 while (running.get() && queuedBuffers.get() >= maxQueuedBuffers) {
                     Thread.onSpinWait();

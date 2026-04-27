@@ -10,10 +10,9 @@ import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.io.File;
 import java.io.IOException;
-import java.util.List;
 import parallelprpd.pipeline.Buffer;
-import parallelprpd.pipeline.DynamicEnvelopeImage;
 import parallelprpd.pipeline.DynamicPRPDHistogram;
+import parallelprpd.pipeline.DynamicSignalImage;
 import parallelprpd.pipeline.Filter;
 import parallelprpd.pipeline.HighPassFilter;
 import parallelprpd.pipeline.PRPDExtractorCore;
@@ -40,24 +39,29 @@ public class PRPDTool extends JFrame {
     private JPanel right;
     private JPanel bottom;
 
-    private final JProgressBar progress = new JProgressBar();
     private final JLabel status = new JLabel("");
 
     // PRPD config
     private double f0 = 50;
     private double t0 = 0;
+    private double fs = 1_000_000;  // próbkowanie 
     private double threshold = 0.012; //próg detekcji impulsu po odjęciu tła
     private double deadUs = 30; //martwy czas po wykryciu impulsu [µs]
     private double filterQ = 0.707; // Q filtra
     private int filterOrder = 4; // rząd filtra
+    private int cutH = 20; // harmoniczna odcięcia
 
     // Data
     private ImagePanel prpdPanel;
+    private ImagePanel signalPanel;
     private ImagePanel envelopePanel;
 
     private DynamicPRPDHistogram histogram;
-    private DynamicEnvelopeImage envelope;
+    private DynamicSignalImage envelope;
+    private DynamicSignalImage signal;
     private PRPDPipeline pipeline;
+
+    private JLabel dataSource;
 
     public PRPDTool() {
         super("PRPDtool");
@@ -152,9 +156,15 @@ public class PRPDTool extends JFrame {
                     0.0, 0.12
             );
 
-            envelope = new DynamicEnvelopeImage(
-                    bottom.getWidth() / 2, bottom.getHeight(),
-                    0.0, 10.0
+            envelope = new DynamicSignalImage(
+                    "Signal envelope", Color.BLUE,
+                    bottom.getWidth() / 2 - 5, bottom.getHeight(),
+                    -10.0, 10.0, null
+            );
+            signal = new DynamicSignalImage(
+                    "Filtered signal", Color.GREEN,
+                    bottom.getWidth() / 2 - 5, bottom.getHeight(),
+                    -10.0, 10.0, null
             );
 
             prpdPanel = new ImagePanel(histogram.getImage());
@@ -163,12 +173,30 @@ public class PRPDTool extends JFrame {
             center.add(prpdPanel);
 
             envelopePanel = new ImagePanel(envelope.getImage());
-            envelopePanel.setPreferredSize(new Dimension(bottom.getWidth() / 2, bottom.getHeight()));
+            envelopePanel.setPreferredSize(new Dimension(bottom.getWidth() / 2 - 5, bottom.getHeight()));
             envelopePanel.setBorder(BorderFactory.createTitledBorder("Envelope"));
-            bottom.add(envelopePanel);
 
-            right.add(status);
-            right.add(progress);
+            signalPanel = new ImagePanel(signal.getImage());
+            signalPanel.setPreferredSize(new Dimension(bottom.getWidth() / 2 - 5, bottom.getHeight()));
+            signalPanel.setBorder(BorderFactory.createTitledBorder("Signal"));
+            bottom.setLayout(new GridLayout(1, 2));
+            bottom.add(envelopePanel);
+            bottom.add(signalPanel);
+
+            right.setLayout(new GridLayout(0, 1));
+            right.setLayout(new BoxLayout(right, BoxLayout.Y_AXIS));
+            dataSource = new JLabel("Data source:");
+            right.add(dataSource);
+            right.add(new JLabel("Frequency:"));
+            right.add(new JLabel("Sampling frequency:"));
+            right.add(new JLabel("Filter:"));
+            right.add(new JLabel("   cut-off freq:"));
+            right.add(new JLabel("   quality factor::"));
+            right.add(new JLabel("   order:"));
+            right.add(new JLabel("Detection thresh:"));
+            right.add(new JLabel("Dead time [us]:"));
+            right.add(Box.createVerticalGlue());
+            right.add(status);         
         });
 
         addComponentListener(new ComponentAdapter() {
@@ -222,15 +250,6 @@ public class PRPDTool extends JFrame {
         }
     }
 
-    private double[][] listOfSamplesToArray(List<Sample> list) {
-        double[][] out = new double[list.size()][3];
-
-        for (int k = 0; k < list.size(); k++) {
-            out[k] = list.get(k).s;
-        }
-        return out;
-    }
-
     //---------------- Actions ------
     private void loadFile() {
         JFileChooser fileChooser = new JFileChooser(getLastUsedDirectory());
@@ -243,26 +262,49 @@ public class PRPDTool extends JFrame {
 
                 stopPipeline();
 
+                Filter filter = new HighPassFilter(fs, cutH * f0, filterQ, filterOrder);
+                Filter abs = new Filter() {
+                    @Override
+                    public double[] filter(double[] signal) {
+                        double[] o = signal.clone();
+                        for (int i = 0; i < o.length; i++) {
+                            o[i] = Math.abs(o[i]);
+                        }
+                        return o;
+                    }
+
+                    @Override
+                    public void setFs(double fs) {
+                        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+                    }
+
+                };
+
                 histogram = new DynamicPRPDHistogram(
                         center.getWidth(), center.getHeight(),
                         360, 200,
                         0.0, 0.12
                 );
 
-                // Na razie zakres czasu przykładowy.
-                // Docelowo tMax możesz wziąć z ostatniej linii pliku.
-                envelope = new DynamicEnvelopeImage(
-                        bottom.getWidth() / 2, center.getHeight(),
-                        0.0, Double.parseDouble(lasttu[0])
+                envelope = new DynamicSignalImage(
+                        "Signal envelope", Color.BLUE,
+                        bottom.getWidth() / 2 - 5, bottom.getHeight(),
+                        0.0, Double.parseDouble(lasttu[0]), abs
+                );
+
+                signal = new DynamicSignalImage(
+                        "Filtered signal", Color.GREEN,
+                        bottom.getWidth() / 2 - 5, bottom.getHeight(),
+                        0.0, Double.parseDouble(lasttu[0]), filter
                 );
 
                 prpdPanel.setImage(histogram.getImage());
                 envelopePanel.setImage(envelope.getImage());
+                signalPanel.setImage(signal.getImage());
 
                 prpdPanel.repaint();
                 envelopePanel.repaint();
-                
-                Filter filter = new HighPassFilter(1_000_000, 20*f0, filterQ, filterOrder);
+                signalPanel.repaint();
 
                 PRPDExtractorCore extractor = new PRPDExtractorCore(
                         f0,
@@ -282,6 +324,8 @@ public class PRPDTool extends JFrame {
                     public void bufferRead(Buffer buffer) {
                         envelope.addBuffer(buffer);
                         envelopePanel.repaint();
+                        signal.addBuffer(buffer);
+                        signalPanel.repaint();
                     }
 
                     @Override
@@ -293,6 +337,7 @@ public class PRPDTool extends JFrame {
                     @Override
                     public void finished() {
                         setTitle("PRPD Viewer - finished: " + file.getName());
+                        setCursor(Cursor.getDefaultCursor());
                     }
 
                     @Override
@@ -308,9 +353,17 @@ public class PRPDTool extends JFrame {
                 }
                 );
 
+                pipeline.setOnReaderProgress(n
+                        -> SwingUtilities.invokeLater(() -> {
+                            status.setText("Read " + n + " buffers." );
+                        })
+                );
+
                 setTitle("PRPD Viewer - " + file.getName());
+                setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
                 pipeline.start();
                 saveLastUsedDirectory(file.getParentFile().getAbsolutePath());
+                dataSource.setText("Data source: file (" + file.getName() + ")");
             } catch (Exception ex) {
                 System.err.println("Bad file");
             }

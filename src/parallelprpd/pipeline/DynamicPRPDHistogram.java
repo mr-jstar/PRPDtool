@@ -171,8 +171,8 @@ public class DynamicPRPDHistogram {
         g.setFont(new Font("Arial", Font.BOLD, 16));
         g.drawString("PRPD", left, 20);
 
-        g.setFont(new Font("Arial", Font.PLAIN, 14));
-        g.drawString("Phase [deg]", left + plotW / 2 - 40, height - 15);
+        g.setFont(new Font("Arial", Font.PLAIN, 12));
+        g.drawString("Phase [deg]", left + plotW / 2 - 40, height - 13);
 
         g.rotate(-Math.PI / 2);
         g.drawString("|Amplitude|", -top - plotH / 2 - 40, 18);
