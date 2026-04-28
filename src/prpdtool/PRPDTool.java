@@ -258,7 +258,15 @@ public class PRPDTool extends JFrame {
         if (result == JFileChooser.APPROVE_OPTION) {
             File file = fileChooser.getSelectedFile();
             try {
-                String[] lasttu = prpdtool.Utils.readLastLineUtf8(file.getAbsolutePath()).trim().split("[,;\\s]+");
+                String filename = file.getAbsolutePath();
+                double [] lasttu = new double[2];
+                String[] last;
+                if( filename.endsWith(".csv") ) {
+                    last = prpdtool.Utils.readLastLineUtf8(filename).trim().split("[,;\\s]+");           
+                } else {
+                    last = prpdtool.Utils.readLastPair(filename).trim().split("[,;\\s]+");
+                }
+                lasttu[0] = Double.parseDouble(last[0]);
 
                 stopPipeline();
 
@@ -289,13 +297,13 @@ public class PRPDTool extends JFrame {
                 envelope = new DynamicSignalImage(
                         "Signal envelope", Color.BLUE,
                         bottom.getWidth() / 2 - 5, bottom.getHeight(),
-                        0.0, Double.parseDouble(lasttu[0]), abs
+                        0.0, lasttu[0], abs
                 );
 
                 signal = new DynamicSignalImage(
                         "Filtered signal", Color.GREEN,
                         bottom.getWidth() / 2 - 5, bottom.getHeight(),
-                        0.0, Double.parseDouble(lasttu[0]), filter
+                        0.0, lasttu[0], filter
                 );
 
                 prpdPanel.setImage(histogram.getImage());
@@ -366,6 +374,7 @@ public class PRPDTool extends JFrame {
                 dataSource.setText("Data source: file (" + file.getName() + ")");
             } catch (Exception ex) {
                 System.err.println("Bad file");
+                ex.printStackTrace();
             }
         }
     }

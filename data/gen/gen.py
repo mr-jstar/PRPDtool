@@ -143,14 +143,16 @@ def generate(
                     pulse_us,
                     tau_us,
                 )
+    if output.endswith(".csv"):
+        with open(output, "w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(["t", "u"])
 
-    with open(output, "w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        w.writerow(["t", "u"])
-
-        for ti, ui in zip(t, u):
-            w.writerow([f"{ti:.9f}", f"{ui:.9f}"])
-
+            for ti, ui in zip(t, u):
+                w.writerow([f"{ti:.9f}", f"{ui:.9f}"])
+    else:
+        data = np.column_stack((t, u)).astype(np.float64)
+        data.tofile(output)
 
 def main():
     p = argparse.ArgumentParser(
