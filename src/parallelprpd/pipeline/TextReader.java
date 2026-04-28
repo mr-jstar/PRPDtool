@@ -64,8 +64,6 @@ public class TextReader implements Closeable, SignalReader {
         br.mark(2048);
 
         String first = br.readLine();
-        
-        System.out.println("First:" + first);
 
         if (first == null) {
             return;

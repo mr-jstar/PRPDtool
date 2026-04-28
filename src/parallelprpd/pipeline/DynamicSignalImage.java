@@ -21,8 +21,8 @@ public class DynamicSignalImage {
     private final int plotW;
     private final int plotH;
 
-    private final double tMin;
-    private final double tMax;
+    private double tMin;
+    private double tMax;
 
     private double yMin = 0.0;
     private double yMax = 1.0;
@@ -34,9 +34,9 @@ public class DynamicSignalImage {
     private final boolean[] hasData;
 
     private final BufferedImage image;
-    
+
     private final String title;
-    
+
     private final Color color;
 
     public DynamicSignalImage(String title, Color color, int width, int height, double tMin, double tMax, Filter filter) {
@@ -88,9 +88,14 @@ public class DynamicSignalImage {
         }
 
         boolean scaleChanged = false;
-        
-        double [] fu = filter == null ? b.u : filter.filter(b.u);
-        
+
+        if (b.t[b.size - 1] > tMax) {
+            expandTimeRange(b.t[b.size - 1]);
+            scaleChanged = true;
+        }
+
+        double[] fu = filter == null ? b.u : filter.filter(b.u);
+
         for (int i = 0; i < b.size; i++) {
             double t = b.t[i];
             double u = fu[i];
@@ -125,6 +130,31 @@ public class DynamicSignalImage {
             redrawPlotAreaOnly();
             drawAxes();
         }
+    }
+
+    private void expandTimeRange(double newTMax) {
+        double timeSqueeze = (tMax - tMin) / (newTMax - tMin);
+        boolean [] newData = new boolean[plotW];
+        for (int x = 0; x < plotW; x++) {
+            if (!hasData[x]) {
+                continue;
+            }
+            int newX = (int) Math.floor(x * timeSqueeze);
+            if (!newData[newX]) {
+                pixMin[newX] = pixMin[x];
+                pixMax[newX] = pixMax[x];
+                newData[newX] = true;
+            } else {
+                if (pixMin[x] < pixMin[newX]) {
+                    pixMin[newX] = pixMin[x];
+                }
+                if (pixMax[x] > pixMax[newX]) {
+                    pixMax[newX] = pixMax[x];
+                }
+            }
+        }
+        System.arraycopy(newData,0,hasData,0,plotW);
+        tMax = newTMax;
     }
 
     private int timeToPixel(double t) {
@@ -193,7 +223,7 @@ public class DynamicSignalImage {
         int py = 0;
         for (int x = 0; x < plotW; x++) {
             if (!hasData[x]) {
-                continue;               
+                continue;
             }
 
             int px = left + x;
