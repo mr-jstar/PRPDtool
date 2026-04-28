@@ -1,0 +1,121 @@
+import javax.swing.*;
+import java.awt.*;
+import java.util.function.DoubleConsumer;
+import java.util.function.DoubleSupplier;
+import java.util.function.IntConsumer;
+import java.util.function.IntSupplier;
+
+public class ParamsPanel extends JPanel {
+
+    private double f0 = 50;
+    private double t0 = 0;
+    private double fs = 1_000_000;
+    private double threshold = 0.012;
+    private double deadUs = 30;
+    private double filterQ = 0.707;
+    private int filterOrder = 4;
+    private int cutH = 20;
+
+    public ParamsPanel() {
+        setLayout(new GridBagLayout());
+
+        Param<?>[] params = {
+                Param.dbl("f0", () -> f0, v -> f0 = v),
+                Param.dbl("t0", () -> t0, v -> t0 = v),
+                Param.dbl("fs", () -> fs, v -> fs = v),
+                Param.dbl("threshold", () -> threshold, v -> threshold = v),
+                Param.dbl("deadUs", () -> deadUs, v -> deadUs = v),
+                Param.dbl("filterQ", () -> filterQ, v -> filterQ = v),
+                Param.integer("filterOrder", () -> filterOrder, v -> filterOrder = v),
+                Param.integer("cutH", () -> cutH, v -> cutH = v)
+        };
+
+        buildForm(params);
+    }
+
+    private void buildForm(Param<?>[] params) {
+        GridBagConstraints c = new GridBagConstraints();
+        c.insets = new Insets(3, 3, 3, 3);
+        c.fill = GridBagConstraints.HORIZONTAL;
+
+        for (int i = 0; i < params.length; i++) {
+            Param<?> p = params[i];
+
+            JLabel label = new JLabel(p.name);
+            JTextField field = new JTextField(p.getText(), 12);
+
+            field.addActionListener(e -> {
+                try {
+                    p.setFromText(field.getText());
+                    field.setBackground(Color.WHITE);
+                    onParameterChanged();
+                } catch (NumberFormatException ex) {
+                    field.setBackground(new Color(255, 200, 200));
+                }
+            });
+
+            field.addFocusListener(new java.awt.event.FocusAdapter() {
+                @Override
+                public void focusLost(java.awt.event.FocusEvent e) {
+                    field.postActionEvent();
+                }
+            });
+
+            c.gridx = 0;
+            c.gridy = i;
+            c.weightx = 0;
+            add(label, c);
+
+            c.gridx = 1;
+            c.gridy = i;
+            c.weightx = 1;
+            add(field, c);
+        }
+    }
+
+    private void onParameterChanged() {
+        System.out.println("f0 = " + f0);
+        System.out.println("fs = " + fs);
+        System.out.println("threshold = " + threshold);
+    }
+
+    private static abstract class Param<T> {
+        final String name;
+
+        Param(String name) {
+            this.name = name;
+        }
+
+        abstract String getText();
+
+        abstract void setFromText(String text);
+
+        static Param<Double> dbl(String name, DoubleSupplier getter, DoubleConsumer setter) {
+            return new Param<>(name) {
+                @Override
+                String getText() {
+                    return Double.toString(getter.getAsDouble());
+                }
+
+                @Override
+                void setFromText(String text) {
+                    setter.accept(Double.parseDouble(text.trim()));
+                }
+            };
+        }
+
+        static Param<Integer> integer(String name, IntSupplier getter, IntConsumer setter) {
+            return new Param<>(name) {
+                @Override
+                String getText() {
+                    return Integer.toString(getter.getAsInt());
+                }
+
+                @Override
+                void setFromText(String text) {
+                    setter.accept(Integer.parseInt(text.trim()));
+                }
+            };
+        }
+    }
+}

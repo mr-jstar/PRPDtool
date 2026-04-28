@@ -10,6 +10,10 @@ import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.io.File;
 import java.io.IOException;
+import java.util.function.DoubleConsumer;
+import java.util.function.DoubleSupplier;
+import java.util.function.IntConsumer;
+import java.util.function.IntSupplier;
 import parallelprpd.pipeline.Buffer;
 import parallelprpd.pipeline.DynamicPRPDHistogram;
 import parallelprpd.pipeline.DynamicSignalImage;
@@ -51,6 +55,17 @@ public class PRPDTool extends JFrame {
     private int filterOrder = 4; // rząd filtra
     private int cutH = 20; // harmoniczna odcięcia
 
+    Param<?>[] params = {
+        Param.dbl("f0", () -> f0, v -> f0 = v),
+        Param.dbl("t0", () -> t0, v -> t0 = v),
+        Param.dbl("fs", () -> fs, v -> fs = v),
+        Param.dbl("threshold", () -> threshold, v -> threshold = v),
+        Param.dbl("deadUs", () -> deadUs, v -> deadUs = v),
+        Param.dbl("filterQ", () -> filterQ, v -> filterQ = v),
+        Param.integer("filterOrder", () -> filterOrder, v -> filterOrder = v),
+        Param.integer("cutH", () -> cutH, v -> cutH = v)
+    };
+
     // Data
     private ImagePanel prpdPanel;
     private ImagePanel signalPanel;
@@ -62,6 +77,47 @@ public class PRPDTool extends JFrame {
     private PRPDPipeline pipeline;
 
     private JLabel dataSource;
+
+    private static abstract class Param<T> {
+
+        final String name;
+
+        Param(String name) {
+            this.name = name;
+        }
+
+        abstract String getText();
+
+        abstract void setFromText(String text);
+
+        static Param<Double> dbl(String name, DoubleSupplier getter, DoubleConsumer setter) {
+            return new Param<>(name) {
+                @Override
+                String getText() {
+                    return Double.toString(getter.getAsDouble());
+                }
+
+                @Override
+                void setFromText(String text) {
+                    setter.accept(Double.parseDouble(text.trim()));
+                }
+            };
+        }
+
+        static Param<Integer> integer(String name, IntSupplier getter, IntConsumer setter) {
+            return new Param<>(name) {
+                @Override
+                String getText() {
+                    return Integer.toString(getter.getAsInt());
+                }
+
+                @Override
+                void setFromText(String text) {
+                    setter.accept(Integer.parseInt(text.trim()));
+                }
+            };
+        }
+    }
 
     public PRPDTool() {
         super("PRPDtool");
@@ -183,20 +239,29 @@ public class PRPDTool extends JFrame {
             bottom.add(envelopePanel);
             bottom.add(signalPanel);
 
-            right.setLayout(new GridLayout(0, 1));
-            right.setLayout(new BoxLayout(right, BoxLayout.Y_AXIS));
-            dataSource = new JLabel("Data source:");
+            right.setLayout(new GridLayout(18, 3));
+            right.add(new JLabel("Data source: "));
+            dataSource = new JLabel("none");
             right.add(dataSource);
-            right.add(new JLabel("Frequency:"));
-            right.add(new JLabel("Sampling frequency:"));
-            right.add(new JLabel("Filter:"));
-            right.add(new JLabel("   cut-off freq:"));
-            right.add(new JLabel("   quality factor::"));
-            right.add(new JLabel("   order:"));
-            right.add(new JLabel("Detection thresh:"));
-            right.add(new JLabel("Dead time [us]:"));
-            right.add(Box.createVerticalGlue());
-            right.add(status);         
+            
+            right.add(new JLabel("Status:"));
+            right.add(status);
+
+            for (Param p : params) {
+                JLabel label = new JLabel(p.name);
+                JTextField field = new JTextField(p.getText(), 8);
+                field.addActionListener(e -> {
+                    try {
+                        p.setFromText(field.getText());
+                        field.setBackground(Color.WHITE);
+                        onParameterChanged(label.getText());
+                    } catch (NumberFormatException ex) {
+                        field.setBackground(new Color(255, 200, 200));
+                    }
+                });
+                right.add(label);
+                right.add(field);
+            }       
         });
 
         addComponentListener(new ComponentAdapter() {
@@ -212,6 +277,11 @@ public class PRPDTool extends JFrame {
     }
 
     // ------------- Misc. helpers
+    private void onParameterChanged(String what) {
+        // np. odśwież wykres / przelicz coś
+        System.out.println(what + " zmienione");
+    }
+
     // Helper -sets font
     private void setFontRecursively(Component comp, Font font, int d) {
         if (comp == null) {
@@ -259,10 +329,10 @@ public class PRPDTool extends JFrame {
             File file = fileChooser.getSelectedFile();
             try {
                 String filename = file.getAbsolutePath();
-                double [] lasttu = new double[2];
+                double[] lasttu = new double[2];
                 String[] last;
-                if( filename.endsWith(".csv") ) {
-                    last = prpdtool.Utils.readLastLineUtf8(filename).trim().split("[,;\\s]+");           
+                if (filename.endsWith(".csv")) {
+                    last = prpdtool.Utils.readLastLineUtf8(filename).trim().split("[,;\\s]+");
                 } else {
                     last = prpdtool.Utils.readLastPair(filename).trim().split("[,;\\s]+");
                 }
@@ -363,7 +433,7 @@ public class PRPDTool extends JFrame {
 
                 pipeline.setOnReaderProgress(n
                         -> SwingUtilities.invokeLater(() -> {
-                            status.setText("Read " + n + " buffers." );
+                            status.setText("Read " + n + " buffers.");
                         })
                 );
 
@@ -371,10 +441,10 @@ public class PRPDTool extends JFrame {
                 setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
                 pipeline.start();
                 saveLastUsedDirectory(file.getParentFile().getAbsolutePath());
-                dataSource.setText("Data source: file (" + file.getName() + ")");
+                dataSource.setText("file (" + file.getName() + ")");
             } catch (Exception ex) {
-                System.err.println("Bad file");
-                ex.printStackTrace();
+                System.err.println("Bad file: " + file.getName());
+                //ex.printStackTrace();
             }
         }
     }
