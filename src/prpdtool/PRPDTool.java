@@ -9,11 +9,16 @@ import java.awt.*;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.lang.invoke.MethodHandles;
+import java.nio.file.Paths;
 import java.util.function.DoubleConsumer;
 import java.util.function.DoubleSupplier;
 import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
+import javax.imageio.ImageIO;
 import parallelprpd.pipeline.Buffer;
 import parallelprpd.pipeline.DynamicPRPDHistogram;
 import parallelprpd.pipeline.DynamicSignalImage;
@@ -53,17 +58,17 @@ public class PRPDTool extends JFrame {
     private double deadUs = 30; //martwy czas po wykryciu impulsu [µs]
     private double filterQ = 0.707; // Q filtra
     private int filterOrder = 4; // rząd filtra
-    private int cutH = 20; // harmoniczna odcięcia
+    private double cutF = 10_000; // f odcięcia
 
     Param<?>[] params = {
-        Param.dbl("f0", () -> f0, v -> f0 = v),
-        Param.dbl("t0", () -> t0, v -> t0 = v),
-        Param.dbl("fs", () -> fs, v -> fs = v),
-        Param.dbl("threshold", () -> threshold, v -> threshold = v),
-        Param.dbl("deadUs", () -> deadUs, v -> deadUs = v),
-        Param.dbl("filterQ", () -> filterQ, v -> filterQ = v),
-        Param.integer("filterOrder", () -> filterOrder, v -> filterOrder = v),
-        Param.integer("cutH", () -> cutH, v -> cutH = v)
+        Param.dbl("Basic frequancy", () -> f0, v -> f0 = v),
+        Param.dbl("Zero-crossing instant", () -> t0, v -> t0 = v),
+        Param.dbl("Sampling frequency", () -> fs, v -> fs = v),
+        Param.dbl("Pulse ampl. threshold", () -> threshold, v -> threshold = v),
+        Param.dbl("Dead time", () -> deadUs, v -> deadUs = v),
+        Param.dbl("HPF cutoff frequency", () -> cutF, v -> cutF = v),
+        Param.dbl("Filter Q", () -> filterQ, v -> filterQ = v),
+        Param.integer("Filter Order", () -> filterOrder, v -> filterOrder = v)
     };
 
     // Data
@@ -71,6 +76,7 @@ public class PRPDTool extends JFrame {
     private ImagePanel signalPanel;
     private ImagePanel envelopePanel;
 
+    private String lastDataFile;
     private DynamicPRPDHistogram histogram;
     private DynamicSignalImage envelope;
     private DynamicSignalImage signal;
@@ -132,10 +138,22 @@ public class PRPDTool extends JFrame {
 
     private void createMenuBar() {
         JMenuBar mb = new JMenuBar();
+
         JMenu fileM = new JMenu("File");
         JMenuItem fileMI = new JMenuItem("Open");
         fileMI.addActionListener(e -> loadFile());
         fileM.add(fileMI);
+
+        JMenuItem exportMI = new JMenuItem("Export histogram data");
+        exportMI.addActionListener(e -> exportHistogram());
+        fileM.add(exportMI);
+
+        JMenuItem imageMI = new JMenuItem("Export histogram image");
+        imageMI.addActionListener(e -> exportImage());
+        fileM.add(imageMI);
+
+        fileM.addSeparator();
+
         JMenuItem exitMI = new JMenuItem("Exit");
         exitMI.addActionListener(e -> System.exit(0));
         fileM.add(exitMI);
@@ -243,7 +261,7 @@ public class PRPDTool extends JFrame {
             right.add(new JLabel("Data source: "));
             dataSource = new JLabel("none");
             right.add(dataSource);
-            
+
             right.add(new JLabel("Status:"));
             right.add(status);
 
@@ -261,7 +279,7 @@ public class PRPDTool extends JFrame {
                 });
                 right.add(label);
                 right.add(field);
-            }       
+            }
         });
 
         addComponentListener(new ComponentAdapter() {
@@ -279,7 +297,13 @@ public class PRPDTool extends JFrame {
     // ------------- Misc. helpers
     private void onParameterChanged(String what) {
         // np. odśwież wykres / przelicz coś
-        System.out.println(what + " zmienione");
+        if (lastDataFile != null) {
+            try {
+                readDataFile(lastDataFile);
+            } catch (Exception ex) {
+                status.setText(ex.getMessage());
+            }
+        }
     }
 
     // Helper -sets font
@@ -329,130 +353,172 @@ public class PRPDTool extends JFrame {
             File file = fileChooser.getSelectedFile();
             try {
                 String filename = file.getAbsolutePath();
-                double[] lasttu = new double[2];
-                String[] last;
-                if (filename.endsWith(".csv")) {
-                    last = prpdtool.Utils.readLastLineUtf8(filename).trim().split("[,;\\s]+");
-                } else {
-                    last = prpdtool.Utils.readLastPair(filename).trim().split("[,;\\s]+");
-                }
-                lasttu[0] = Double.parseDouble(last[0]);
-
-                stopPipeline();
-
-                Filter filter = new HighPassFilter(fs, cutH * f0, filterQ, filterOrder);
-                Filter abs = new Filter() {
-                    @Override
-                    public double[] filter(double[] signal) {
-                        double[] o = signal.clone();
-                        for (int i = 0; i < o.length; i++) {
-                            o[i] = Math.abs(o[i]);
-                        }
-                        return o;
-                    }
-
-                    @Override
-                    public void setFs(double fs) {
-                        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
-                    }
-
-                };
-
-                histogram = new DynamicPRPDHistogram(
-                        center.getWidth(), center.getHeight(),
-                        360, 200,
-                        0.0, 0.12
-                );
-
-                envelope = new DynamicSignalImage(
-                        "Signal envelope", Color.BLUE,
-                        bottom.getWidth() / 2 - 5, bottom.getHeight(),
-                        0.0, lasttu[0], abs
-                );
-
-                signal = new DynamicSignalImage(
-                        "Filtered signal", Color.GREEN,
-                        bottom.getWidth() / 2 - 5, bottom.getHeight(),
-                        0.0, lasttu[0], filter
-                );
-
-                prpdPanel.setImage(histogram.getImage());
-                envelopePanel.setImage(envelope.getImage());
-                signalPanel.setImage(signal.getImage());
-
-                prpdPanel.repaint();
-                envelopePanel.repaint();
-                signalPanel.repaint();
-
-                PRPDExtractorCore extractor = new PRPDExtractorCore(
-                        f0,
-                        t0,
-                        threshold,
-                        deadUs,
-                        filter
-                );
-
-                pipeline = new PRPDPipeline(
-                        file.getAbsolutePath(),
-                        500_000,
-                        2,
-                        extractor,
-                        new PRPDPipelineListener() {
-                    @Override
-                    public void bufferRead(Buffer buffer) {
-                        envelope.addBuffer(buffer);
-                        envelopePanel.repaint();
-                        signal.addBuffer(buffer);
-                        signalPanel.repaint();
-                    }
-
-                    @Override
-                    public void pulsesReady(Pulses pulses) {
-                        histogram.addPulses(pulses);
-                        prpdPanel.repaint();
-                    }
-
-                    @Override
-                    public void finished() {
-                        setTitle("PRPD Viewer - finished: " + file.getName());
-                        setCursor(Cursor.getDefaultCursor());
-                    }
-
-                    @Override
-                    public void error(Exception ex) {
-                        ex.printStackTrace();
-                        JOptionPane.showMessageDialog(
-                                PRPDTool.this,
-                                ex.getMessage(),
-                                "Error",
-                                JOptionPane.ERROR_MESSAGE
-                        );
-                    }
-                }
-                );
-
-                pipeline.setOnReaderProgress(n
-                        -> SwingUtilities.invokeLater(() -> {
-                            status.setText("Read " + n + " buffers.");
-                        })
-                );
-
-                setTitle("PRPD Viewer - " + file.getName());
-                setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-                pipeline.start();
+                readDataFile(filename);
                 saveLastUsedDirectory(file.getParentFile().getAbsolutePath());
                 dataSource.setText("file (" + file.getName() + ")");
+                lastDataFile = filename;
             } catch (Exception ex) {
                 System.err.println("Bad file: " + file.getName());
+                lastDataFile = null;
                 //ex.printStackTrace();
             }
         }
+    }
+
+    private void readDataFile(String filename) throws Exception {
+        double[] lasttu = new double[2];
+        String[] last;
+        if (filename.endsWith(".csv")) {
+            last = prpdtool.Utils.readLastLineUtf8(filename).trim().split("[,;\\s]+");
+        } else {
+            last = prpdtool.Utils.readLastPair(filename).trim().split("[,;\\s]+");
+        }
+        lasttu[0] = Double.parseDouble(last[0]);
+
+        stopPipeline();
+
+        Filter filter = new HighPassFilter(fs, cutF, filterQ, filterOrder);
+        Filter abs = new Filter() {
+            @Override
+            public double[] filter(double[] signal) {
+                double[] o = signal.clone();
+                for (int i = 0; i < o.length; i++) {
+                    o[i] = Math.abs(o[i]);
+                }
+                return o;
+            }
+
+            @Override
+            public void setFs(double fs) {
+                throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+            }
+
+        };
+
+        histogram = new DynamicPRPDHistogram(
+                center.getWidth(), center.getHeight(),
+                360, 200,
+                0.0, 0.12
+        );
+
+        envelope = new DynamicSignalImage(
+                "Signal envelope", Color.BLUE,
+                bottom.getWidth() / 2 - 5, bottom.getHeight(),
+                0.0, lasttu[0], abs
+        );
+
+        signal = new DynamicSignalImage(
+                "Filtered signal", Color.GREEN,
+                bottom.getWidth() / 2 - 5, bottom.getHeight(),
+                0.0, lasttu[0], filter
+        );
+
+        prpdPanel.setImage(histogram.getImage());
+        envelopePanel.setImage(envelope.getImage());
+        signalPanel.setImage(signal.getImage());
+
+        prpdPanel.repaint();
+        envelopePanel.repaint();
+        signalPanel.repaint();
+
+        PRPDExtractorCore extractor = new PRPDExtractorCore(
+                f0,
+                t0,
+                threshold,
+                deadUs,
+                filter
+        );
+
+        pipeline = new PRPDPipeline(
+                filename,
+                500_000,
+                2,
+                extractor,
+                new PRPDPipelineListener() {
+            @Override
+            public void bufferRead(Buffer buffer) {
+                envelope.addBuffer(buffer);
+                envelopePanel.repaint();
+                signal.addBuffer(buffer);
+                signalPanel.repaint();
+            }
+
+            @Override
+            public void pulsesReady(Pulses pulses) {
+                histogram.addPulses(pulses);
+                prpdPanel.repaint();
+            }
+
+            @Override
+            public void finished() {
+                setTitle("PRPD Viewer - finished: " + Paths.get(filename).getFileName().toString());
+                setCursor(Cursor.getDefaultCursor());
+            }
+
+            @Override
+            public void error(Exception ex) {
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(
+                        PRPDTool.this,
+                        ex.getMessage(),
+                        "Error",
+                        JOptionPane.ERROR_MESSAGE
+                );
+            }
+        }
+        );
+
+        pipeline.setOnReaderProgress(n
+                -> SwingUtilities.invokeLater(() -> {
+                    status.setText("Read " + n + " buffers.");
+                })
+        );
+
+        setTitle("PRPD Viewer - " + Paths.get(filename).getFileName().toString());
+        setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+        pipeline.start();
     }
 
     private void stopPipeline() {
         if (pipeline != null) {
             pipeline.close();
             pipeline = null;
+        }
+    }
+
+    private void exportHistogram() {
+        JFileChooser fileChooser = new JFileChooser(getLastUsedDirectory());
+        setFontRecursively(fileChooser, currentFont, 0);
+        int result = fileChooser.showSaveDialog(this);
+        if (result == JFileChooser.APPROVE_OPTION) {
+            try {
+                int[][] h = histogram.getHistogram();
+                PrintWriter w = new PrintWriter(new FileWriter(fileChooser.getSelectedFile()));
+                w.println(histogram.getMin() + "," + histogram.getMax());
+                for (int[] row : h) {
+                    for (int j = 0; j < row.length - 1; j++) {
+                        w.print(row[j] + ",");
+                    }
+                    w.println(row[row.length - 1]);
+                }
+                status.setText("histogram saved to " + fileChooser.getSelectedFile().getName());
+            } catch (IOException ex) {
+                status.setText(ex.getMessage());
+            }
+        }
+    }
+
+    private void exportImage() {
+        JFileChooser fileChooser = new JFileChooser(getLastUsedDirectory());
+        setFontRecursively(fileChooser, currentFont, 0);
+        int result = fileChooser.showSaveDialog(this);
+        if (result == JFileChooser.APPROVE_OPTION) {
+            try {
+                ImageIO.write(histogram.getImage(), "png", fileChooser.getSelectedFile());
+                status.setText("image saved to " + fileChooser.getSelectedFile().getName());
+            } catch (IOException ex) {
+                status.setText(ex.getMessage());
+            }
         }
     }
 

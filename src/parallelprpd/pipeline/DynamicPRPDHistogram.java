@@ -47,7 +47,7 @@ public class DynamicPRPDHistogram {
         this.plotH = height - top - bottom;
 
         if (plotW <= 0 || plotH <= 0) {
-            throw new IllegalArgumentException("Image too small");
+            throw new IllegalArgumentException("Image would be too small");
         }
 
         this.hist = new int[binsPhase][binsAmp];
@@ -58,6 +58,18 @@ public class DynamicPRPDHistogram {
 
     public BufferedImage getImage() {
         return image;
+    }
+    
+    public double getMin() {
+        return ampMin;
+    }
+     
+    public double getMax() {
+        return ampMax;
+    }
+    
+    public int[][] getHistogram() {
+        return hist;
     }
 
     public void addPulses(Pulses p) {

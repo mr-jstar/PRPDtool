@@ -1,7 +1,5 @@
 package parallelprpd.pipeline;
 
-import prpdtool.DigitalFilters;
-
 /**
  *
  * @author jstar
