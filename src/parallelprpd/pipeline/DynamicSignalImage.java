@@ -8,6 +8,7 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.Arrays;
 import java.util.Locale;
+import prpdtool.NicerScale;
 
 public class DynamicSignalImage {
 
@@ -24,8 +25,11 @@ public class DynamicSignalImage {
     private double tMin;
     private double tMax;
 
-    private double yMin = 0.0;
+    private double yMin = -1.0;
     private double yMax = 1.0;
+
+    NicerScale.Scale xs;
+    NicerScale.Scale ys;
 
     private Filter filter;
 
@@ -96,9 +100,16 @@ public class DynamicSignalImage {
 
         double[] fu = filter == null ? b.u : filter.filter(b.u);
 
+        double bMin = Double.POSITIVE_INFINITY;
+        double bMax = Double.NEGATIVE_INFINITY;
         for (int i = 0; i < b.size; i++) {
             double t = b.t[i];
             double u = fu[i];
+            if (u < bMin) {
+                bMin = u;
+            } else if (u > bMax) {
+                bMax = u;
+            }
 
             int x = timeToPixel(t);
             if (x < 0 || x >= plotW) {
@@ -123,6 +134,10 @@ public class DynamicSignalImage {
                 scaleChanged = true;
             }
         }
+        if (bMax - bMin < (yMax - yMin / 2)) {
+            checkYRange();
+            scaleChanged = true;
+        }
 
         if (scaleChanged) {
             redrawAll();
@@ -134,7 +149,7 @@ public class DynamicSignalImage {
 
     private void expandTimeRange(double newTMax) {
         double timeSqueeze = (tMax - tMin) / (newTMax - tMin);
-        boolean [] newData = new boolean[plotW];
+        boolean[] newData = new boolean[plotW];
         for (int x = 0; x < plotW; x++) {
             if (!hasData[x]) {
                 continue;
@@ -153,7 +168,7 @@ public class DynamicSignalImage {
                 }
             }
         }
-        System.arraycopy(newData,0,hasData,0,plotW);
+        System.arraycopy(newData, 0, hasData, 0, plotW);
         tMax = newTMax;
     }
 
@@ -177,14 +192,39 @@ public class DynamicSignalImage {
 
         double span = yMax - yMin;
         if (span <= 0.0) {
-            yMin -= 1.0;
-            yMax += 1.0;
+            yMin -= 0.5;
+            yMax += 0.5;
             return;
         }
 
         double margin = 0.10 * span;
         yMin -= margin;
         yMax += margin;
+    }
+
+    private void checkYRange() {
+        double currentMin = Double.POSITIVE_INFINITY;
+        double currentMax = Double.NEGATIVE_INFINITY;
+        for (int x = 0; x < plotW; x++) {
+            if (hasData[x]) {
+                if (pixMin[x] < currentMin) {
+                    currentMin = pixMin[x];
+                }
+                if (pixMax[x] > currentMax) {
+                    currentMax = pixMax[x];
+                }
+            }
+        }
+        double span = currentMax - currentMin;
+        if (span <= 0.0) {
+            yMin -= 0.5;
+            yMax += 0.5;
+            return;
+        }
+
+        double margin = 0.10 * span;
+        yMin = currentMin - margin;
+        yMax = currentMax + margin;
     }
 
     private void redrawAll() {
@@ -207,13 +247,32 @@ public class DynamicSignalImage {
 
         g.setColor(new Color(230, 230, 230));
 
+        xs = NicerScale.niceScale(tMin, tMax);
+        tMin = xs.min();
+        tMax = xs.max();
+        ys = NicerScale.niceScale(yMin, yMax);
+        yMin = ys.min();
+        yMax = ys.max();
+
+        /*
         for (int i = 0; i <= 10; i++) {
             int x = left + (int) Math.round(i / 10.0 * plotW);
-            g.drawLine(x, top, x, top + plotH);
+
         }
 
         for (int i = 0; i <= 5; i++) {
             int y = top + (int) Math.round(i / 5.0 * plotH);
+            g.drawLine(left, y, left + plotW, y);
+        }
+         */
+        for (double t = xs.min(); t <= xs.max() + 0.5 * xs.step(); t += xs.step()) {
+
+            int x = left + (int) Math.round((t - xs.min()) / (xs.max() - xs.min()) * plotW);
+            g.drawLine(x, top, x, top + plotH);
+        }
+
+        for (double yVal = ys.min(); yVal <= ys.max() + 0.5 * ys.step(); yVal += ys.step()) {
+            int y = top + plotH - (int) Math.round((yVal - ys.min()) / (ys.max() - ys.min()) * plotH);
             g.drawLine(left, y, left + plotW, y);
         }
 
@@ -267,21 +326,24 @@ public class DynamicSignalImage {
 
         g.setFont(new Font("Arial", Font.PLAIN, 13));
 
-        for (int i = 0; i <= 10; i++) {
-            double t = tMin + i * (tMax - tMin) / 10.0;
-            int x = left + (int) Math.round(i / 10.0 * plotW);
+        //for (int i = 0; i <= 10; i++) {
+        //                double t = tMin + i * (tMax - tMin) / 10.0;
+        for (double t = xs.min(); t <= xs.max() + 0.5 * xs.step(); t += xs.step()) {
+
+            int x = left + (int) Math.round((t - xs.min()) / (xs.max() - xs.min()) * plotW);
 
             g.drawLine(x, top + plotH, x, top + plotH + 5);
-            g.drawString(String.format(Locale.US, "%.3f", t),
+            g.drawString(NicerScale.formatTick(t, xs.step()),
                     x - 20, top + plotH + 22);
         }
 
-        for (int i = 0; i <= 5; i++) {
-            double yVal = yMin + i * (yMax - yMin) / 5.0;
-            int y = top + plotH - (int) Math.round(i / 5.0 * plotH);
+        //for (int i = 0; i <= 5; i++) {
+        //    double yVal = yMin + i * (yMax - yMin) / 5.0;
+        for (double yVal = ys.min(); yVal <= ys.max() + 0.5 * ys.step(); yVal += ys.step()) {
+            int y = top + plotH - (int) Math.round((yVal - ys.min()) / (ys.max() - ys.min()) * plotH);
 
             g.drawLine(left - 5, y, left, y);
-            g.drawString(String.format(Locale.US, "%.3f", yVal),
+            g.drawString(NicerScale.formatTick(yVal, ys.step()),
                     5, y + 5);
         }
 

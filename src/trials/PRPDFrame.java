@@ -157,11 +157,11 @@ public class PRPDFrame extends JFrame {
                 }
 
                 @Override
-                public void error(Exception ex) {
+                public void error(Throwable ex, String msg) {
                     ex.printStackTrace();
                     JOptionPane.showMessageDialog(
                             PRPDFrame.this,
-                            ex.getMessage(),
+                            ex.getMessage() + msg,
                             "Error",
                             JOptionPane.ERROR_MESSAGE
                     );
