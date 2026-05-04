@@ -12,7 +12,7 @@ public final class BufferFactory {
     private static final int BUFFER_COUNT = 4;
     private static final int BUFFER_SIZE = 1024 * 1024;
     
-    private static Buffer [] buffers = new Buffer[BUFFER_COUNT];
+    private static final Buffer [] buffers = new Buffer[BUFFER_COUNT];
 
     private static final BlockingQueue<Buffer> pool =
             new ArrayBlockingQueue<>(BUFFER_COUNT);

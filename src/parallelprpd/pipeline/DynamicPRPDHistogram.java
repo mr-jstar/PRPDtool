@@ -74,7 +74,7 @@ public class DynamicPRPDHistogram {
 
     public void addPulses(Pulses p) {
 
-        for (int i = 0; i < p.size; i++) {
+        for (int i = 0; i < p.n; i++) {
 
             double phase = p.phase[i];
             double amp = Math.abs(p.amp[i]);
@@ -166,6 +166,7 @@ public class DynamicPRPDHistogram {
 
         g.setFont(new Font("Arial", Font.PLAIN, 13));
 
+        // Osie
         for (int deg = 0; deg <= 360; deg += 60) {
             int x = left + (int) Math.round(deg / 360.0 * plotW);
             g.drawLine(x, top + plotH, x, top + plotH + 5);
@@ -177,9 +178,10 @@ public class DynamicPRPDHistogram {
             int y = top + plotH - (int) Math.round(i / 4.0 * plotH);
 
             g.drawLine(left - 5, y, left, y);
-            g.drawString(String.format(Locale.US, "%.3f", val), 5, y + 5);
+            g.drawString(String.format(Locale.US, "%.3f", val), 25, y + 5);
         }
 
+        // Opis
         g.setFont(new Font("Arial", Font.BOLD, 16));
         g.drawString("PRPD", left, 20);
 

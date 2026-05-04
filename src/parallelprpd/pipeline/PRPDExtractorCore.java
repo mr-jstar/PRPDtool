@@ -11,6 +11,7 @@ public class PRPDExtractorCore {
     private final double threshold;
     private final double deadUs;
     private final Filter filter;
+    private Pulses pulses;
 
     private double lastT = Double.NaN;
 
@@ -30,10 +31,15 @@ public class PRPDExtractorCore {
 
     public Pulses extract(Buffer b) {
         int n = b.used;
+        
+        if( pulses == null || pulses.n < n ) {
+            pulses = new Pulses(new double[n], new double[n], new double[n], n);
+        }
 
         if (n < 3) {
             b.release();
-            return new Pulses(new double[0], new double[0], new double[0], 0);
+            pulses.n = 0;
+            return pulses;
         }
 
         double fs = estimateFs(b.t, n);
@@ -42,10 +48,6 @@ public class PRPDExtractorCore {
         int deadN = Math.max(1, (int) Math.round(deadUs * 1e-6 * fs));
 
         double [] filtered = filter.filter(b.u);
-
-        double[] pt = new double[n];
-        double[] pp = new double[n];
-        double[] pa = new double[n];
 
         int count = 0;
         int i = 1;
@@ -80,9 +82,9 @@ public class PRPDExtractorCore {
                 //double amp = b.u[best] - filtered[best];
                 double amp = filtered[best];
 
-                pt[count] = tp;
-                pp[count] = phase(tp);
-                pa[count] = amp;
+                pulses.t[count] = tp;
+                pulses.phase[count] = phase(tp);
+                pulses.amp[count] = amp;
                 count++;
 
                 lastT = tp;
@@ -92,9 +94,10 @@ public class PRPDExtractorCore {
                 i++;
             }
         }
+        pulses.n = count;
         b.release();
 
-        return new Pulses(pt, pp, pa, count);
+        return pulses;
     }
 
     private double phase(double t) {
@@ -122,37 +125,5 @@ public class PRPDExtractorCore {
         }
 
         return 1.0 / (sum / count);
-    }
-
-    private static double[] movingAverageCentered(double[] x, int n, int win) {
-        double[] y = new double[n];
-        double[] ps = new double[n + 1];
-
-        for (int i = 0; i < n; i++) {
-            ps[i + 1] = ps[i] + x[i];
-        }
-
-        int half = win / 2;
-
-        for (int i = 0; i < n; i++) {
-            int left = i - half;
-            int right = i + half;
-
-            if (win % 2 == 0) {
-                right--;
-            }
-
-            if (left < 0) {
-                left = 0;
-            }
-
-            if (right >= n) {
-                right = n - 1;
-            }
-
-            y[i] = (ps[right + 1] - ps[left]) / (right - left + 1);
-        }
-
-        return y;
     }
 }

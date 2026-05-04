@@ -60,7 +60,6 @@ public class PRPDTool extends JFrame {
     private int filterOrder = 4; // rząd filtra
     private double cutF = 10_000; // f odcięcia
 
-
     Param<?>[] params = {
         Param.dbl("Basic frequency [Hz]", () -> f0, v -> f0 = v),
         Param.dbl("Zero-crossing instant", () -> t0, v -> t0 = v),
@@ -246,6 +245,8 @@ public class PRPDTool extends JFrame {
             int[] padding = histogram.padding();
             prpdPanel.setPreferredSize(new Dimension(center.getWidth() - padding[0], center.getHeight() - padding[1]));
             center.add(prpdPanel);
+            center.setBackground(Color.white);
+            center.revalidate();
 
             envelopePanel = new ImagePanel(envelope.getImage());
             envelopePanel.setPreferredSize(new Dimension(bottom.getWidth() / 2 - 5, bottom.getHeight()));
@@ -296,8 +297,7 @@ public class PRPDTool extends JFrame {
             public void componentResized(ComponentEvent e) {
                 histogram.resize(center.getWidth(), center.getHeight());
                 envelope.resize(bottom.getWidth() / 2, bottom.getHeight());
-                int[] padding = histogram.padding();
-                prpdPanel.setPreferredSize(new Dimension(center.getWidth() - padding[0], center.getHeight() - padding[1]));
+                prpdPanel.setPreferredSize(new Dimension(center.getWidth(), center.getHeight()));
                 envelopePanel.setPreferredSize(new Dimension(bottom.getWidth() / 2, bottom.getHeight()));
             }
         });
@@ -375,6 +375,14 @@ public class PRPDTool extends JFrame {
     }
 
     private void readDataFile(String filename) throws Exception {
+
+        stopPipeline();
+        try {
+            Thread.sleep(100);
+        } catch( InterruptedException ex ) {
+            
+        }
+
         double[] lasttu = new double[2];
         String[] last;
         if (filename.endsWith(".csv")) {
@@ -383,8 +391,6 @@ public class PRPDTool extends JFrame {
             last = prpdtool.Utils.readLastPair(filename).trim().split("[,;\\s]+");
         }
         lasttu[0] = Double.parseDouble(last[0]);
-
-        stopPipeline();
 
         Filter filter = new HighPassFilter(fs, cutF, filterQ, filterOrder);
         Filter abs = new Filter() {
@@ -437,7 +443,7 @@ public class PRPDTool extends JFrame {
                 deadUs,
                 filter
         );
-        
+
         Buffer b = BufferFactory.acquire(1);
         int buffer_size = b.size();
         b.release();
