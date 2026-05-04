@@ -55,6 +55,7 @@ public class PRPDTool extends JFrame {
     private double t0 = 0;
     private double fs = 1_000_000;  // próbkowanie 
     private double threshold = 0.012; //próg detekcji impulsu po odjęciu tła
+    private double ampMax = 1.2; // max amplituda immpulsu
     private double deadUs = 30; //martwy czas po wykryciu impulsu [µs]
     private double filterQ = 0.707; // Q filtra
     private int filterOrder = 4; // rząd filtra
@@ -65,6 +66,7 @@ public class PRPDTool extends JFrame {
         Param.dbl("Zero-crossing instant", () -> t0, v -> t0 = v),
         Param.dbl("Sampling frequency [Hz]", () -> fs, v -> fs = v),
         Param.dbl("Pulse ampl. threshold", () -> threshold, v -> threshold = v),
+        Param.dbl("Max pulse amplitude", () -> ampMax, v -> ampMax = v),
         Param.dbl("Dead time [us]", () -> deadUs, v -> deadUs = v),
         Param.dbl("HPF cutoff frequency [Hz]", () -> cutF, v -> cutF = v),
         Param.dbl("Filter Q", () -> filterQ, v -> filterQ = v),
@@ -227,7 +229,7 @@ public class PRPDTool extends JFrame {
             histogram = new DynamicPRPDHistogram(
                     center.getWidth(), center.getHeight(),
                     360, 200,
-                    0.0, 0.12
+                    0.0, ampMax
             );
 
             envelope = new DynamicSignalImage(
@@ -413,7 +415,7 @@ public class PRPDTool extends JFrame {
         histogram = new DynamicPRPDHistogram(
                 center.getWidth(), center.getHeight(),
                 360, 200,
-                0.0, 0.12
+                0.0, ampMax
         );
 
         envelope = new DynamicSignalImage(
