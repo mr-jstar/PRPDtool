@@ -349,7 +349,7 @@ public class DynamicSignalImage {
 
             g.drawLine(left - 5, y, left, y);
             g.drawString(NicerScale.formatTick(yVal, ys.step()),
-                    5, y + 5);
+                    30, y + 5);
         }
 
         g.setFont(new Font("Arial", Font.BOLD, 16));

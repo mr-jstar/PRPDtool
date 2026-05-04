@@ -60,9 +60,6 @@ public class PRPDTool extends JFrame {
     private int filterOrder = 4; // rząd filtra
     private double cutF = 10_000; // f odcięcia
 
-    // Reader
-    private int bufferSize = 500_000;
-    private int queueCapacity = 2;
 
     Param<?>[] params = {
         Param.dbl("Basic frequency [Hz]", () -> f0, v -> f0 = v),
@@ -72,9 +69,7 @@ public class PRPDTool extends JFrame {
         Param.dbl("Dead time [us]", () -> deadUs, v -> deadUs = v),
         Param.dbl("HPF cutoff frequency [Hz]", () -> cutF, v -> cutF = v),
         Param.dbl("Filter Q", () -> filterQ, v -> filterQ = v),
-        Param.integer("Filter Order", () -> filterOrder, v -> filterOrder = v),
-        Param.integer("Read buffer size", () -> bufferSize, v -> bufferSize = v),
-        Param.integer("Read queue capacity", () -> queueCapacity, v -> queueCapacity = v)
+        Param.integer("Filter Order", () -> filterOrder, v -> filterOrder = v)
     };
 
     // Data
@@ -263,7 +258,7 @@ public class PRPDTool extends JFrame {
             bottom.add(envelopePanel);
             bottom.add(signalPanel);
 
-            right.setLayout(new GridLayout(18, 3));
+            right.setLayout(new GridLayout(18, 2));
             right.add(new JLabel("Data source: "));
             dataSource = new JLabel("none");
             right.add(dataSource);
