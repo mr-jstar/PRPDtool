@@ -12,7 +12,6 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.lang.invoke.MethodHandles;
 import java.nio.file.Paths;
 import java.util.function.DoubleConsumer;
 import java.util.function.DoubleSupplier;
@@ -61,6 +60,10 @@ public class PRPDTool extends JFrame {
     private int filterOrder = 4; // rząd filtra
     private double cutF = 10_000; // f odcięcia
 
+    // Reader
+    private int bufferSize = 500_000;
+    private int queueCapacity = 2;
+
     Param<?>[] params = {
         Param.dbl("Basic frequency [Hz]", () -> f0, v -> f0 = v),
         Param.dbl("Zero-crossing instant", () -> t0, v -> t0 = v),
@@ -69,7 +72,9 @@ public class PRPDTool extends JFrame {
         Param.dbl("Dead time [us]", () -> deadUs, v -> deadUs = v),
         Param.dbl("HPF cutoff frequency [Hz]", () -> cutF, v -> cutF = v),
         Param.dbl("Filter Q", () -> filterQ, v -> filterQ = v),
-        Param.integer("Filter Order", () -> filterOrder, v -> filterOrder = v)
+        Param.integer("Filter Order", () -> filterOrder, v -> filterOrder = v),
+        Param.integer("Read buffer size", () -> bufferSize, v -> bufferSize = v),
+        Param.integer("Read queue capacity", () -> queueCapacity, v -> queueCapacity = v)
     };
 
     // Data
@@ -278,6 +283,14 @@ public class PRPDTool extends JFrame {
                         field.setBackground(new Color(255, 200, 200));
                     }
                 });
+
+                field.addFocusListener(new java.awt.event.FocusAdapter() {
+                    @Override
+                    public void focusLost(java.awt.event.FocusEvent e) {
+                        status.setText("Some parameter changes may not have been applied!");
+                    }
+                });
+
                 right.add(label);
                 right.add(field);
             }
@@ -462,11 +475,11 @@ public class PRPDTool extends JFrame {
             }
 
             @Override
-            public void error(Exception ex) {
+            public void error(Throwable ex, String msg) {
                 ex.printStackTrace();
                 JOptionPane.showMessageDialog(
                         PRPDTool.this,
-                        ex.getMessage(),
+                        ex.getMessage() + msg,
                         "Error",
                         JOptionPane.ERROR_MESSAGE
                 );

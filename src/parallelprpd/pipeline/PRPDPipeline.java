@@ -101,10 +101,10 @@ public class PRPDPipeline implements AutoCloseable {
                 }
             }
 
-        } catch (Exception ex) {
+        } catch (Throwable ex) {
             running.set(false);
             readerFinished.set(true);
-            SwingUtilities.invokeLater(() -> listener.error(ex));
+            SwingUtilities.invokeLater(() -> listener.error(ex, " in readerLoop"));
         }
     }
 
@@ -134,9 +134,9 @@ public class PRPDPipeline implements AutoCloseable {
             running.set(false);
             SwingUtilities.invokeLater(listener::finished);
 
-        } catch (Exception ex) {
+        } catch (Throwable ex) {
             running.set(false);
-            SwingUtilities.invokeLater(() -> listener.error(ex));
+            SwingUtilities.invokeLater(() -> listener.error(ex, " in extractorLoop"));
         }
     }
 
