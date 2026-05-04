@@ -29,9 +29,10 @@ public class PRPDExtractorCore {
     }
 
     public Pulses extract(Buffer b) {
-        int n = b.size;
+        int n = b.used;
 
         if (n < 3) {
+            b.release();
             return new Pulses(new double[0], new double[0], new double[0], 0);
         }
 
@@ -91,6 +92,7 @@ public class PRPDExtractorCore {
                 i++;
             }
         }
+        b.release();
 
         return new Pulses(pt, pp, pa, count);
     }

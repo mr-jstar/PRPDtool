@@ -83,20 +83,24 @@ public class DynamicSignalImage {
     }
 
     public void addBuffer(Buffer b) {
-        if (b == null || b.size == 0) {
+        if (b == null) {
+            return;
+        }
+        if(b.used == 0) {
+            b.release();
             return;
         }
 
         boolean scaleChanged = false;
 
-        if (b.t[b.size - 1] > tMax) {
-            expandTimeRange(b.t[b.size - 1]);
+        if (b.t[b.used - 1] > tMax) {
+            expandTimeRange(b.t[b.used - 1]);
             scaleChanged = true;
         }
 
         double[] fu = filter == null ? b.u : filter.filter(b.u);
 
-        for (int i = 0; i < b.size; i++) {
+        for (int i = 0; i < b.used; i++) {
             double t = b.t[i];
             double u = fu[i];
 
@@ -123,6 +127,7 @@ public class DynamicSignalImage {
                 scaleChanged = true;
             }
         }
+        b.release();
 
         if (scaleChanged) {
             redrawAll();

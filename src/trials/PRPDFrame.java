@@ -135,6 +135,7 @@ public class PRPDFrame extends JFrame {
 
             pipeline = new PRPDPipeline(
                     file.getAbsolutePath(),
+                    2, // 2 konsumentów: extractor i envelope
                     5_000_000,
                     2,
                     extractor,

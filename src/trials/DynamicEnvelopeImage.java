@@ -73,13 +73,16 @@ public class DynamicEnvelopeImage {
     }
 
     public void addBuffer(Buffer b) {
-        if (b == null || b.size == 0) {
+        if (b == null) {
             return;
         }
-
+        if (b.used == 0) {
+            b.release();
+            return;
+        }
         boolean scaleChanged = false;
 
-        for (int i = 0; i < b.size; i++) {
+        for (int i = 0; i < b.used; i++) {
             double t = b.t[i];
             double u = Math.abs(b.u[i]);
 
@@ -106,6 +109,7 @@ public class DynamicEnvelopeImage {
                 scaleChanged = true;
             }
         }
+        b.release();
 
         if (scaleChanged) {
             redrawAll();

@@ -26,6 +26,7 @@ public class PRPDPipeline implements AutoCloseable {
     private final String filename;
     private final int bufferSize;
     private final int maxQueuedBuffers;
+    private final int consumerCount;
 
     private final PRPDExtractorCore extractor;
     private final PRPDPipelineListener listener;
@@ -36,12 +37,14 @@ public class PRPDPipeline implements AutoCloseable {
 
     public PRPDPipeline(
             String filename,
+            int consumerCount,
             int bufferSize,
             int maxQueuedBuffers,
             PRPDExtractorCore extractor,
             PRPDPipelineListener listener
     ) {
         this.filename = filename;
+        this.consumerCount = consumerCount;
         this.bufferSize = bufferSize;
         this.maxQueuedBuffers = maxQueuedBuffers;
         this.extractor = extractor;
@@ -69,9 +72,9 @@ public class PRPDPipeline implements AutoCloseable {
         try {
             SignalReader reader = null;
             if (filename.endsWith(".csv")) {
-                reader = new TextReader(filename, bufferSize);
+                reader = new TextReader(filename, consumerCount, bufferSize);
             } else {
-                reader = new BinaryReader(filename, bufferSize);;
+                reader = new BinaryReader(filename, consumerCount, bufferSize);;
             }
 
             while (running.get()) {
@@ -84,7 +87,7 @@ public class PRPDPipeline implements AutoCloseable {
 
                 Buffer buffer = reader.read();
 
-                if (buffer.size > 0) {
+                if (buffer.used > 0) {
                     queue.add(buffer);
                     queuedBuffers.incrementAndGet();
 

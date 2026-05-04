@@ -20,6 +20,7 @@ import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
 import javax.imageio.ImageIO;
 import parallelprpd.pipeline.Buffer;
+import parallelprpd.pipeline.BufferFactory;
 import parallelprpd.pipeline.DynamicPRPDHistogram;
 import parallelprpd.pipeline.DynamicSignalImage;
 import parallelprpd.pipeline.Filter;
@@ -61,12 +62,12 @@ public class PRPDTool extends JFrame {
     private double cutF = 10_000; // f odcięcia
 
     Param<?>[] params = {
-        Param.dbl("Basic frequancy", () -> f0, v -> f0 = v),
+        Param.dbl("Basic frequency [Hz]", () -> f0, v -> f0 = v),
         Param.dbl("Zero-crossing instant", () -> t0, v -> t0 = v),
-        Param.dbl("Sampling frequency", () -> fs, v -> fs = v),
+        Param.dbl("Sampling frequency [Hz]", () -> fs, v -> fs = v),
         Param.dbl("Pulse ampl. threshold", () -> threshold, v -> threshold = v),
-        Param.dbl("Dead time", () -> deadUs, v -> deadUs = v),
-        Param.dbl("HPF cutoff frequency", () -> cutF, v -> cutF = v),
+        Param.dbl("Dead time [us]", () -> deadUs, v -> deadUs = v),
+        Param.dbl("HPF cutoff frequency [Hz]", () -> cutF, v -> cutF = v),
         Param.dbl("Filter Q", () -> filterQ, v -> filterQ = v),
         Param.integer("Filter Order", () -> filterOrder, v -> filterOrder = v)
     };
@@ -358,7 +359,7 @@ public class PRPDTool extends JFrame {
                 dataSource.setText("file (" + file.getName() + ")");
                 lastDataFile = filename;
             } catch (Exception ex) {
-                System.err.println("Bad file: " + file.getName());
+                System.err.println("Bad file: " + file.getName() + " : " + ex.getMessage());
                 lastDataFile = null;
                 //ex.printStackTrace();
             }
@@ -428,10 +429,15 @@ public class PRPDTool extends JFrame {
                 deadUs,
                 filter
         );
+        
+        Buffer b = BufferFactory.acquire(1);
+        int buffer_size = b.size();
+        b.release();
 
         pipeline = new PRPDPipeline(
                 filename,
-                500_000,
+                3, // 3 konsumentów: extractor, envelope, signal
+                buffer_size,
                 2,
                 extractor,
                 new PRPDPipelineListener() {
@@ -482,6 +488,7 @@ public class PRPDTool extends JFrame {
     private void stopPipeline() {
         if (pipeline != null) {
             pipeline.close();
+            BufferFactory.reset();
             pipeline = null;
         }
     }
