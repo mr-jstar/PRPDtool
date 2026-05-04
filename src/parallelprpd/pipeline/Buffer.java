@@ -36,14 +36,14 @@ public class Buffer {
         this.eof = false;
         this.used = 0;
         this.refs.set(consumerCount);
-        System.out.println( this + ": buffer's counter set to " + consumerCount);
+        //System.out.println( this + ": buffer's counter set to " + consumerCount);
     }
 
     public void release() {
         int r = refs.decrementAndGet();
-        System.out.println(this + ": buffer released, r= " + refs.get());
+        //System.out.println(this + ": buffer released, r= " + refs.get());
         if (r == 0) {
-            System.out.println(this + ": returned to pool");
+            //System.out.println(this + ": returned to pool");
             BufferFactory.returnToPool(this);
         } else if (r < 0) {
             throw new IllegalStateException("Buffer released too many times");
