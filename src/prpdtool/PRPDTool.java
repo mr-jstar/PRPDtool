@@ -48,6 +48,10 @@ public class PRPDTool extends JFrame {
     private JPanel right;
     private JPanel bottom;
 
+    private JSplitPane splitCenterRight;
+    private JSplitPane splitLeft;
+    private JSplitPane verticalSplit;
+
     private final JLabel status = new JLabel("");
 
     // PRPD config
@@ -72,6 +76,9 @@ public class PRPDTool extends JFrame {
         Param.dbl("Filter Q", () -> filterQ, v -> filterQ = v),
         Param.integer("Filter Order", () -> filterOrder, v -> filterOrder = v)
     };
+
+    // Misc options
+    private boolean drawF0 = true;
 
     // Data
     private ImagePanel prpdPanel;
@@ -142,7 +149,7 @@ public class PRPDTool extends JFrame {
         JMenuBar mb = new JMenuBar();
 
         JMenu fileM = new JMenu("File");
-        JMenuItem fileMI = new JMenuItem("Open");
+        JMenuItem fileMI = new JMenuItem("Read (t,u) from file");
         fileMI.addActionListener(e -> loadFile());
         fileM.add(fileMI);
 
@@ -163,6 +170,7 @@ public class PRPDTool extends JFrame {
 
         JMenu optM = new JMenu("Options");
         JMenuItem fontMI = new JMenuItem("Font size");
+        optM.add(fontMI);
         ButtonGroup fgroup = new ButtonGroup();
         for (Font f : fonts) {
             JRadioButtonMenuItem fontOpt = new JRadioButtonMenuItem("\t\t\t" + String.valueOf(f.getSize()));
@@ -178,7 +186,15 @@ public class PRPDTool extends JFrame {
             fgroup.add(fontOpt);
             optM.add(fontOpt);
         }
-        optM.add(fontMI);
+        optM.addSeparator();
+
+        JCheckBoxMenuItem sinMB = new JCheckBoxMenuItem("Draw base sine", drawF0);
+        sinMB.addActionListener(e -> {
+            drawF0 = sinMB.isSelected();
+            histogram.drawF0(drawF0);
+            prpdPanel.repaint();
+        });
+        optM.add(sinMB);
         mb.add(optM);
         setJMenuBar(mb);
     }
@@ -190,7 +206,7 @@ public class PRPDTool extends JFrame {
         bottom = new JPanel();
         center = new JPanel();
 
-        JSplitPane splitCenterRight = new JSplitPane(
+        splitCenterRight = new JSplitPane(
                 JSplitPane.HORIZONTAL_SPLIT,
                 center,
                 right
@@ -198,7 +214,7 @@ public class PRPDTool extends JFrame {
         splitCenterRight.setResizeWeight(0.85);
 
         // --- lewy + reszta ---
-        JSplitPane splitLeft = new JSplitPane(
+        splitLeft = new JSplitPane(
                 JSplitPane.HORIZONTAL_SPLIT,
                 left,
                 splitCenterRight
@@ -206,7 +222,7 @@ public class PRPDTool extends JFrame {
         splitLeft.setResizeWeight(0.05);
 
         // --- góra (80%) + dół (20%) ---
-        JSplitPane verticalSplit = new JSplitPane(
+        verticalSplit = new JSplitPane(
                 JSplitPane.VERTICAL_SPLIT,
                 splitLeft,
                 bottom
@@ -231,6 +247,7 @@ public class PRPDTool extends JFrame {
                     360, 200,
                     0.0, ampMax
             );
+            histogram.drawF0(drawF0);
 
             envelope = new DynamicSignalImage(
                     "Signal envelope", Color.BLUE,
@@ -297,6 +314,9 @@ public class PRPDTool extends JFrame {
         addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
+                verticalSplit.setDividerLocation(0.75);
+                splitLeft.setDividerLocation(0.05);
+                splitCenterRight.setDividerLocation(0.8);
                 histogram.resize(center.getWidth(), center.getHeight());
                 envelope.resize(bottom.getWidth() / 2, bottom.getHeight());
                 prpdPanel.setPreferredSize(new Dimension(center.getWidth(), center.getHeight()));
@@ -381,8 +401,8 @@ public class PRPDTool extends JFrame {
         stopPipeline();
         try {
             Thread.sleep(100);
-        } catch( InterruptedException ex ) {
-            
+        } catch (InterruptedException ex) {
+
         }
 
         double[] lasttu = new double[2];
@@ -417,6 +437,7 @@ public class PRPDTool extends JFrame {
                 360, 200,
                 0.0, ampMax
         );
+        histogram.drawF0(drawF0);
 
         envelope = new DynamicSignalImage(
                 "Signal envelope", Color.BLUE,

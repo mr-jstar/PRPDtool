@@ -25,6 +25,8 @@ public class DynamicPRPDHistogram {
 
     private final int[][] hist;
     private int maxCount = 0;
+    
+    private boolean addF0;
 
     private final BufferedImage image;
 
@@ -70,6 +72,11 @@ public class DynamicPRPDHistogram {
     
     public int[][] getHistogram() {
         return hist;
+    }
+    
+    public void drawF0( boolean doIt ) {
+        addF0 = doIt;
+        redraw();
     }
 
     public void addPulses(Pulses p) {
@@ -123,6 +130,17 @@ public class DynamicPRPDHistogram {
 
         g.setColor(Color.BLACK);
         g.fillRect(left, top, plotW, plotH);
+                
+        if( addF0 ) {
+            int yp = top + plotH/2;
+            for( int x= left+1; x < plotW+left; x++ ) {
+                double ph = 2*Math.PI * (x-left) / plotW;
+                int y = top + plotH/2 - (int) ( plotH/4 * Math.sin(ph));
+                g.setColor(Color.gray);
+                g.drawLine(x-1, yp, x, y);
+                yp = y;
+            }
+        }
 
         for (int xb = 0; xb < binsPhase; xb++) {
             for (int yb = 0; yb < binsAmp; yb++) {
@@ -131,6 +149,7 @@ public class DynamicPRPDHistogram {
                     continue;
                 }
 
+                // <0,maxCount> -> log -> <0,1>
                 double v = Math.log1p(c) / Math.log1p(maxCount);
 
                 int x0 = left + (int) Math.floor(xb * plotW / (double) binsPhase);
