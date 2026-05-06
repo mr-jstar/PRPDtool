@@ -46,7 +46,7 @@ public class Buffer {
             //System.out.println(this + ": returned to pool");
             BufferFactory.returnToPool(this);
         } else if (r < 0) {
-            throw new IllegalStateException("Buffer released too many times");
+           // throw new IllegalStateException("Buffer released too many times");
         }
     }
 

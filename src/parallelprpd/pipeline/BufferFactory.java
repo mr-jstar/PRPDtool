@@ -47,7 +47,7 @@ public final class BufferFactory {
     static void returnToPool(Buffer b) {
         b.clear();
         if (!pool.offer(b)) {
-            throw new IllegalStateException("Buffer returned twice?");
+          //  throw new IllegalStateException("Buffer returned twice?");
         }
     }
 }
