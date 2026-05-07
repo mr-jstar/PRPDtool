@@ -4,10 +4,12 @@ package prpdtool;
  *
  * @author jstar
  */
+import classifier.PythonPRPDClassifier;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -92,6 +94,12 @@ public class PRPDTool extends JFrame {
     private PRPDPipeline pipeline;
 
     private JLabel dataSource;
+
+    private JLabel paramChange;
+    private JButton applyButton;
+
+    private JButton classifyButton;
+    private JLabel classResult;
 
     private static abstract class Param<T> {
 
@@ -278,7 +286,7 @@ public class PRPDTool extends JFrame {
             bottom.add(envelopePanel);
             bottom.add(signalPanel);
 
-            right.setLayout(new GridLayout(18, 2));
+            right.setLayout(new GridLayout(20, 2));
             right.add(new JLabel("Data source: "));
             dataSource = new JLabel("none");
             right.add(dataSource);
@@ -293,7 +301,9 @@ public class PRPDTool extends JFrame {
                     try {
                         p.setFromText(field.getText());
                         field.setBackground(Color.WHITE);
-                        onParameterChanged(label.getText());
+                        status.setText("Some parameter changes may not have been applied!");
+                        paramChange.setText("Param(s) change!");
+                        applyButton.setVisible(true);
                     } catch (NumberFormatException ex) {
                         field.setBackground(new Color(255, 200, 200));
                     }
@@ -303,12 +313,25 @@ public class PRPDTool extends JFrame {
                     @Override
                     public void focusLost(java.awt.event.FocusEvent e) {
                         status.setText("Some parameter changes may not have been applied!");
+                        paramChange.setText("Param(s) change!");
+                        applyButton.setVisible(true);
                     }
                 });
-
                 right.add(label);
                 right.add(field);
             }
+            paramChange = new JLabel(" ");
+            applyButton = new JButton("APPLY");
+            applyButton.addActionListener(e -> onParameterChanged());
+            applyButton.setVisible(false);
+            right.add(paramChange);
+            right.add(applyButton);
+            classifyButton = new JButton("CLASIFY");
+            classifyButton.addActionListener(e -> classifyPRPD());
+            classifyButton.setVisible(false);
+            right.add(classifyButton);
+            classResult = new JLabel("");
+            right.add(classResult);
         });
 
         addComponentListener(new ComponentAdapter() {
@@ -326,7 +349,7 @@ public class PRPDTool extends JFrame {
     }
 
     // ------------- Misc. helpers
-    private void onParameterChanged(String what) {
+    private void onParameterChanged() {
         // np. odśwież wykres / przelicz coś
         if (lastDataFile != null) {
             try {
@@ -335,6 +358,8 @@ public class PRPDTool extends JFrame {
                 status.setText(ex.getMessage());
             }
         }
+        paramChange.setText(" ");
+        applyButton.setVisible(false);
     }
 
     // Helper -sets font
@@ -375,6 +400,27 @@ public class PRPDTool extends JFrame {
         }
     }
 
+    private void classifyPRPD() {
+        if (histogram != null && histogram.getImage() != null) {
+            try {
+                PythonPRPDClassifier.Result result = PythonPRPDClassifier.classify(
+                        histogram.getImage(),
+                        "/usr/bin/python",
+                        "/home/jstar/NetBeansProjects/PRPDtool/klasyfikator/file_predict.py"
+                );
+                classResult.setText(result.toString());
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(
+                        PRPDTool.this,
+                        ex.getMessage(),
+                        "Error",
+                        JOptionPane.ERROR_MESSAGE
+                );
+            }
+        }
+    }
+
     //---------------- Actions ------
     private void loadFile() {
         JFileChooser fileChooser = new JFileChooser(getLastUsedDirectory());
@@ -382,6 +428,8 @@ public class PRPDTool extends JFrame {
         int result = fileChooser.showOpenDialog(this);
         if (result == JFileChooser.APPROVE_OPTION) {
             File file = fileChooser.getSelectedFile();
+            classifyButton.setVisible(false);
+            classResult.setText("");
             try {
                 String filename = file.getAbsolutePath();
                 readDataFile(filename);
@@ -496,6 +544,8 @@ public class PRPDTool extends JFrame {
             public void finished() {
                 setTitle("PRPD Viewer - finished: " + Paths.get(filename).getFileName().toString());
                 setCursor(Cursor.getDefaultCursor());
+                classifyButton.setVisible(true);
+                classResult.setText("");
             }
 
             @Override
