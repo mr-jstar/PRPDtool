@@ -121,7 +121,7 @@ def predict_defect_from_file(
         conf_cls_th
     )
 
-    return cls_id, obj_score, cls_scores
+    return cls_id, obj_score, cls_scores, tensor
 
 def prepare_model(model_path):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -140,8 +140,11 @@ if __name__ == "__main__":
 
     (device,model) = prepare_model(MODEL_PATH)
     if model is not None:
-        (cls,score,cls_scores) = predict_defect_from_file( sys.argv[1], model, device, CONF_OBJ_TH, CONF_CLS_TH )
+        (cls,score,cls_scores,tensor) = predict_defect_from_file( sys.argv[1], model, device, CONF_OBJ_TH, CONF_CLS_TH )
         if cls is None:
             print( "-1 0 0 0 0 0" )
         else:
             print( cls, score,  cls_scores )
+
+        if len(sys.argv) > 2 :
+            torch.onnx.export(model, tensor, sys.argv[2] + ".onnx")

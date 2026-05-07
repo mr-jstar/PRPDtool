@@ -9,7 +9,6 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
-import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -33,6 +32,11 @@ import parallelprpd.pipeline.Pulses;
 
 public class PRPDTool extends JFrame {
 
+    private static String python = "/Users/jstar/anaconda3/bin/python";
+    private static String classifier = "//Users/jstar/NetBeansProjects/PRPDTool/klasyfikator/file_predict.py";
+    //private static  String python = "/usr/bin/python";
+    //private static  String classifier = "/home/jstar/NetBeansProjects/PRPDtool/klasyfikator/file_predict.py";
+
     // GUI config
     private final static Font[] fonts = {
         new Font("Courier", Font.PLAIN, 12),
@@ -49,6 +53,7 @@ public class PRPDTool extends JFrame {
     private JPanel center;
     private JPanel right;
     private JPanel bottom;
+    private JPanel paramPanel;
 
     private JSplitPane splitCenterRight;
     private JSplitPane splitLeft;
@@ -105,13 +110,24 @@ public class PRPDTool extends JFrame {
 
         final String name;
 
+        JTextField field;
+
         Param(String name) {
             this.name = name;
+        }
+
+        void setField(JTextField field) {
+            this.field = field;
         }
 
         abstract String getText();
 
         abstract void setFromText(String text);
+        
+        void setFromField() {
+            if( field != null )
+                setFromText(field.getText());
+        }
 
         static Param<Double> dbl(String name, DoubleSupplier getter, DoubleConsumer setter) {
             return new Param<>(name) {
@@ -286,17 +302,19 @@ public class PRPDTool extends JFrame {
             bottom.add(envelopePanel);
             bottom.add(signalPanel);
 
-            right.setLayout(new GridLayout(20, 2));
-            right.add(new JLabel("Data source: "));
+            paramPanel = new JPanel();
+            paramPanel.setLayout(new GridLayout(20, 2));
+            paramPanel.add(new JLabel("Data source: "));
             dataSource = new JLabel("none");
-            right.add(dataSource);
+            paramPanel.add(dataSource);
 
-            right.add(new JLabel("Status:"));
-            right.add(status);
+            paramPanel.add(new JLabel("Status:"));
+            paramPanel.add(status);
 
             for (Param p : params) {
                 JLabel label = new JLabel(p.name);
                 JTextField field = new JTextField(p.getText(), 8);
+                p.setField(field);
                 field.addActionListener(e -> {
                     try {
                         p.setFromText(field.getText());
@@ -304,6 +322,7 @@ public class PRPDTool extends JFrame {
                         status.setText("Some parameter changes may not have been applied!");
                         paramChange.setText("Param(s) change!");
                         applyButton.setVisible(true);
+                        applyButton.setBackground(Color.red);
                     } catch (NumberFormatException ex) {
                         field.setBackground(new Color(255, 200, 200));
                     }
@@ -317,22 +336,29 @@ public class PRPDTool extends JFrame {
                         applyButton.setVisible(true);
                     }
                 });
-                right.add(label);
-                right.add(field);
+                paramPanel.add(label);
+                paramPanel.add(field);
             }
             paramChange = new JLabel(" ");
             applyButton = new JButton("APPLY");
             applyButton.addActionListener(e -> onParameterChanged());
             applyButton.setVisible(false);
-            right.add(paramChange);
-            right.add(applyButton);
+            paramPanel.add(paramChange);
+            paramPanel.add(applyButton);
+
+            right.setLayout(new BorderLayout());
+            right.add(paramPanel, BorderLayout.CENTER);
+
+            JPanel classifyPanel = new JPanel(new BorderLayout());
             classifyButton = new JButton("CLASIFY");
             classifyButton.addActionListener(e -> classifyPRPD());
             classifyButton.setVisible(false);
-            right.add(classifyButton);
+            classifyPanel.add(classifyButton, BorderLayout.SOUTH);
             classResult = new JLabel("");
             classResult.setAlignmentX(CENTER_ALIGNMENT);
-            right.add(classResult);
+            classifyPanel.add(classResult, BorderLayout.CENTER);
+
+            right.add(classifyPanel, BorderLayout.SOUTH);
         });
 
         addComponentListener(new ComponentAdapter() {
@@ -351,7 +377,9 @@ public class PRPDTool extends JFrame {
 
     // ------------- Misc. helpers
     private void onParameterChanged() {
-        // np. odśwież wykres / przelicz coś
+        for (Param p : params)
+            p.setFromField();
+        
         if (lastDataFile != null) {
             try {
                 readDataFile(lastDataFile);
@@ -407,9 +435,10 @@ public class PRPDTool extends JFrame {
                 classResult.setText("   working...");
                 PythonPRPDClassifier.Result result = PythonPRPDClassifier.classify(
                         histogram.getImage(),
-                        "/usr/bin/python",
-                        "/home/jstar/NetBeansProjects/PRPDtool/klasyfikator/file_predict.py"
+                        PRPDTool.python,
+                        PRPDTool.classifier
                 );
+                classResult.setBackground(Color.white);
                 classResult.setText(result.toString());
             } catch (Exception ex) {
                 ex.printStackTrace();
@@ -628,11 +657,11 @@ public class PRPDTool extends JFrame {
     //---------------- PRPD ------
     public static BufferedImage createPrpdImage(double[][] pulses, int width, int height) {
         int left = 70;
-        int right = 25;
+        int paramPanel = 25;
         int top = 30;
         int bottom = 55;
 
-        int plotW = width - left - right;
+        int plotW = width - left - paramPanel;
         int plotH = height - top - bottom;
 
         int binsPhase = plotW;
