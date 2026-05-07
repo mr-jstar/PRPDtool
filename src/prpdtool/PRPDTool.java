@@ -331,6 +331,7 @@ public class PRPDTool extends JFrame {
             classifyButton.setVisible(false);
             right.add(classifyButton);
             classResult = new JLabel("");
+            classResult.setAlignmentX(CENTER_ALIGNMENT);
             right.add(classResult);
         });
 
@@ -403,6 +404,7 @@ public class PRPDTool extends JFrame {
     private void classifyPRPD() {
         if (histogram != null && histogram.getImage() != null) {
             try {
+                classResult.setText("   working...");
                 PythonPRPDClassifier.Result result = PythonPRPDClassifier.classify(
                         histogram.getImage(),
                         "/usr/bin/python",
