@@ -12,9 +12,9 @@ public class DynamicPRPDHistogram {
 
     private int width, height;
     private final int left = 70, right = 25, top = 30, bottom = 55;
-    
-    public int [] padding() {
-        return new int[]{left+right,top+bottom};
+
+    public int[] padding() {
+        return new int[]{left + right, top + bottom};
     }
 
     private final int plotW, plotH;
@@ -25,7 +25,7 @@ public class DynamicPRPDHistogram {
 
     private final int[][] hist;
     private int maxCount = 0;
-    
+
     private boolean addF0;
 
     private final BufferedImage image;
@@ -61,22 +61,49 @@ public class DynamicPRPDHistogram {
     public BufferedImage getImage() {
         return image;
     }
-    
+
+    public BufferedImage getPRPD(int w, int h) {
+        BufferedImage prpd = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = prpd.createGraphics();
+        for (int xb = 0; xb < binsPhase; xb++) {
+            for (int yb = 0; yb < binsAmp; yb++) {
+                int c = hist[xb][yb];
+                if (c == 0) {
+                    continue;
+                }
+
+                // <0,maxCount> -> log -> <0,1>
+                double v = Math.log1p(c) / Math.log1p(maxCount);
+
+                int x0 = (int) Math.floor(xb * w / (double) binsPhase);
+                int x1 = (int) Math.floor((xb + 1) * w / (double) binsPhase);
+
+                int y0 = h - (int) Math.floor((yb + 1) * h / (double) binsAmp);
+                int y1 = h - (int) Math.floor(yb * h / (double) binsAmp);
+
+                g.setColor(heatColor(v));
+                g.fillRect(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
+            }
+        }
+        g.dispose();
+        return prpd;
+    }
+
     public double getMin() {
         return ampMin;
     }
-     
+
     public double getMax() {
         return ampMax;
     }
-    
+
     public int[][] getHistogram() {
         return hist;
     }
-    
-    public void drawF0( boolean doIt ) {
+
+    public void drawF0(boolean doIt) {
         addF0 = doIt;
-        redraw();
+        redraw(image);
     }
 
     public void addPulses(Pulses p) {
@@ -102,13 +129,13 @@ public class DynamicPRPDHistogram {
             }
         }
 
-        redraw();
+        redraw(image);
     }
-    
-    public void resize(int w, int h ) {
+
+    public void resize(int w, int h) {
         this.width = w;
         this.height = h;
-        redraw();
+        redraw(image);
     }
 
     private void drawEmpty() {
@@ -122,22 +149,22 @@ public class DynamicPRPDHistogram {
 
         g.dispose();
 
-        drawAxes();
+        drawAxes(image);
     }
 
-    private void redraw() {
-        Graphics2D g = image.createGraphics();
+    private void drawImg(BufferedImage img) {
+        Graphics2D g = img.createGraphics();
 
         g.setColor(Color.BLACK);
         g.fillRect(left, top, plotW, plotH);
-                
-        if( addF0 ) {
-            int yp = top + plotH/2;
-            for( int x= left+1; x < plotW+left; x++ ) {
-                double ph = 2*Math.PI * (x-left) / plotW;
-                int y = top + plotH/2 - (int) ( plotH/4 * Math.sin(ph));
+
+        if (addF0) {
+            int yp = top + plotH / 2;
+            for (int x = left + 1; x < plotW + left; x++) {
+                double ph = 2 * Math.PI * (x - left) / plotW;
+                int y = top + plotH / 2 - (int) (plotH / 4 * Math.sin(ph));
                 g.setColor(Color.gray);
-                g.drawLine(x-1, yp, x, y);
+                g.drawLine(x - 1, yp, x, y);
                 yp = y;
             }
         }
@@ -164,11 +191,15 @@ public class DynamicPRPDHistogram {
         }
 
         g.dispose();
-        drawAxes();
     }
 
-    private void drawAxes() {
-        Graphics2D g = image.createGraphics();
+    private void redraw(BufferedImage img) {
+        drawImg(img);
+        drawAxes(img);
+    }
+
+    private void drawAxes(BufferedImage img) {
+        Graphics2D g = img.createGraphics();
 
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
                 RenderingHints.VALUE_ANTIALIAS_ON);

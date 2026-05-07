@@ -9,6 +9,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -123,10 +124,11 @@ public class PRPDTool extends JFrame {
         abstract String getText();
 
         abstract void setFromText(String text);
-        
+
         void setFromField() {
-            if( field != null )
+            if (field != null) {
                 setFromText(field.getText());
+            }
         }
 
         static Param<Double> dbl(String name, DoubleSupplier getter, DoubleConsumer setter) {
@@ -377,9 +379,10 @@ public class PRPDTool extends JFrame {
 
     // ------------- Misc. helpers
     private void onParameterChanged() {
-        for (Param p : params)
+        for (Param p : params) {
             p.setFromField();
-        
+        }
+
         if (lastDataFile != null) {
             try {
                 readDataFile(lastDataFile);
@@ -426,29 +429,6 @@ public class PRPDTool extends JFrame {
             configuration.saveValue(LAST_DIR, directory);
         } catch (IOException e) {
             //message.setText(e.getLocalizedMessage());
-        }
-    }
-
-    private void classifyPRPD() {
-        if (histogram != null && histogram.getImage() != null) {
-            try {
-                classResult.setText("   working...");
-                PythonPRPDClassifier.Result result = PythonPRPDClassifier.classify(
-                        histogram.getImage(),
-                        PRPDTool.python,
-                        PRPDTool.classifier
-                );
-                classResult.setBackground(Color.white);
-                classResult.setText(result.toString());
-            } catch (Exception ex) {
-                ex.printStackTrace();
-                JOptionPane.showMessageDialog(
-                        PRPDTool.this,
-                        ex.getMessage(),
-                        "Error",
-                        JOptionPane.ERROR_MESSAGE
-                );
-            }
         }
     }
 
@@ -644,6 +624,37 @@ public class PRPDTool extends JFrame {
             } catch (IOException ex) {
                 status.setText(ex.getMessage());
             }
+        }
+    }
+
+    private void classifyPRPD() {
+        if (histogram != null) {
+            setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+            classResult.setText("   Classifier is working...");
+            classResult.repaint();
+            BufferedImage prpd4YOLO = histogram.getPRPD(448, 448);
+            SwingUtilities.invokeLater(() -> {
+                try {
+                    ImageIO.write(prpd4YOLO, "png", new File("prpd4YOLO.png"));
+                    PythonPRPDClassifier.Result result = PythonPRPDClassifier.classify(
+                            prpd4YOLO,
+                            PRPDTool.python,
+                            PRPDTool.classifier
+                    );
+                    classResult.setBackground(Color.white);
+                    classResult.setText("Detection result: " + result.toString());
+                    classResult.repaint();
+                    setCursor(Cursor.getDefaultCursor());
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    JOptionPane.showMessageDialog(
+                            PRPDTool.this,
+                            ex.getMessage(),
+                            "Error",
+                            JOptionPane.ERROR_MESSAGE
+                    );
+                }
+            });
         }
     }
 
