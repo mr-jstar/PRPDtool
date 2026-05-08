@@ -38,15 +38,15 @@ import parallelprpd.pipeline.Pulses;
 
 public class PRPDTool extends JFrame {
 
-    //private static String python = "/Users/jstar/anaconda3/bin/python";
-    //private static String pyclassifier = "//Users/jstar/NetBeansProjects/PRPDTool/models/file_predict.py";
-    private static String python = "/usr/bin/python";
-    private static String pyclassifier = "/home/jstar/NetBeansProjects/PRPDtool/models/file_predict.py";
+    private static String python = "/Users/jstar/anaconda3/bin/python";
+    private static String pyclassifier = "//Users/jstar/NetBeansProjects/PRPDTool/models/file_predict.py";
+    //private static String python = "/usr/bin/python";
+    //private static String pyclassifier = "/home/jstar/NetBeansProjects/PRPDtool/models/file_predict.py";
 
-    private static String home = "/home/jstar/";
-    //String home = "/Users/jstar/";
-    private static String host = "oer";
-    //String host = "oer";  
+    //private static String home = "/home/jstar/";
+    private static String home = "/Users/jstar/";
+    //private static String host = "oer";
+    private static String host = "mac";  
     private static String model = home + "NetBeansProjects/PRPDtool/models/" + host + "_classprpd.onnx";
 
     private static Classifier[] classifiers = {
@@ -85,11 +85,11 @@ public class PRPDTool extends JFrame {
     private double t0 = 0;
     private double fs = 1_000_000;  // próbkowanie 
     private double threshold = 0.012; //próg detekcji impulsu po odjęciu tła
-    private double ampMax = 1.2; // max amplituda immpulsu
+    private double ampMax = 0.12; // max amplituda immpulsu
     private double deadUs = 30; //martwy czas po wykryciu impulsu [µs]
     private double filterQ = 0.707; // Q filtra
     private int filterOrder = 4; // rząd filtra
-    private double cutF = 10_000; // f odcięcia
+    private double cutF = 50_000; // f odcięcia
 
     Param<?>[] params = {
         Param.dbl("Basic frequency [Hz]", () -> f0, v -> f0 = v),
@@ -368,8 +368,12 @@ public class PRPDTool extends JFrame {
             JPanel modelPanel = new JPanel(new GridLayout(classifiers.length + 1, 2,3,3));
             //modelPanel.setBackground(Color.black);
             final Map<Classifier, JLabel> cResults = new HashMap<>();
-            modelPanel.add(new JLabel("Classifier",SwingConstants.CENTER));
-            modelPanel.add(new JLabel("Result",SwingConstants.CENTER));
+            JLabel c1 = new JLabel("Classifier"); 
+            c1.setBorder(BorderFactory.createLineBorder(Color.black));
+            JLabel c2 = new JLabel("Result"); 
+            c2.setBorder(BorderFactory.createLineBorder(Color.black));
+            modelPanel.add(c1);
+            modelPanel.add(c2);
             for (Classifier c : classifiers) {
                 if (c.ok()) {
                     JLabel name = new JLabel(c.name());

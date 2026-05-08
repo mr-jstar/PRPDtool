@@ -38,7 +38,7 @@ public class ONNXClassifier implements Classifier, AutoCloseable {
             session = env.createSession(modelPath, opts);
             ok = true;
         } catch (Exception e) {
-            System.err.println("ONNXClassifier using model " + modelPath + " can not be constructed.");
+            System.err.println("ONNXClassifier using model " + modelPath + " can not be constructed: " + e.getMessage());
             ok = false;
         }
     }

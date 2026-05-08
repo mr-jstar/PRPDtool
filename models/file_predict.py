@@ -171,26 +171,29 @@ if __name__ == "__main__":
 #            print(y.shape)
 
         if len(sys.argv) > 2 :
-            model_cpu = model.to("cpu").eval()
-            tensor_cpu = tensor.to("cpu")
-            export_model = ONNXWrapper(model_cpu).eval()
-            with torch.no_grad():
-                traced = torch.jit.trace(
-                    export_model,
-                    tensor_cpu,
-                    strict=False
-                )
+            try:
+                torch.onnx.export(model,tensor,sys.argv[2] + ".onnx")
+            except:
+                model_cpu = model.to("cpu").eval()
+                tensor_cpu = tensor.to("cpu")
+                export_model = ONNXWrapper(model_cpu).eval()
+                with torch.no_grad():
+                    traced = torch.jit.trace(
+                        export_model,
+                        tensor_cpu,
+                        strict=False
+                    )
 
-                y = traced(tensor_cpu)
+                    y = traced(tensor_cpu)
 
-                print(type(y))
-                print(y.shape)
+                    print(type(y))
+                    print(y.shape)
 
-                torch.onnx.export(
-                    traced,
-                    tensor_cpu,
-                    sys.argv[2] + ".onnx",
-                    input_names=["input"],
-                    output_names=["permute"],
-                    opset_version=11
-                )
+                    torch.onnx.export(
+                        traced,
+                        tensor_cpu,
+                        sys.argv[2] + ".onnx",
+                        input_names=["input"],
+                        output_names=["permute"],
+                        opset_version=11
+                    )
