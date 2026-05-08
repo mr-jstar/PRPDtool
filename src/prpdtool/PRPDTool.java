@@ -38,15 +38,20 @@ import parallelprpd.pipeline.Pulses;
 
 public class PRPDTool extends JFrame {
 
-    private static String python = "/Users/jstar/anaconda3/bin/python";
-    private static String pyclassifier = "//Users/jstar/NetBeansProjects/PRPDTool/models/file_predict.py";
-    //private static String python = "/usr/bin/python";
-    //private static String pyclassifier = "/home/jstar/NetBeansProjects/PRPDtool/models/file_predict.py";
-
-    //private static String home = "/home/jstar/";
+    /* mac */
+    private static String host = "mac"; 
     private static String home = "/Users/jstar/";
-    //private static String host = "oer";
-    private static String host = "mac";  
+    private static String python = "/Users/jstar/anaconda3/bin/python";
+    /* */
+    
+    /* oer 
+    private static String host = "oer";
+    private static String home = "/home/jstar/";
+    private static String python = "/usr/bin/python";
+    */
+    
+    private static String pyclassifier = home + "NetBeansProjects/PRPDTool/models/file_predict.py";
+    
     private static String model = home + "NetBeansProjects/PRPDtool/models/" + host + "_classprpd.onnx";
 
     private static Classifier[] classifiers = {
