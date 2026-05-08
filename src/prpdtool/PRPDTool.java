@@ -69,7 +69,7 @@ public class PRPDTool extends JFrame {
     private final String LAST_DIR = "PRPDMonitor.last.dir";
 
     private JPanel left;
-    private JPanel center;
+    private ImagePanel center;
     private JPanel right;
     private JPanel bottom;
     private JPanel paramPanel;
@@ -107,7 +107,6 @@ public class PRPDTool extends JFrame {
     private boolean drawF0 = true;
 
     // Data
-    private ImagePanel prpdPanel;
     private ImagePanel signalPanel;
     private ImagePanel envelopePanel;
 
@@ -235,7 +234,7 @@ public class PRPDTool extends JFrame {
         sinMB.addActionListener(e -> {
             drawF0 = sinMB.isSelected();
             histogram.drawF0(drawF0);
-            prpdPanel.repaint();
+            center.repaint();
         });
         optM.add(sinMB);
         mb.add(optM);
@@ -247,7 +246,7 @@ public class PRPDTool extends JFrame {
         left = new JPanel();
         right = new JPanel();
         bottom = new JPanel();
-        center = new JPanel();
+        center = new ImagePanel(new BufferedImage(640,480,BufferedImage.TYPE_BYTE_GRAY));
 
         splitCenterRight = new JSplitPane(
                 JSplitPane.HORIZONTAL_SPLIT,
@@ -303,11 +302,7 @@ public class PRPDTool extends JFrame {
                     -10.0, 10.0, null
             );
 
-            prpdPanel = new ImagePanel(histogram.getImage());
-            int[] padding = {0,0,0,0}; //histogram.padding();
-            prpdPanel.setPreferredSize(new Dimension(center.getWidth() - padding[0], center.getHeight() - padding[1]));
-            center.add(prpdPanel);
-            center.setBackground(Color.white);
+            center.setImage(histogram.getImage());
             center.revalidate();
 
             envelopePanel = new ImagePanel(envelope.getImage());
@@ -370,15 +365,17 @@ public class PRPDTool extends JFrame {
 
             JPanel classifyPanel = new JPanel(new BorderLayout());
 
-            JPanel modelPanel = new JPanel(new GridLayout(classifiers.length + 1, 2));
-            modelPanel.setBackground(Color.white);
+            JPanel modelPanel = new JPanel(new GridLayout(classifiers.length + 1, 2,3,3));
+            //modelPanel.setBackground(Color.black);
             final Map<Classifier, JLabel> cResults = new HashMap<>();
-            modelPanel.add(new JLabel("Classifier"));
-            modelPanel.add(new JLabel("Result"));
+            modelPanel.add(new JLabel("Classifier",SwingConstants.CENTER));
+            modelPanel.add(new JLabel("Result",SwingConstants.CENTER));
             for (Classifier c : classifiers) {
                 if (c.ok()) {
                     JLabel name = new JLabel(c.name());
+                    name.setBackground(Color.gray);
                     JLabel result = new JLabel("           ");
+                    result.setBackground(Color.gray);
                     modelPanel.add(name);
                     modelPanel.add(result);
                     cResults.put(c, result);
@@ -403,7 +400,7 @@ public class PRPDTool extends JFrame {
                 splitCenterRight.setDividerLocation(0.8);
                 histogram.resize(center.getWidth(), center.getHeight());
                 envelope.resize(bottom.getWidth() / 2, bottom.getHeight());
-                prpdPanel.setPreferredSize(new Dimension(center.getWidth(), center.getHeight()));
+                //prpdPanel.setPreferredSize(new Dimension(center.getWidth(), center.getHeight()));
                 envelopePanel.setPreferredSize(new Dimension(bottom.getWidth() / 2, bottom.getHeight()));
             }
         });
@@ -541,11 +538,11 @@ public class PRPDTool extends JFrame {
                 0.0, lasttu[0], filter
         );
 
-        prpdPanel.setImage(histogram.getImage());
+        center.setImage(histogram.getImage());
         envelopePanel.setImage(envelope.getImage());
         signalPanel.setImage(signal.getImage());
 
-        prpdPanel.repaint();
+        center.repaint();
         envelopePanel.repaint();
         signalPanel.repaint();
 
@@ -579,7 +576,7 @@ public class PRPDTool extends JFrame {
             @Override
             public void pulsesReady(Pulses pulses) {
                 histogram.addPulses(pulses);
-                prpdPanel.repaint();
+                center.repaint();
             }
 
             @Override
@@ -676,7 +673,7 @@ public class PRPDTool extends JFrame {
                     ImageIO.write(prpd4YOLO, "png", new File("prpd4YOLO.png"));
                     Prediction result = classifier.classify(prpd4YOLO);
                     resultView.setBackground(Color.white);
-                    resultView.setText("Detection: " + result.toString());
+                    resultView.setText( result.toString());
                     resultView.repaint();
                     setCursor(Cursor.getDefaultCursor());
                 } catch (Exception ex) {
