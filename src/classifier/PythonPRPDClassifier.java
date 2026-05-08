@@ -28,8 +28,12 @@ public class PythonPRPDClassifier implements Classifier {
         ok = Files.isExecutable(Paths.get(pythonExe)) && Files.exists(Paths.get(scriptPath));
         if( ok )
             name = Paths.get(scriptPath).getFileName().toString();
-        else
+        else {
             name = "UNKNOWN";
+            System.err.println("Can not create classifier: " + pythonExe + " & " + scriptPath );
+            //System.err.println(pythonExe + ":" + Files.isExecutable(Paths.get(pythonExe)) );
+            //System.err.println(scriptPath + ":" + Files.exists(Paths.get(scriptPath)) );
+        }
     }
     
     @Override
