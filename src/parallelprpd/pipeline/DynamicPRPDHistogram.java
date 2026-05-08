@@ -17,8 +17,8 @@ public class DynamicPRPDHistogram {
         return new int[]{left + right, top + bottom};
     }
 
-    private final int plotW, plotH;
-    private final int binsPhase, binsAmp;
+    private int plotW, plotH;
+    private int binsPhase, binsAmp;
 
     private final double ampMin;
     private final double ampMax;
@@ -106,6 +106,15 @@ public class DynamicPRPDHistogram {
         redraw(image);
     }
 
+    public void resize(int width, int height) {
+        this.width = width;
+        this.height = height;
+
+        //this.plotW = width - left - right;
+        //this.plotH = height - top - bottom;
+        redraw(image);
+    }
+
     public void addPulses(Pulses p) {
 
         for (int i = 0; i < p.n; i++) {
@@ -129,12 +138,6 @@ public class DynamicPRPDHistogram {
             }
         }
 
-        redraw(image);
-    }
-
-    public void resize(int w, int h) {
-        this.width = w;
-        this.height = h;
         redraw(image);
     }
 

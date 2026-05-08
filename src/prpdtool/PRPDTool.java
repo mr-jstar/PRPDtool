@@ -4,6 +4,9 @@ package prpdtool;
  *
  * @author jstar
  */
+import classifier.Classifier;
+import classifier.ONNXClassifier;
+import classifier.Prediction;
 import classifier.PythonPRPDClassifier;
 import javax.swing.*;
 import java.awt.*;
@@ -15,6 +18,8 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Paths;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.DoubleConsumer;
 import java.util.function.DoubleSupplier;
 import java.util.function.IntConsumer;
@@ -33,10 +38,23 @@ import parallelprpd.pipeline.Pulses;
 
 public class PRPDTool extends JFrame {
 
-    private static String python = "/Users/jstar/anaconda3/bin/python";
-    private static String classifier = "//Users/jstar/NetBeansProjects/PRPDTool/klasyfikator/file_predict.py";
-    //private static  String python = "/usr/bin/python";
-    //private static  String classifier = "/home/jstar/NetBeansProjects/PRPDtool/klasyfikator/file_predict.py";
+    //private static String python = "/Users/jstar/anaconda3/bin/python";
+    //private static String pyclassifier = "//Users/jstar/NetBeansProjects/PRPDTool/models/file_predict.py";
+    private static String python = "/usr/bin/python";
+    private static String pyclassifier = "/home/jstar/NetBeansProjects/PRPDtool/models/file_predict.py";
+
+    private static String home = "/home/jstar/";
+    //String home = "/Users/jstar/";
+    private static String host = "oer";
+    //String host = "oer";  
+    private static String model = home + "NetBeansProjects/PRPDtool/models/" + host + "_classprpd.onnx";
+
+    private static Classifier[] classifiers = {
+        new PythonPRPDClassifier(python, pyclassifier),
+        new ONNXClassifier(model)
+    };
+
+    private BufferedImage prpd4YOLO;
 
     // GUI config
     private final static Font[] fonts = {
@@ -105,7 +123,6 @@ public class PRPDTool extends JFrame {
     private JButton applyButton;
 
     private JButton classifyButton;
-    private JLabel classResult;
 
     private static abstract class Param<T> {
 
@@ -287,7 +304,7 @@ public class PRPDTool extends JFrame {
             );
 
             prpdPanel = new ImagePanel(histogram.getImage());
-            int[] padding = histogram.padding();
+            int[] padding = {0,0,0,0}; //histogram.padding();
             prpdPanel.setPreferredSize(new Dimension(center.getWidth() - padding[0], center.getHeight() - padding[1]));
             center.add(prpdPanel);
             center.setBackground(Color.white);
@@ -352,13 +369,28 @@ public class PRPDTool extends JFrame {
             right.add(paramPanel, BorderLayout.CENTER);
 
             JPanel classifyPanel = new JPanel(new BorderLayout());
+
+            JPanel modelPanel = new JPanel(new GridLayout(classifiers.length + 1, 2));
+            modelPanel.setBackground(Color.white);
+            final Map<Classifier, JLabel> cResults = new HashMap<>();
+            modelPanel.add(new JLabel("Classifier"));
+            modelPanel.add(new JLabel("Result"));
+            for (Classifier c : classifiers) {
+                if (c.ok()) {
+                    JLabel name = new JLabel(c.name());
+                    JLabel result = new JLabel("           ");
+                    modelPanel.add(name);
+                    modelPanel.add(result);
+                    cResults.put(c, result);
+                }
+            }
+            classifyPanel.add(modelPanel, BorderLayout.CENTER);
+
             classifyButton = new JButton("CLASIFY");
-            classifyButton.addActionListener(e -> classifyPRPD());
+            classifyButton.setBackground(Color.white);
+            classifyButton.addActionListener(e -> classifyPRPD(cResults));
             classifyButton.setVisible(false);
             classifyPanel.add(classifyButton, BorderLayout.SOUTH);
-            classResult = new JLabel("");
-            classResult.setAlignmentX(CENTER_ALIGNMENT);
-            classifyPanel.add(classResult, BorderLayout.CENTER);
 
             right.add(classifyPanel, BorderLayout.SOUTH);
         });
@@ -440,7 +472,6 @@ public class PRPDTool extends JFrame {
         if (result == JFileChooser.APPROVE_OPTION) {
             File file = fileChooser.getSelectedFile();
             classifyButton.setVisible(false);
-            classResult.setText("");
             try {
                 String filename = file.getAbsolutePath();
                 readDataFile(filename);
@@ -486,7 +517,7 @@ public class PRPDTool extends JFrame {
 
             @Override
             public void setFs(double fs) {
-                throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+                throw new UnsupportedOperationException("Not supported yet.");
             }
 
         };
@@ -556,7 +587,6 @@ public class PRPDTool extends JFrame {
                 setTitle("PRPD Viewer - finished: " + Paths.get(filename).getFileName().toString());
                 setCursor(Cursor.getDefaultCursor());
                 classifyButton.setVisible(true);
-                classResult.setText("");
             }
 
             @Override
@@ -627,23 +657,27 @@ public class PRPDTool extends JFrame {
         }
     }
 
-    private void classifyPRPD() {
+    private void classifyPRPD(Map<Classifier, JLabel> map) {
         if (histogram != null) {
+            prpd4YOLO = histogram.getPRPD(448, 448);
+            for (Classifier c : map.keySet()) {
+                classifyPRPD(c, map.get(c));
+            }
+        }
+    }
+
+    private void classifyPRPD(Classifier classifier, JLabel resultView) {
+        if (prpd4YOLO != null) {
             setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-            classResult.setText("   Classifier is working...");
-            classResult.repaint();
-            BufferedImage prpd4YOLO = histogram.getPRPD(448, 448);
+            resultView.setText("..working...");
+            resultView.repaint();
             SwingUtilities.invokeLater(() -> {
                 try {
                     ImageIO.write(prpd4YOLO, "png", new File("prpd4YOLO.png"));
-                    PythonPRPDClassifier.Result result = PythonPRPDClassifier.classify(
-                            prpd4YOLO,
-                            PRPDTool.python,
-                            PRPDTool.classifier
-                    );
-                    classResult.setBackground(Color.white);
-                    classResult.setText("Detection result: " + result.toString());
-                    classResult.repaint();
+                    Prediction result = classifier.classify(prpd4YOLO);
+                    resultView.setBackground(Color.white);
+                    resultView.setText("Detection: " + result.toString());
+                    resultView.repaint();
                     setCursor(Cursor.getDefaultCursor());
                 } catch (Exception ex) {
                     ex.printStackTrace();

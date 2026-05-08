@@ -4,6 +4,8 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -11,57 +13,51 @@ import java.util.List;
  *
  * @author jstar
  */
-public class PythonPRPDClassifier {
+public class PythonPRPDClassifier implements Classifier {
 
-    public static class Result {
-        public final int clsId;
-        public final double objScore;
-        public final double[] clsScores;
-        public final String rawOutput;
-        
-        private final static String [] classes = { "DEF1", "DEF2", "DEF3", "DEF4" };
+    private final String pythonExe;
+    private final String scriptPath;
 
-        public Result(int clsId,
-                      double objScore,
-                      double[] clsScores,
-                      String rawOutput) {
-            this.clsId = clsId;
-            this.objScore = objScore;
-            this.clsScores = clsScores;
-            this.rawOutput = rawOutput;
-        }
-        
-        @Override
-        public String toString() {
-            if( clsId == -1 )
-                return "no defect";
-            else 
-                return classes[clsId] + objScore;
-        }
+    private final boolean ok;
+    
+    private String name;
+
+    public PythonPRPDClassifier(String pythonExe, String scriptPath) {
+        this.pythonExe = pythonExe;
+        this.scriptPath = scriptPath;
+        ok = Files.isExecutable(Paths.get(pythonExe)) && Files.exists(Paths.get(scriptPath));
+        if( ok )
+            name = Paths.get(scriptPath).getFileName().toString();
+        else
+            name = "UNKNOWN";
+    }
+    
+    @Override
+    public String name() {
+        return name;
+    }
+
+    @Override
+    public boolean ok() {
+        return ok;
     }
 
     /**
-     * image        - obraz PRPD
-     * pythonExe    - np. "python3"
-     * scriptPath   - classify_prpd.py
+     * image - obraz PRPD pythonExe - np. "python3" scriptPath -
+     * classify_prpd.py
      *
      * Python powinien wypisać:
      *
      * cls_id obj_score cls0 cls1 cls2 ...
      *
-     * np:
-     * 2 0.98 0.01 0.02 0.95 0.02
+     * np: 2 0.98 0.01 0.02 0.95 0.02
      */
-    public static Result classify(
-            BufferedImage image,
-            String pythonExe,
-            String scriptPath
-    ) throws Exception {
+    @Override
+    public Prediction classify(BufferedImage image) throws Exception {
 
         // ----------------------------------------------------
         // 1. zapis BufferedImage -> PNG
         // ----------------------------------------------------
-
         File tempFile = File.createTempFile("prpd_", ".png");
 
         try {
@@ -70,7 +66,6 @@ public class PythonPRPDClassifier {
             // ------------------------------------------------
             // 2. uruchomienie pythona
             // ------------------------------------------------
-
             ProcessBuilder pb = new ProcessBuilder(
                     pythonExe,
                     scriptPath,
@@ -84,7 +79,6 @@ public class PythonPRPDClassifier {
             // ------------------------------------------------
             // 3. odczyt wyniku
             // ------------------------------------------------
-
             String output;
 
             try (BufferedReader br = new BufferedReader(
@@ -116,7 +110,6 @@ public class PythonPRPDClassifier {
             //
             // cls_id obj_score cls0 cls1 ...
             // --------------------------------------------
-
             String[] tok = output.split("\\s+");
 
             if (tok.length < 2) {
@@ -126,25 +119,26 @@ public class PythonPRPDClassifier {
             }
 
             int clsId = Integer.parseInt(tok[0]);
-            double objScore = Double.parseDouble(tok[1]);
+            float objScore = Float.parseFloat(tok[1]);
 
-            List<Double> scores = new ArrayList<>();
+            List<Float> scores = new ArrayList<>();
 
             for (int i = 2; i < tok.length; i++) {
-                scores.add(Double.parseDouble(tok[i]));
+                scores.add(Float.parseFloat(tok[i]));
             }
 
-            double[] clsScores = new double[scores.size()];
+            float[] clsScores = new float[scores.size()];
 
             for (int i = 0; i < scores.size(); i++) {
                 clsScores[i] = scores.get(i);
             }
 
-            return new Result(
-                    clsId,
+            return new Prediction(
+                    clsId < 0 ? null : clsId,
+                    objScore,
                     objScore,
                     clsScores,
-                    output
+                    0, 0, 0
             );
 
         } finally {

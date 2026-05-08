@@ -11,12 +11,20 @@ import javax.imageio.ImageIO;
 public class ONNXTest {
 
     public static void main(String[] args) {
+        String home = "/home/jstar/";
+        //String home = "/Users/jstar/";
+        String host = "oer";
+        //String host = "oer";
         
+        String model = home + "NetBeansProjects/PRPDtool/klasyfikator/" + host + "_classprpd.onnx";
+        
+        System.out.println( "Model: " + model);
 
         try (ONNXClassifier clf
-                = new ONNXClassifier("/Users/jstar/NetBeansProjects/PRPDtool/klasyfikator/classprpd.onnx")) {
+                = new ONNXClassifier( model ))
+        {
 
-            BufferedImage img = ImageIO.read(new File("/Users/jstar/NetBeansProjects/PRPDtool/klasyfikator/test_image.png"));;
+            BufferedImage img = ImageIO.read(new File(home + "NetBeansProjects/PRPDtool/klasyfikator/test_image.png"));;
             
             Prediction p = clf.classify(img);
 

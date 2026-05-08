@@ -7,31 +7,53 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.nio.FloatBuffer;
+import java.nio.file.Paths;
 import java.util.Collections;
-import java.util.Map.Entry;
 import javax.imageio.ImageIO;
 
 /**
  *
  * @author jstar
  */
-public class ONNXClassifier implements AutoCloseable {
+public class ONNXClassifier implements Classifier, AutoCloseable {
 
-    private final OrtEnvironment env;
-    private final OrtSession session;
+    private OrtEnvironment env;
+    private OrtSession session;
 
     private final int inputWidth = 224;
     private final int inputHeight = 224;
+    
+    private String model;
+    private  boolean ok;
 
-    public ONNXClassifier(String modelPath) throws Exception {
-        env = OrtEnvironment.getEnvironment();
+    public ONNXClassifier(String modelPath) {
+        model = Paths.get(modelPath).getFileName().toString();
+        try {
+            env = OrtEnvironment.getEnvironment(OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR);
 
-        OrtSession.SessionOptions opts
-                = new OrtSession.SessionOptions();
+            OrtSession.SessionOptions opts
+                    = new OrtSession.SessionOptions();
+            opts.setSessionLogLevel(OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR);
 
-        session = env.createSession(modelPath, opts);
+            session = env.createSession(modelPath, opts);
+            ok = true;
+        } catch (Exception e) {
+            System.err.println("ONNXClassifier using model " + modelPath + " can not be constructed.");
+            ok = false;
+        }
+    }
+    
+    @Override
+    public String name() {
+        return model;
+    }
+    
+    @Override
+    public boolean ok() {
+        return ok;
     }
 
+    @Override
     public Prediction classify(BufferedImage image) throws Exception {
 
         float[] chw = bufferedImageToGrayCHW(image);
@@ -51,14 +73,14 @@ public class ONNXClassifier implements AutoCloseable {
                 Collections.singletonMap(inputName, tensor)
         );
 
+        /*
         for (Entry<String, OnnxValue> e : result) {
             System.out.println(e.getKey() + " -> " + e.getValue());
         }
-
+         */
         Object value = result.get(0).getValue();
 
-        System.out.println(value);
-
+        //System.out.println(value);
         float[] flat;
 
         if (value instanceof float[][][][]) {
