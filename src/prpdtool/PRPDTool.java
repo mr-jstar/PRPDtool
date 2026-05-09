@@ -38,18 +38,19 @@ import parallelprpd.pipeline.Pulses;
 
 public class PRPDTool extends JFrame {
 
-    /* mac */
+/* mac 
     private static String host = "mac";
     private static String home = "/Users/jstar/";
     private static String python = "/Users/jstar/anaconda3/bin/python";
-    /* */
+*/
 
- /* oer 
+ /* oer */
     private static String host = "oer";
     private static String home = "/home/jstar/";
     private static String python = "/usr/bin/python";
-     */
-    private static String pyclassifier = home + "NetBeansProjects/PRPDTool/models/file_predict.py";
+ /*    */
+    
+    private static String pyclassifier = home + "NetBeansProjects/PRPDtool/models/file_predict.py";
 
     private static String model = home + "NetBeansProjects/PRPDtool/models/" + host + "_classprpd.onnx";
 
@@ -396,7 +397,7 @@ public class PRPDTool extends JFrame {
             classifyButton = new JButton("CLASIFY");
             classifyButton.setBackground(Color.white);
             classifyButton.addActionListener(e -> classifyPRPD(cResults));
-            classifyButton.setVisible(false);
+            classifyButton.setEnabled(false);
             classifyPanel.add(classifyButton, BorderLayout.SOUTH);
 
             right.add(classifyPanel, BorderLayout.SOUTH);
@@ -500,7 +501,7 @@ public class PRPDTool extends JFrame {
         } catch (InterruptedException ex) {
 
         }
-        classifyButton.setVisible(false);
+        classifyButton.setEnabled(false);
         for (Classifier c : cResults.keySet()) {
             cResults.get(c).setText("");
         }
@@ -596,7 +597,7 @@ public class PRPDTool extends JFrame {
             public void finished() {
                 setTitle("PRPD Viewer - finished: " + Paths.get(filename).getFileName().toString());
                 setCursor(Cursor.getDefaultCursor());
-                classifyButton.setVisible(true);
+                classifyButton.setEnabled(true);
             }
 
             @Override
