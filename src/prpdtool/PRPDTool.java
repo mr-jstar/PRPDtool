@@ -38,26 +38,27 @@ import parallelprpd.pipeline.Pulses;
 
 public class PRPDTool extends JFrame {
 
-    /* mac
-    private static String host = "mac"; 
+    /* mac */
+    private static String host = "mac";
     private static String home = "/Users/jstar/";
     private static String python = "/Users/jstar/anaconda3/bin/python";
-    */
-    
-    /* oer */
+    /* */
+
+ /* oer 
     private static String host = "oer";
     private static String home = "/home/jstar/";
     private static String python = "/usr/bin/python";
-    /* */
-    
-    private static String pyclassifier = home + "NetBeansProjects/PRPDtool/models/file_predict.py";
-    
+     */
+    private static String pyclassifier = home + "NetBeansProjects/PRPDTool/models/file_predict.py";
+
     private static String model = home + "NetBeansProjects/PRPDtool/models/" + host + "_classprpd.onnx";
 
     private static Classifier[] classifiers = {
         new PythonPRPDClassifier(python, pyclassifier),
         new ONNXClassifier(model)
     };
+
+    private Map<Classifier, JLabel> cResults;
 
     private BufferedImage prpd4YOLO;
 
@@ -251,7 +252,7 @@ public class PRPDTool extends JFrame {
         left = new JPanel();
         right = new JPanel();
         bottom = new JPanel();
-        center = new ImagePanel(new BufferedImage(640,480,BufferedImage.TYPE_BYTE_GRAY));
+        center = new ImagePanel(new BufferedImage(640, 480, BufferedImage.TYPE_BYTE_GRAY));
 
         splitCenterRight = new JSplitPane(
                 JSplitPane.HORIZONTAL_SPLIT,
@@ -370,12 +371,12 @@ public class PRPDTool extends JFrame {
 
             JPanel classifyPanel = new JPanel(new BorderLayout());
 
-            JPanel modelPanel = new JPanel(new GridLayout(classifiers.length + 1, 2,3,3));
+            JPanel modelPanel = new JPanel(new GridLayout(classifiers.length + 1, 2, 3, 3));
             //modelPanel.setBackground(Color.black);
-            final Map<Classifier, JLabel> cResults = new HashMap<>();
-            JLabel c1 = new JLabel("Classifier"); 
+            cResults = new HashMap<>();
+            JLabel c1 = new JLabel("Classifier");
             c1.setBorder(BorderFactory.createLineBorder(Color.black));
-            JLabel c2 = new JLabel("Result"); 
+            JLabel c2 = new JLabel("Result");
             c2.setBorder(BorderFactory.createLineBorder(Color.black));
             modelPanel.add(c1);
             modelPanel.add(c2);
@@ -477,7 +478,6 @@ public class PRPDTool extends JFrame {
         int result = fileChooser.showOpenDialog(this);
         if (result == JFileChooser.APPROVE_OPTION) {
             File file = fileChooser.getSelectedFile();
-            classifyButton.setVisible(false);
             try {
                 String filename = file.getAbsolutePath();
                 readDataFile(filename);
@@ -499,6 +499,10 @@ public class PRPDTool extends JFrame {
             Thread.sleep(200);
         } catch (InterruptedException ex) {
 
+        }
+        classifyButton.setVisible(false);
+        for (Classifier c : cResults.keySet()) {
+            cResults.get(c).setText("");
         }
 
         double[] lasttu = new double[2];
@@ -682,7 +686,7 @@ public class PRPDTool extends JFrame {
                     ImageIO.write(prpd4YOLO, "png", new File("prpd4YOLO.png"));
                     Prediction result = classifier.classify(prpd4YOLO);
                     resultView.setBackground(Color.white);
-                    resultView.setText( result.toString());
+                    resultView.setText(result.toString());
                     resultView.repaint();
                     setCursor(Cursor.getDefaultCursor());
                 } catch (Exception ex) {

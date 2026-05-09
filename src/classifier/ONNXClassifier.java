@@ -203,7 +203,7 @@ public class ONNXClassifier implements Classifier, AutoCloseable {
         g.dispose();
 
         try {
-            ImageIO.write(gray, "png", new File("gray"));
+            ImageIO.write(gray, "png", new File("gray.png"));
         } catch (IOException e) {
             e.printStackTrace();
         }
