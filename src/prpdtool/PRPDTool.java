@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Paths;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.DoubleConsumer;
 import java.util.function.DoubleSupplier;
@@ -38,19 +39,18 @@ import parallelprpd.pipeline.Pulses;
 
 public class PRPDTool extends JFrame {
 
-/* mac 
+    /* mac */
     private static String host = "mac";
     private static String home = "/Users/jstar/";
     private static String python = "/Users/jstar/anaconda3/bin/python";
-*/
+    /* */
 
- /* oer */
+ /* oer 
     private static String host = "oer";
     private static String home = "/home/jstar/";
     private static String python = "/usr/bin/python";
- /*    */
-    
-    private static String pyclassifier = home + "NetBeansProjects/PRPDtool/models/file_predict.py";
+     */
+    private static String pyclassifier = home + "NetBeansProjects/PRPDTool/models/file_predict.py";
 
     private static String model = home + "NetBeansProjects/PRPDtool/models/" + host + "_classprpd.onnx";
 
@@ -91,6 +91,7 @@ public class PRPDTool extends JFrame {
     private double f0 = 50;
     private double t0 = 0;
     private double fs = 1_000_000;  // próbkowanie 
+    private double dfs = fs;  // próbkowanie z danych
     private double threshold = 0.012; //próg detekcji impulsu po odjęciu tła
     private double ampMax = 0.12; // max amplituda immpulsu
     private double deadUs = 30; //martwy czas po wykryciu impulsu [µs]
@@ -515,6 +516,7 @@ public class PRPDTool extends JFrame {
         }
         lasttu[0] = Double.parseDouble(last[0]);
 
+        dfs = fs;
         Filter filter = new HighPassFilter(fs, cutF, filterQ, filterOrder);
         Filter abs = new Filter() {
             @Override
@@ -589,6 +591,9 @@ public class PRPDTool extends JFrame {
 
             @Override
             public void pulsesReady(Pulses pulses) {
+                if (pulses.fs != fs) {
+                    dfs = pulses.fs;
+                }
                 histogram.addPulses(pulses);
                 center.repaint();
             }
@@ -598,6 +603,14 @@ public class PRPDTool extends JFrame {
                 setTitle("PRPD Viewer - finished: " + Paths.get(filename).getFileName().toString());
                 setCursor(Cursor.getDefaultCursor());
                 classifyButton.setEnabled(true);
+                if (Math.abs((dfs-fs)/fs) > 1e-8) {
+                    JOptionPane.showMessageDialog(
+                            PRPDTool.this,
+                            "The sampling frequency estimated from data is " + String.format(Locale.US, "%.6g", dfs) + " Hz",
+                            "Error",
+                            JOptionPane.ERROR_MESSAGE
+                    );
+                }
             }
 
             @Override

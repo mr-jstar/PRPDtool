@@ -10,6 +10,7 @@ public class Pulses {
     public final double[] amp;
     public int size;
     public int n;
+    public double fs;
 
     public Pulses(double[] t, double[] phase, double[] amp, int size) {
         this.t = t;

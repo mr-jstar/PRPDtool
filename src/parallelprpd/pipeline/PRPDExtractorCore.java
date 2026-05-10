@@ -44,6 +44,7 @@ public class PRPDExtractorCore {
 
         double fs = estimateFs(b.t, n);
         filter.setFs(fs);
+        pulses.fs = fs;
 
         int deadN = Math.max(1, (int) Math.round(deadUs * 1e-6 * fs));
 
