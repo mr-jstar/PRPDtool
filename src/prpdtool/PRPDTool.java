@@ -39,18 +39,7 @@ import parallelprpd.pipeline.Pulses;
 
 public class PRPDTool extends JFrame {
 
-    /* mac */
-    private static String host = "mac";
-    private static String home = "/Users/jstar/";
-    private static String python = "/Users/jstar/anaconda3/bin/python";
-    /* */
-
- /* oer 
-    private static String host = "oer";
-    private static String home = "/home/jstar/";
-    private static String python = "/usr/bin/python";
-     */
-    private Classifier[] classifiers;
+    private final Classifier[] classifiers;
 
     private Map<Classifier, JLabel> cResults;
 
@@ -62,7 +51,7 @@ public class PRPDTool extends JFrame {
         new Font("Courier", Font.PLAIN, 18),
         new Font("Courier", Font.PLAIN, 24)
     };
-    private static Font currentFont = fonts[1];
+    private Font currentFont = fonts[1];
 
     private static final String CONFIG_FILE = ".prpd_config";
     private final Configuration configuration = new Configuration(CONFIG_FILE);
@@ -70,6 +59,17 @@ public class PRPDTool extends JFrame {
     private final String HOME_DIR = "PRPDMonitor.home.dir";
     private final String MODELS_ROOT = "PRPDMonitor.models.root";
     private final String PYTHON = "PRPDMonitor.python";
+    private final String FONTSIZE = "PRPDMonitor.font.size";
+    private final String FRAMESIZE = "PRPDMonitor.frame.size";
+    
+    /* Example configuration
+    PRPDMonitor.font.size=24
+    PRPDMonitor.last.dir=/media/jstar/VIDEO/PRPDtool/data
+    PRPDMonitor.home.dir=/home/jstar/
+    PRPDMonitor.python=/usr/bin/python
+    PRPDMonitor.models.root=oer
+    PRPDMonitor.frame.size=2963x1452
+    */
 
     private JPanel left;
     private ImagePanel center;
@@ -184,8 +184,26 @@ public class PRPDTool extends JFrame {
         super("PRPDtool");
 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1600, 1024);
+
+        try {
+            String[] wh = configuration.getValue(FONTSIZE).trim().split("x");
+            int w = Integer.parseInt(wh[0]);
+            int h = Integer.parseInt(wh[1]);
+            setSize(w, h);
+        } catch (Exception ex) {
+            setSize(1600, 1024);
+        }
         setLocationRelativeTo(null);
+
+        try {
+            int size = Integer.parseInt(configuration.getValue(FONTSIZE));
+            for (Font f : fonts) {
+                if (Math.abs(f.getSize() - size) < Math.abs(currentFont.getSize() - size)) {
+                    currentFont = f;
+                }
+            }
+        } catch (Exception e) {
+        }
 
         String homeDir = configuration.getValue(HOME_DIR);
         String modelsRoot = configuration.getValue(MODELS_ROOT);
@@ -200,6 +218,7 @@ public class PRPDTool extends JFrame {
 
         createMenuBar();
         initGui();
+        setCurrentFont();
     }
 
     private void createMenuBar() {
@@ -234,10 +253,12 @@ public class PRPDTool extends JFrame {
             final Font cf = f;
             fontOpt.addActionListener(e -> {
                 currentFont = cf;
-                setFontRecursively(this, currentFont, 0);
-                UIManager.put("OptionPane.messageFont", currentFont);
-                UIManager.put("OptionPane.buttonFont", currentFont);
-                UIManager.put("OptionPane.messageFont", currentFont);
+                setCurrentFont();
+                try {
+                    configuration.saveValue(FONTSIZE, "" + cf.getSize());
+                } catch (IOException ex) {
+
+                }
             });
             fontOpt.setSelected(f == currentFont);
             fgroup.add(fontOpt);
@@ -374,6 +395,7 @@ public class PRPDTool extends JFrame {
             applyButton.setVisible(false);
             paramPanel.add(paramChange);
             paramPanel.add(applyButton);
+            setFontRecursively(paramPanel, currentFont, 0);
 
             right.setLayout(new BorderLayout());
             right.add(paramPanel, BorderLayout.CENTER);
@@ -421,6 +443,10 @@ public class PRPDTool extends JFrame {
                 envelope.resize(bottom.getWidth() / 2, bottom.getHeight());
                 //prpdPanel.setPreferredSize(new Dimension(center.getWidth(), center.getHeight()));
                 envelopePanel.setPreferredSize(new Dimension(bottom.getWidth() / 2, bottom.getHeight()));
+                try {
+                    configuration.saveValue(FRAMESIZE, getWidth() + "x" + getHeight() );
+                } catch( IOException ex) {                   
+                }
             }
         });
     }
@@ -443,6 +469,13 @@ public class PRPDTool extends JFrame {
     }
 
     // Helper -sets font
+    private void setCurrentFont() {
+        setFontRecursively(this, currentFont, 0);
+        UIManager.put("OptionPane.messageFont", currentFont);
+        UIManager.put("OptionPane.buttonFont", currentFont);
+        UIManager.put("OptionPane.messageFont", currentFont);
+    }
+
     private void setFontRecursively(Component comp, Font font, int d) {
         if (comp == null) {
             return;
