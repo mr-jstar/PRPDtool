@@ -55,6 +55,7 @@ public class PRPDTool extends JFrame {
 
     private static final String CONFIG_FILE = ".prpd_config";
     private final Configuration configuration = new Configuration(CONFIG_FILE);
+    
     private final String LAST_DIR = "PRPDMonitor.last.dir";
     private final String HOME_DIR = "PRPDMonitor.home.dir";
     private final String MODELS_ROOT = "PRPDMonitor.models.root";
@@ -186,7 +187,7 @@ public class PRPDTool extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         try {
-            String[] wh = configuration.getValue(FONTSIZE).trim().split("x");
+            String[] wh = configuration.getValue(FRAMESIZE).trim().split("x");
             int w = Integer.parseInt(wh[0]);
             int h = Integer.parseInt(wh[1]);
             setSize(w, h);
@@ -429,6 +430,8 @@ public class PRPDTool extends JFrame {
             classifyButton.addActionListener(e -> classifyPRPD(cResults));
             classifyButton.setEnabled(false);
             classifyPanel.add(classifyButton, BorderLayout.SOUTH);
+            
+            setFontRecursively(classifyPanel, currentFont, 0);
 
             right.add(classifyPanel, BorderLayout.SOUTH);
         });
