@@ -50,14 +50,7 @@ public class PRPDTool extends JFrame {
     private static String home = "/home/jstar/";
     private static String python = "/usr/bin/python";
      */
-    private static String pyclassifier = home + "NetBeansProjects/PRPDTool/models/file_predict.py";
-
-    private static String model = home + "NetBeansProjects/PRPDtool/models/" + host + "_classprpd.onnx";
-
-    private static Classifier[] classifiers = {
-        new PythonPRPDClassifier(python, pyclassifier),
-        new ONNXClassifier(model)
-    };
+    private Classifier[] classifiers;
 
     private Map<Classifier, JLabel> cResults;
 
@@ -74,6 +67,9 @@ public class PRPDTool extends JFrame {
     private static final String CONFIG_FILE = ".prpd_config";
     private final Configuration configuration = new Configuration(CONFIG_FILE);
     private final String LAST_DIR = "PRPDMonitor.last.dir";
+    private final String HOME_DIR = "PRPDMonitor.home.dir";
+    private final String MODELS_ROOT = "PRPDMonitor.models.root";
+    private final String PYTHON = "PRPDMonitor.python";
 
     private JPanel left;
     private ImagePanel center;
@@ -190,6 +186,17 @@ public class PRPDTool extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1600, 1024);
         setLocationRelativeTo(null);
+
+        String homeDir = configuration.getValue(HOME_DIR);
+        String modelsRoot = configuration.getValue(MODELS_ROOT);
+        String python = configuration.getValue(PYTHON);
+
+        String pyclassifier = homeDir + "NetBeansProjects/PRPDtool/models/file_predict.py";
+        String model = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_classprpd.onnx";
+
+        classifiers = new classifier.Classifier[2];
+        classifiers[0] = new PythonPRPDClassifier(python, pyclassifier);
+        classifiers[1] = new ONNXClassifier(model);
 
         createMenuBar();
         initGui();
@@ -603,7 +610,7 @@ public class PRPDTool extends JFrame {
                 setTitle("PRPD Viewer - finished: " + Paths.get(filename).getFileName().toString());
                 setCursor(Cursor.getDefaultCursor());
                 classifyButton.setEnabled(true);
-                if (Math.abs((dfs-fs)/fs) > 1e-8) {
+                if (Math.abs((dfs - fs) / fs) > 1e-8) {
                     JOptionPane.showMessageDialog(
                             PRPDTool.this,
                             "The sampling frequency estimated from data is " + String.format(Locale.US, "%.6g", dfs) + " Hz",
