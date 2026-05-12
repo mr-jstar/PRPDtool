@@ -23,6 +23,10 @@ public final class BufferFactory {
             pool.add(buffers[i]);
         }
     }
+    
+    public static int bufferSize() {
+        return BUFFER_SIZE;
+    }
 
     private BufferFactory() {}
     

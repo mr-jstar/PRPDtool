@@ -6,9 +6,10 @@ package parallelprpd.pipeline;
  */
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.util.Arrays;
 import java.util.Locale;
 
-public class DynamicPRPDHistogram {
+public class DynamicPRPDHistogramImage implements PRPDHistogram {
 
     private int width, height;
     private final int left = 70, right = 25, top = 30, bottom = 55;
@@ -30,7 +31,7 @@ public class DynamicPRPDHistogram {
 
     private final BufferedImage image;
 
-    public DynamicPRPDHistogram(
+    public DynamicPRPDHistogramImage(
             int width,
             int height,
             int binsPhase,
@@ -55,6 +56,14 @@ public class DynamicPRPDHistogram {
         this.hist = new int[binsPhase][binsAmp];
         this.image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
 
+        drawEmpty();
+    }
+
+    @Override
+    public void reset() {
+        for (int i = 0; i < binsPhase; i++) {
+            Arrays.fill(hist[i], 0);
+        }
         drawEmpty();
     }
 
@@ -110,8 +119,6 @@ public class DynamicPRPDHistogram {
         this.width = width;
         this.height = height;
 
-        //this.plotW = width - left - right;
-        //this.plotH = height - top - bottom;
         redraw(image);
     }
 

@@ -15,7 +15,7 @@ public class PRPDFrame extends JFrame {
     private ImagePanel envelopePanel;
     private JPanel infoPanel;
 
-    private DynamicPRPDHistogram histogram;
+    private DynamicPRPDHistogramImage histogram;
     private DynamicEnvelopeImage envelope;
     private PRPDPipeline pipeline;
 
@@ -31,7 +31,7 @@ public class PRPDFrame extends JFrame {
     }
 
     private void createLayout() {
-        histogram = new DynamicPRPDHistogram(
+        histogram = new DynamicPRPDHistogramImage(
                 1200, 650,
                 360, 200,
                 0.0, 0.12
@@ -104,7 +104,7 @@ public class PRPDFrame extends JFrame {
 
             stopPipeline();
 
-            histogram = new DynamicPRPDHistogram(
+            histogram = new DynamicPRPDHistogramImage(
                     1200, 650,
                     360, 200,
                     0.0, 0.12
