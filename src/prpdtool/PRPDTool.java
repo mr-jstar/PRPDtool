@@ -4,10 +4,7 @@ package prpdtool;
  *
  * @author jstar
  */
-import classifier.Classifier;
-import classifier.ONNXClassifier;
-import classifier.Prediction;
-import classifier.PythonPRPDClassifier;
+import classifiers.*;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ComponentAdapter;
@@ -40,7 +37,16 @@ import parallelprpd.pipeline.Pulses;
 public class PRPDTool extends JFrame {
 
     private boolean inBatchMode;
-
+    
+    private String[] classes = {
+            "floating",
+            "corona -",
+            "noise",
+            "corona +",
+            "surface",
+            "void"
+    };
+    
     private final Classifier[] classifiers;
 
     private Map<Classifier, JLabel> cResults;
@@ -210,26 +216,19 @@ public class PRPDTool extends JFrame {
 
         String homeDir = configuration.getValue(HOME_DIR);
         String modelsRoot = configuration.getValue(MODELS_ROOT);
-        String python = configuration.getValue(PYTHON);
 
-        String pyclassifier = homeDir + "NetBeansProjects/PRPDtool/models/file_predict.py";
-        String model1 = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_classprpd.onnx";
-        String model2 = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_mobileyolo_6.onnx";
+        String mobileYOLO = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_mobileYOLO.onnx";
+        String squeezeYOLO = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_squeezeYOLO.onnx";
 
-        String[] classes = {
-            "floating",
-            "ncorona",
-            "noise",
-            "pcorona",
-            "surface",
-            "void"
-        };
-
-        classifiers = new classifier.Classifier[3];
-        classifiers[2] = new PythonPRPDClassifier(python, pyclassifier, classes);
-        classifiers[1] = new ONNXClassifier(model1, 4, 9, 7, classes);
-        classifiers[0] = new ONNXClassifier(model2, 4, 9, 7, classes);
-
+        classifiers = new Classifier[2];
+        classifiers[0] = new ONNXClassifier(
+                mobileYOLO, 
+                new MobileYOLOParser(7, 9, classes, 0.5f, 0.55f)
+        );
+        classifiers[1] = new classifiers.ONNXClassifier(
+                squeezeYOLO, 
+                new SqueezeYOLOParser(7, 9, classes, 0.25f)
+        );
         createMenuBar();
         initGui();
         setCurrentFont();

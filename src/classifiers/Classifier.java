@@ -1,4 +1,4 @@
-package classifier;
+package classifiers;
 
 import java.awt.image.BufferedImage;
 
@@ -9,6 +9,8 @@ import java.awt.image.BufferedImage;
 public interface Classifier {
 
     Prediction classify(BufferedImage image) throws Exception;
+
     boolean ok();
+
     String name();
 }

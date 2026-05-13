@@ -1,4 +1,4 @@
-package classifier;
+package trials.classifier_alpha;
 
 import ai.onnxruntime.*;
 
@@ -245,22 +245,19 @@ public class ONNXClassifier implements Classifier, AutoCloseable {
         return chw;
     }
 
-    private static float[] flatten(float[][][][] out) {
-        final int GRID_SIZE = 7;
-        final int NUM_ANCHORS = 9;
-        final int NUM_CLASSES = 4;
-        final int STRIDE = 5 + NUM_CLASSES; // 9
+    private float[] flatten(float[][][][] out) {
+        int stride = 5 + num_classes; // 9
 
-        float[] flat = new float[GRID_SIZE * GRID_SIZE * NUM_ANCHORS * STRIDE];
+        float[] flat = new float[grid_size * grid_size * num_anchors * stride];
 
         int k = 0;
 
-        for (int gy = 0; gy < GRID_SIZE; gy++) {
-            for (int gx = 0; gx < GRID_SIZE; gx++) {
-                for (int a = 0; a < NUM_ANCHORS; a++) {
-                    int base = a * STRIDE;
+        for (int gy = 0; gy < grid_size; gy++) {
+            for (int gx = 0; gx < grid_size; gx++) {
+                for (int a = 0; a < num_anchors; a++) {
+                    int base = a * stride;
 
-                    for (int j = 0; j < STRIDE; j++) {
+                    for (int j = 0; j < stride; j++) {
                         flat[k++] = out[0][gy][gx][base + j];
                     }
                 }

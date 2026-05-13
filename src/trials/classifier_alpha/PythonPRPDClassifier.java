@@ -1,4 +1,4 @@
-package classifier;
+package trials.classifier_alpha;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;

@@ -1,4 +1,4 @@
-package classifier;
+package trials.classifier_alpha;
 
 import java.util.Locale;
 
