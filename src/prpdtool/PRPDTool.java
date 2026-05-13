@@ -67,7 +67,6 @@ public class PRPDTool extends JFrame {
     private final String LAST_DIR = "PRPDMonitor.last.dir";
     private final String HOME_DIR = "PRPDMonitor.home.dir";
     private final String MODELS_ROOT = "PRPDMonitor.models.root";
-    private final String PYTHON = "PRPDMonitor.python";
     private final String FONTSIZE = "PRPDMonitor.font.size";
     private final String FRAMESIZE = "PRPDMonitor.frame.size";
 
@@ -241,6 +240,7 @@ public class PRPDTool extends JFrame {
         JMenuItem fileMI = new JMenuItem("Read (t,u) from file");
         fileMI.addActionListener(e -> loadFile());
         fileM.add(fileMI);
+        fileM.addSeparator();
 
         JMenuItem exportMI = new JMenuItem("Export histogram data");
         exportMI.addActionListener(e -> exportHistogram());
