@@ -6,10 +6,9 @@ package parallelprpd.pipeline;
  */
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.util.Arrays;
 import java.util.Locale;
 
-public class DynamicPRPDHistogramImage implements PRPDHistogram {
+public class DynamicPRPDHistogram implements PRPDHistogram {
 
     private int width, height;
     private final int left = 70, right = 25, top = 30, bottom = 55;
@@ -18,33 +17,27 @@ public class DynamicPRPDHistogramImage implements PRPDHistogram {
         return new int[]{left + right, top + bottom};
     }
 
+    private boolean drawF0;
     private int plotW, plotH;
-    private int binsPhase, binsAmp;
-
-    private final double ampMin;
-    private final double ampMax;
-
-    private final int[][] hist;
-    private int maxCount = 0;
+    private DynamicPRPDHistogramData data;
 
     private boolean addF0;
+    private boolean bipolar;
 
     private final BufferedImage image;
 
-    public DynamicPRPDHistogramImage(
+    public DynamicPRPDHistogram(
             int width,
             int height,
             int binsPhase,
             int binsAmp,
             double ampMin,
-            double ampMax
+            double ampMax,
+            boolean bipolar
     ) {
         this.width = width;
         this.height = height;
-        this.binsPhase = binsPhase;
-        this.binsAmp = binsAmp;
-        this.ampMin = ampMin;
-        this.ampMax = ampMax;
+        this.data = new DynamicPRPDHistogramData(binsPhase, binsAmp, ampMin, ampMax, bipolar);
 
         this.plotW = width - left - right;
         this.plotH = height - top - bottom;
@@ -53,7 +46,6 @@ public class DynamicPRPDHistogramImage implements PRPDHistogram {
             throw new IllegalArgumentException("Image would be too small");
         }
 
-        this.hist = new int[binsPhase][binsAmp];
         this.image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
 
         drawEmpty();
@@ -61,9 +53,7 @@ public class DynamicPRPDHistogramImage implements PRPDHistogram {
 
     @Override
     public void reset() {
-        for (int i = 0; i < binsPhase; i++) {
-            Arrays.fill(hist[i], 0);
-        }
+        data.reset();
         drawEmpty();
     }
 
@@ -74,9 +64,12 @@ public class DynamicPRPDHistogramImage implements PRPDHistogram {
     public BufferedImage getPRPD(int w, int h) {
         BufferedImage prpd = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = prpd.createGraphics();
+        double maxCount = (double) data.getMaxCount();
+        int binsPhase = data.getPhaseBins();
+        int binsAmp = data.getAmpBins();
         for (int xb = 0; xb < binsPhase; xb++) {
             for (int yb = 0; yb < binsAmp; yb++) {
-                int c = hist[xb][yb];
+                int c = data.getBin(xb, yb);
                 if (c == 0) {
                     continue;
                 }
@@ -98,16 +91,19 @@ public class DynamicPRPDHistogramImage implements PRPDHistogram {
         return prpd;
     }
 
+    @Override
     public double getMin() {
-        return ampMin;
+        return data.getMin();
     }
 
+    @Override
     public double getMax() {
-        return ampMax;
+        return data.getMax();
     }
 
+    @Override
     public int[][] getHistogram() {
-        return hist;
+        return data.getHistogram();
     }
 
     public void drawF0(boolean doIt) {
@@ -124,26 +120,7 @@ public class DynamicPRPDHistogramImage implements PRPDHistogram {
 
     public void addPulses(Pulses p) {
 
-        for (int i = 0; i < p.n; i++) {
-
-            double phase = p.phase[i];
-            double amp = Math.abs(p.amp[i]);
-
-            int xb = (int) (phase / 360.0 * binsPhase);
-            int yb = (int) ((amp - ampMin) / (ampMax - ampMin) * binsAmp);
-
-            if (xb < 0 || xb >= binsPhase) {
-                continue;
-            }
-            if (yb < 0 || yb >= binsAmp) {
-                continue;
-            }
-
-            hist[xb][yb]++;
-            if (hist[xb][yb] > maxCount) {
-                maxCount = hist[xb][yb];
-            }
-        }
+        data.addPulses(p);
 
         redraw(image);
     }
@@ -178,16 +155,19 @@ public class DynamicPRPDHistogramImage implements PRPDHistogram {
                 yp = y;
             }
         }
+        
+        int binsPhase = data.getPhaseBins();
+        int binsAmp = data.getAmpBins();
 
         for (int xb = 0; xb < binsPhase; xb++) {
             for (int yb = 0; yb < binsAmp; yb++) {
-                int c = hist[xb][yb];
+                int c = data.getBin(xb,yb);
                 if (c == 0) {
                     continue;
                 }
 
                 // <0,maxCount> -> log -> <0,1>
-                double v = Math.log1p(c) / Math.log1p(maxCount);
+                double v = Math.log1p(c) / Math.log1p((double)data.getMaxCount());
 
                 int x0 = left + (int) Math.floor(xb * plotW / (double) binsPhase);
                 int x1 = left + (int) Math.floor((xb + 1) * plotW / (double) binsPhase);
@@ -233,8 +213,10 @@ public class DynamicPRPDHistogramImage implements PRPDHistogram {
             g.drawString(Integer.toString(deg), x - 10, top + plotH + 22);
         }
 
+        double delta = data.getMax() - data.getMin();
+        double min = data.getMin();
         for (int i = 0; i <= 4; i++) {
-            double val = ampMin + i * (ampMax - ampMin) / 4.0;
+            double val = min + i * delta / 4.0;
             int y = top + plotH - (int) Math.round(i / 4.0 * plotH);
 
             g.drawLine(left - 5, y, left, y);

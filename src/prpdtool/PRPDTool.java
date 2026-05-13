@@ -28,7 +28,7 @@ import java.util.function.IntSupplier;
 import javax.imageio.ImageIO;
 import parallelprpd.pipeline.Buffer;
 import parallelprpd.pipeline.BufferFactory;
-import parallelprpd.pipeline.DynamicPRPDHistogramData;
+import parallelprpd.pipeline.DynamicPRPDHistogram;
 import parallelprpd.pipeline.DynamicPRPDHistogramImage;
 import parallelprpd.pipeline.DynamicSignalImage;
 import parallelprpd.pipeline.Filter;
@@ -39,6 +39,8 @@ import parallelprpd.pipeline.PRPDPipelineListener;
 import parallelprpd.pipeline.Pulses;
 
 public class PRPDTool extends JFrame {
+
+    private boolean inBatchMode;
 
     private final Classifier[] classifiers;
 
@@ -110,13 +112,14 @@ public class PRPDTool extends JFrame {
 
     // Misc options
     private boolean drawF0 = true;
+    private boolean bipolarHistogram;
 
     // Data
     private ImagePanel signalPanel;
     private ImagePanel envelopePanel;
 
     private String lastDataFile;
-    private DynamicPRPDHistogramImage histogram;
+    private DynamicPRPDHistogram histogram;
     private DynamicSignalImage envelope;
     private DynamicSignalImage signal;
     private PRPDPipeline pipeline;
@@ -211,11 +214,23 @@ public class PRPDTool extends JFrame {
         String python = configuration.getValue(PYTHON);
 
         String pyclassifier = homeDir + "NetBeansProjects/PRPDtool/models/file_predict.py";
-        String model = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_classprpd.onnx";
+        String model1 = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_classprpd.onnx";
+        String model2 = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_mobileyolo_6.onnx";
 
-        classifiers = new classifier.Classifier[2];
-        classifiers[0] = new PythonPRPDClassifier(python, pyclassifier);
-        classifiers[1] = new ONNXClassifier(model);
+        
+        String[] classes = {
+            "floating",
+            "ncorona",
+            "noise",
+            "pcorona",
+            "surface",
+            "void"
+        };
+        
+        classifiers = new classifier.Classifier[3];
+        classifiers[2] = new PythonPRPDClassifier(python, pyclassifier,classes);
+        classifiers[1] = new ONNXClassifier(model1,4,9,7,classes);
+        classifiers[0] = new ONNXClassifier(model2,4,9,7,classes);
 
         createMenuBar();
         initGui();
@@ -239,7 +254,7 @@ public class PRPDTool extends JFrame {
         fileM.add(imageMI);
 
         JMenuItem prpdMI = new JMenuItem("Export YOLO image");
-        prpdMI.addActionListener(e -> exportPRPD4YOLO());
+        prpdMI.addActionListener(e -> exportPRPD4YOLO(lastDataFile));
         fileM.add(prpdMI);
 
         fileM.addSeparator();
@@ -284,6 +299,27 @@ public class PRPDTool extends JFrame {
             center.repaint();
         });
         optM.add(sinMB);
+
+        JCheckBoxMenuItem bipolarMB = new JCheckBoxMenuItem("Bipolar histogram", bipolarHistogram);
+        bipolarMB.addActionListener(e -> {
+            bipolarHistogram = bipolarMB.isSelected();
+            histogram = new DynamicPRPDHistogram(
+                    center.getWidth(), center.getHeight(),
+                    360, 200,
+                    (bipolarHistogram ? -ampMax : 0 ), ampMax,
+                    bipolarHistogram
+            );
+            if (lastDataFile != null) {
+                try {
+                    readDataFile(lastDataFile);
+                } catch (Exception ex) {
+                    status.setText(ex.getMessage());
+                }
+            }
+            center.repaint();
+        });
+        optM.add(bipolarMB);
+
         mb.add(optM);
         setJMenuBar(mb);
     }
@@ -331,10 +367,11 @@ public class PRPDTool extends JFrame {
             splitLeft.setDividerLocation(0.05);
             splitCenterRight.setDividerLocation(0.8);
 
-            histogram = new DynamicPRPDHistogramImage(
+            histogram = new DynamicPRPDHistogram(
                     center.getWidth(), center.getHeight(),
                     360, 200,
-                    0.0, ampMax
+                    (bipolarHistogram ? -ampMax : 0 ), ampMax,
+                    bipolarHistogram
             );
             histogram.drawF0(drawF0);
 
@@ -532,6 +569,7 @@ public class PRPDTool extends JFrame {
         setFontRecursively(fileChooser, currentFont, 0);
         int result = fileChooser.showOpenDialog(this);
         if (result == JFileChooser.APPROVE_OPTION) {
+            inBatchMode = false;
             File file = fileChooser.getSelectedFile();
             try {
                 String filename = file.getAbsolutePath();
@@ -588,10 +626,11 @@ public class PRPDTool extends JFrame {
 
         };
 
-        histogram = new DynamicPRPDHistogramImage(
+        histogram = new DynamicPRPDHistogram(
                 center.getWidth(), center.getHeight(),
                 360, 200,
-                0.0, ampMax
+                (bipolarHistogram ? -ampMax : 0 ), ampMax,
+                bipolarHistogram
         );
         histogram.drawF0(drawF0);
 
@@ -651,9 +690,13 @@ public class PRPDTool extends JFrame {
 
             @Override
             public void finished() {
-                setTitle("PRPD Viewer - finished: " + Paths.get(filename).getFileName().toString());
+                setTitle("PRPD Viewer: " + Paths.get(filename).getFileName().toString());
                 setCursor(Cursor.getDefaultCursor());
                 classifyButton.setEnabled(true);
+                if (inBatchMode) {
+                    exportPRPD4YOLO(filename);
+                    System.out.println("..." + filename + " finished.");
+                }
                 if (Math.abs((dfs - fs) / fs) > 1e-8) {
                     JOptionPane.showMessageDialog(
                             PRPDTool.this,
@@ -732,12 +775,11 @@ public class PRPDTool extends JFrame {
         }
     }
 
-    private void exportPRPD4YOLO() {
-        System.out.println("Exporting " + histogram);
+    private void exportPRPD4YOLO(String fileName) {
         if (histogram != null) {
             prpd4YOLO = histogram.getPRPD(224, 224);
             try {
-                String o = lastDataFile.replaceAll("\\..*$", ".png");
+                String o = fileName.replaceAll("\\..*$", ".png");
                 ImageIO.write(prpd4YOLO, "png", new File(o));
                 status.setText("YOLO IMG:" + o);
             } catch (IOException ex) {
@@ -788,32 +830,53 @@ public class PRPDTool extends JFrame {
         setFontRecursively(fileChooser, currentFont, 0);
         int result = fileChooser.showOpenDialog(this);
         if (result == JFileChooser.APPROVE_OPTION) {
-            File file = fileChooser.getSelectedFile();
-            if (file.isDirectory()) {
-                String[] files = file.list((dir, name) -> {
-                    File f = new File(dir, name);
-                    return f.isFile()
-                            && name.toLowerCase().endsWith(".bin");
-                });
-                for (String s : files) {
-                    String ds = file.getAbsolutePath() + File.separator + s;
-                    System.out.println(ds);
-                }
-                try {
-                    String ds = file.getAbsolutePath() + File.separator + files[0];
-                    System.out.println("Processing " + ds);
-                    readDataFile(ds);
-                    while (pipeline.isRunning()) {
-                        Thread.sleep(100);
-                    }
-                    exportPRPD4YOLO();
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                } finally {
-                    stopPipeline();
-                }
+            File dir = fileChooser.getSelectedFile();
+            if (dir.isDirectory()) {
+                processDirectoryBatch(dir);
             }
         }
+    }
+
+    private void processDirectoryBatch(File dir) {
+        String[] files = dir.list((d, name) -> {
+            File f = new File(d, name);
+            return f.isFile() && name.toLowerCase().endsWith(".bin");
+        });
+
+        if (files == null) {
+            return;
+        }
+
+        new Thread(() -> {
+            inBatchMode = true;
+
+            for (String s : files) {
+                try {
+                    while (pipeline != null && pipeline.isRunning()) {
+                        Thread.sleep(250);
+                    }
+
+                    String ds = dir.getAbsolutePath() + File.separator + s;
+                    System.out.print("Processing " + ds);
+
+                    SwingUtilities.invokeAndWait(() -> {
+                        try {
+                            readDataFile(ds);
+                        } catch (Exception ex) {
+                            ex.printStackTrace();
+                        }
+                    });
+
+                    System.out.println(" ...started");
+
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+
+            inBatchMode = false;
+
+        }, "PRPD-batch-thread").start();
     }
 
     public static void main(String[] args) {
@@ -822,74 +885,3 @@ public class PRPDTool extends JFrame {
         });
     }
 }
-
-/*
-    private void dir2prpd() {
-        JFileChooser fileChooser = new JFileChooser(getLastUsedDirectory());
-        fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        setFontRecursively(fileChooser, currentFont, 0);
-        int result = fileChooser.showOpenDialog(this);
-        if (result == JFileChooser.APPROVE_OPTION) {
-            File file = fileChooser.getSelectedFile();
-            if (file.isDirectory()) {
-                String[] files = file.list((dir, name) -> {
-                    File f = new File(dir, name);
-                    return f.isFile()
-                            && name.toLowerCase().endsWith(".bin");
-                });
-                SwingUtilities.invokeLater(() -> {
-                    DynamicPRPDHistogramData hist = new DynamicPRPDHistogramData(
-                            360, 200, 0.0, ampMax
-                    );
-                    Filter filter = new HighPassFilter(fs, cutF, filterQ, filterOrder);
-                    PRPDExtractorCore extractor = new PRPDExtractorCore(
-                            f0, t0, threshold, deadUs, filter
-                    );
-                    int buffer_size = BufferFactory.bufferSize();
-                    for (String s : files) {
-                        String ds = file.getAbsolutePath() + File.separator + s;
-                        hist.reset();
-                        PRPDPipeline proc = new PRPDPipeline(ds, 1, // 1 konsument - extractor
-                                buffer_size, 2, extractor, new PRPDPipelineListener() {
-                            private int nb;
-
-                            @Override
-                            public void bufferRead(Buffer buffer) {
-                                System.err.println("Buffer #" + nb++);
-                            }
-
-                            @Override
-                            public void pulsesReady(Pulses pulses) {
-                                hist.addPulses(pulses);
-                            }
-
-                            @Override
-                            public void finished() {
-                                BufferFactory.reset();
-                                String prpd = ds.replaceAll(".bin$", ".png");
-                                try {
-                                    ImageIO.write(hist.getPRPD(244, 244), "png", new File(prpd));
-                                } catch (IOException ex) {
-                                    System.err.println("Unable to write " + prpd);
-                                }
-                            }
-
-                            @Override
-                            public void error(Throwable ex, String msg) {
-                                System.err.println("ERRROR while processing " + ds + ": " + ex.getMessage() + "," + msg);
-                            }
-                        });
-                        proc.start();
-                        try {
-                            while (proc.isRunning()) {
-                                Thread.sleep(100);
-                            }
-                        } catch (InterruptedException ex) {
-                            ex.printStackTrace();
-                        }
-                    }
-                });
-            }
-        }
-    }
- */

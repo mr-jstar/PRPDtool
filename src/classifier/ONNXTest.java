@@ -15,23 +15,31 @@ public class ONNXTest {
         //String home = "/Users/jstar/";
         String host = "oer";
         //String host = "oer";
-        
+
         String model = home + "NetBeansProjects/PRPDtool/klasyfikator/" + host + "_classprpd.onnx";
-        
-        System.out.println( "Model: " + model);
+
+        System.out.println("Model: " + model);
+
+        String[] classes = {
+            "floating",
+            "ncorona",
+            "noise",
+            "pcorona",
+            "surface",
+            "void"
+        };
 
         try (ONNXClassifier clf
-                = new ONNXClassifier( model ))
-        {
+                = new ONNXClassifier(model, 4, 9, 7, classes)) {
 
             BufferedImage img = ImageIO.read(new File(home + "NetBeansProjects/PRPDtool/klasyfikator/test_image.png"));;
-            
+
             Prediction p = clf.classify(img);
 
             int best = 0;
 
             System.out.println("Predicted class = " + p.clsId);
-        } catch( Exception ex ) {
+        } catch (Exception ex) {
             ex.printStackTrace();
         }
     }

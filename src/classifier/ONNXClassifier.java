@@ -20,14 +20,23 @@ public class ONNXClassifier implements Classifier, AutoCloseable {
     private OrtEnvironment env;
     private OrtSession session;
 
+    private final int num_classes;// = 4;
+    private final int num_anchors;// = 9;
+    private final int grid_size; // = 7;
+
     private final int inputWidth = 224;
     private final int inputHeight = 224;
-    
-    private String model;
-    private  boolean ok;
 
-    public ONNXClassifier(String modelPath) {
+    private String model;
+    private boolean ok;
+    private String [] classes; 
+
+    public ONNXClassifier(String modelPath, int num_classes, int num_anchors, int grid_size, String [] classes ) {
         model = Paths.get(modelPath).getFileName().toString();
+        this.num_classes = num_classes;
+        this.num_anchors = num_anchors;
+        this.grid_size = grid_size;
+        this.classes = classes;
         try {
             env = OrtEnvironment.getEnvironment(OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR);
 
@@ -42,12 +51,12 @@ public class ONNXClassifier implements Classifier, AutoCloseable {
             ok = false;
         }
     }
-    
+
     @Override
     public String name() {
         return model;
     }
-    
+
     @Override
     public boolean ok() {
         return ok;
@@ -101,27 +110,24 @@ public class ONNXClassifier implements Classifier, AutoCloseable {
         return parseYoloLikeOutput(flat, 0.30f, 0.55f);
     }
 
-    public static Prediction parseYoloLikeOutput(
+    public Prediction parseYoloLikeOutput(
             float[] flat,
             float confObjTh,
             float confClsTh
     ) {
-        final int NUM_CLASSES = 4;
-        final int NUM_ANCHORS = 9;
-        final int GRID_SIZE = 7;
-        final int STRIDE = 5 + NUM_CLASSES; // 9
+        int stride = 5 + num_classes; // 9
 
         int bestGy = 0;
         int bestGx = 0;
         int bestA = 0;
         float bestObj = -Float.MAX_VALUE;
 
-        for (int gy = 0; gy < GRID_SIZE; gy++) {
-            for (int gx = 0; gx < GRID_SIZE; gx++) {
-                for (int a = 0; a < NUM_ANCHORS; a++) {
+        for (int gy = 0; gy < grid_size; gy++) {
+            for (int gx = 0; gx < grid_size; gx++) {
+                for (int a = 0; a < num_anchors; a++) {
 
                     int base
-                            = (((gy * GRID_SIZE + gx) * NUM_ANCHORS + a) * STRIDE);
+                            = (((gy * grid_size + gx) * num_anchors + a) * stride);
 
                     float obj = flat[base + 4];
 
@@ -136,14 +142,14 @@ public class ONNXClassifier implements Classifier, AutoCloseable {
         }
 
         int bestBase
-                = (((bestGy * GRID_SIZE + bestGx) * NUM_ANCHORS + bestA) * STRIDE);
+                = (((bestGy * grid_size + bestGx) * num_anchors + bestA) * stride);
 
-        float[] clsScores = new float[NUM_CLASSES];
+        float[] clsScores = new float[num_classes];
 
         int clsId = 0;
         float clsProb = -Float.MAX_VALUE;
 
-        for (int c = 0; c < NUM_CLASSES; c++) {
+        for (int c = 0; c < num_classes; c++) {
             float v = flat[bestBase + 5 + c];
             clsScores[c] = v;
 
@@ -161,7 +167,8 @@ public class ONNXClassifier implements Classifier, AutoCloseable {
                     clsScores,
                     bestGx,
                     bestGy,
-                    bestA
+                    bestA,
+                    classes
             );
         }
 
@@ -172,7 +179,8 @@ public class ONNXClassifier implements Classifier, AutoCloseable {
                 clsScores,
                 bestGx,
                 bestGy,
-                bestA
+                bestA,
+                classes
         );
     }
 

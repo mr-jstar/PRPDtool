@@ -17,17 +17,21 @@ public class DynamicPRPDHistogramData implements PRPDHistogram {
 
     private final int[][] hist;
     private int maxCount = 0;
+    
+    private boolean bipolar;
 
     public DynamicPRPDHistogramData(
             int binsPhase,
             int binsAmp,
             double ampMin,
-            double ampMax
+            double ampMax,
+            boolean bipolar
     ) {
         this.binsPhase = binsPhase;
         this.binsAmp = binsAmp;
         this.ampMin = ampMin;
         this.ampMax = ampMax;
+        this.bipolar = bipolar;
 
         this.hist = new int[binsPhase][binsAmp];
     }
@@ -87,7 +91,7 @@ public class DynamicPRPDHistogramData implements PRPDHistogram {
         for (int i = 0; i < p.n; i++) {
 
             double phase = p.phase[i];
-            double amp = Math.abs(p.amp[i]);
+            double amp = bipolar ? p.amp[i] : Math.abs(p.amp[i]);
 
             int xb = (int) (phase / 360.0 * binsPhase);
             int yb = (int) ((amp - ampMin) / (ampMax - ampMin) * binsAmp);
@@ -134,5 +138,21 @@ public class DynamicPRPDHistogramData implements PRPDHistogram {
         }
 
         return new Color(r, g, b);
+    }
+    
+    public int getMaxCount() {
+        return maxCount;
+    }
+    
+    public int getPhaseBins() {
+        return binsPhase;
+    }
+    
+    public int getAmpBins() {
+        return binsAmp;
+    }
+    
+    public int getBin(int ph, int amp) {
+        return hist[ph][amp];
     }
 }

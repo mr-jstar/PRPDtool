@@ -1,5 +1,7 @@
 package classifier;
 
+import java.util.Locale;
+
 /**
  *
  * @author jstar
@@ -12,10 +14,11 @@ public class Prediction {
     public final float[] clsScores;
     public final int gx, gy, anchor;
 
-    private final static String[] classes = {"DEF1", "DEF2", "DEF3", "DEF4"};
+    private final String[] classes;
 
     public Prediction(Integer clsId, float objScore, float clsProb,
-            float[] clsScores, int gx, int gy, int anchor) {
+            float[] clsScores, int gx, int gy, int anchor,
+            String [] classes ) {
         this.clsId = clsId;
         this.objScore = objScore;
         this.clsProb = clsProb;
@@ -23,6 +26,7 @@ public class Prediction {
         this.gx = gx;
         this.gy = gy;
         this.anchor = anchor;
+        this.classes = classes;
     }
 
     @Override
@@ -30,7 +34,7 @@ public class Prediction {
         if (clsId == null) {
             return "no defect";
         } else {
-            return classes[clsId] + objScore;
+            return classes[clsId] + String.format(Locale.US, " (%3.0f%%)", objScore*100);
         }
     }
 }

@@ -19,23 +19,26 @@ public class PythonPRPDClassifier implements Classifier {
     private final String scriptPath;
 
     private final boolean ok;
-    
+
     private String name;
 
-    public PythonPRPDClassifier(String pythonExe, String scriptPath) {
+    String[] classes;
+
+    public PythonPRPDClassifier(String pythonExe, String scriptPath, String [] classes) {
         this.pythonExe = pythonExe;
         this.scriptPath = scriptPath;
-        ok = Files.isExecutable(Paths.get(pythonExe)) && Files.exists(Paths.get(scriptPath));
-        if( ok )
+        this.classes = classes;
+        ok = pythonExe != null && scriptPath != null && Files.isExecutable(Paths.get(pythonExe)) && Files.exists(Paths.get(scriptPath));
+        if (ok) {
             name = Paths.get(scriptPath).getFileName().toString();
-        else {
+        } else {
             name = "UNKNOWN";
-            System.err.println("Can not create classifier: " + pythonExe + " & " + scriptPath );
+            System.err.println("Can not create classifier: " + pythonExe + " & " + scriptPath);
             //System.err.println(pythonExe + ":" + Files.isExecutable(Paths.get(pythonExe)) );
             //System.err.println(scriptPath + ":" + Files.exists(Paths.get(scriptPath)) );
         }
     }
-    
+
     @Override
     public String name() {
         return name;
@@ -142,7 +145,9 @@ public class PythonPRPDClassifier implements Classifier {
                     objScore,
                     objScore,
                     clsScores,
-                    0, 0, 0
+                    0, 0, 0,
+                    classes
+          
             );
 
         } finally {
