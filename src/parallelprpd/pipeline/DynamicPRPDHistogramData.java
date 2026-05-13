@@ -34,6 +34,7 @@ public class DynamicPRPDHistogramData implements PRPDHistogram {
         this.bipolar = bipolar;
 
         this.hist = new int[binsPhase][binsAmp];
+        System.err.println("Histogramdata: ampMin="+this.ampMin+" bipolar="+this.bipolar);
     }
     
     @Override

@@ -29,7 +29,6 @@ import javax.imageio.ImageIO;
 import parallelprpd.pipeline.Buffer;
 import parallelprpd.pipeline.BufferFactory;
 import parallelprpd.pipeline.DynamicPRPDHistogram;
-import parallelprpd.pipeline.DynamicPRPDHistogramImage;
 import parallelprpd.pipeline.DynamicSignalImage;
 import parallelprpd.pipeline.Filter;
 import parallelprpd.pipeline.HighPassFilter;
@@ -217,7 +216,6 @@ public class PRPDTool extends JFrame {
         String model1 = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_classprpd.onnx";
         String model2 = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_mobileyolo_6.onnx";
 
-        
         String[] classes = {
             "floating",
             "ncorona",
@@ -226,11 +224,11 @@ public class PRPDTool extends JFrame {
             "surface",
             "void"
         };
-        
+
         classifiers = new classifier.Classifier[3];
-        classifiers[2] = new PythonPRPDClassifier(python, pyclassifier,classes);
-        classifiers[1] = new ONNXClassifier(model1,4,9,7,classes);
-        classifiers[0] = new ONNXClassifier(model2,4,9,7,classes);
+        classifiers[2] = new PythonPRPDClassifier(python, pyclassifier, classes);
+        classifiers[1] = new ONNXClassifier(model1, 4, 9, 7, classes);
+        classifiers[0] = new ONNXClassifier(model2, 4, 9, 7, classes);
 
         createMenuBar();
         initGui();
@@ -306,9 +304,12 @@ public class PRPDTool extends JFrame {
             histogram = new DynamicPRPDHistogram(
                     center.getWidth(), center.getHeight(),
                     360, 200,
-                    (bipolarHistogram ? -ampMax : 0 ), ampMax,
+                    (bipolarHistogram ? -ampMax : 0), ampMax,
                     bipolarHistogram
             );
+            histogram.drawF0(drawF0);
+            center.setImage(histogram.getImage());
+            center.revalidate();
             if (lastDataFile != null) {
                 try {
                     readDataFile(lastDataFile);
@@ -370,7 +371,7 @@ public class PRPDTool extends JFrame {
             histogram = new DynamicPRPDHistogram(
                     center.getWidth(), center.getHeight(),
                     360, 200,
-                    (bipolarHistogram ? -ampMax : 0 ), ampMax,
+                    (bipolarHistogram ? -ampMax : 0), ampMax,
                     bipolarHistogram
             );
             histogram.drawF0(drawF0);
@@ -629,7 +630,7 @@ public class PRPDTool extends JFrame {
         histogram = new DynamicPRPDHistogram(
                 center.getWidth(), center.getHeight(),
                 360, 200,
-                (bipolarHistogram ? -ampMax : 0 ), ampMax,
+                (bipolarHistogram ? -ampMax : 0), ampMax,
                 bipolarHistogram
         );
         histogram.drawF0(drawF0);
