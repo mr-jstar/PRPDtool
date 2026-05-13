@@ -17,12 +17,11 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         return new int[]{left + right, top + bottom};
     }
 
-    private boolean drawF0;
-    private int plotW, plotH;
-    private DynamicPRPDHistogramData data;
+    private final int plotW;
+    private final int plotH;
+    private final DynamicPRPDHistogramData data;
 
     private boolean addF0;
-    private boolean bipolar;
 
     private final BufferedImage image;
 
@@ -61,6 +60,7 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         return image;
     }
 
+    @Override
     public BufferedImage getPRPD(int w, int h) {
         BufferedImage prpd = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = prpd.createGraphics();
@@ -118,6 +118,7 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         redraw(image);
     }
 
+    @Override
     public void addPulses(Pulses p) {
 
         data.addPulses(p);
