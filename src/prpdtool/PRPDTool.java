@@ -30,6 +30,7 @@ import pipeline.DynamicSignalImage;
 import dsp.Filter;
 import dsp.HighPassFilter;
 import dsp.LowPassFilter;
+import dsp.PhaseEstimator;
 import pipeline.PRPDExtractorCore;
 import pipeline.PRPDPipeline;
 import pipeline.PRPDPipelineListener;
@@ -103,6 +104,8 @@ public class PRPDTool extends JFrame {
     private double filterQ = 0.707; // Q filtra
     private int filterOrder = 4; // rząd filtra
     private double cutF = 50_000; // f odcięcia
+
+    private boolean signalStart;
 
     Param<?>[] params = {
         Param.dbl("Basic frequency [Hz]", () -> f0, v -> f0 = v),
@@ -672,6 +675,26 @@ public class PRPDTool extends JFrame {
     //---------------- Actions ------
     private void loadFile() {
         JFileChooser fileChooser = new JFileChooser(getLastUsedDirectory());
+        fileChooser.setFileFilter(new javax.swing.filechooser.FileFilter() {
+            @Override
+            public boolean accept(File f) {
+
+                if (f.isDirectory()) {
+                    return true;
+                }
+
+                String name = f.getName().toLowerCase();
+
+                return !(name.endsWith(".png")
+                        || name.endsWith(".jpg")
+                        || name.endsWith(".jpeg"));
+            }
+
+            @Override
+            public String getDescription() {
+                return "Non-image files";
+            }
+        });
         setFontRecursively(fileChooser, currentFont, 0);
         int result = fileChooser.showOpenDialog(this);
         if (result == JFileChooser.APPROVE_OPTION) {
@@ -725,7 +748,7 @@ public class PRPDTool extends JFrame {
                 }
                 return o;
             }
-            
+
             @Override
             public double[] filter(double[] signal, int n) {
                 double[] o = new double[n];
@@ -797,6 +820,22 @@ public class PRPDTool extends JFrame {
                 new PRPDPipelineListener() {
             @Override
             public void bufferRead(Buffer buffer) {
+                if (signalStart) {
+                    double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0);
+                    double estt0 = ph0 / Math.PI / f0;
+                    System.out.println("est ph=" + (360.0*(estt0 - 0) * f0) % 360.0 + " deg");
+                    System.out.println( "Delta " + Math.abs((((360.0 * (t0 - estt0) * f0 + 180.0) % 360.0 + 360.0) % 360.0) - 180.0));
+                    if ( Math.abs((((360.0 * (t0 - estt0) * f0 + 180.0) % 360.0 + 360.0) % 360.0) - 180.0) > 0.1) {
+                        //System.out.println("Estimated ph0 = " + ph0 + ", t0 = " + estt0 + " t0*f0=" + estt0*f0);
+                        JOptionPane.showMessageDialog(
+                                PRPDTool.this,
+                                "The zero-crossing instant estimated from data is " + String.format(Locale.US, "%.6g", estt0) + " s",
+                                "Warning",
+                                JOptionPane.WARNING_MESSAGE
+                        );
+                    }
+                    signalStart = false;
+                }
                 envelope.addBuffer(buffer);
                 envelopePanel.repaint();
                 signal.addBuffer(buffer);
@@ -852,6 +891,7 @@ public class PRPDTool extends JFrame {
 
         setTitle("PRPD Viewer - " + Paths.get(filename).getFileName().toString());
         setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+        signalStart = true;
         pipeline.start();
     }
 
