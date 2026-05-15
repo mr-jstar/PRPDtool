@@ -221,20 +221,20 @@ public class PRPDTool extends JFrame {
         String homeDir = configuration.getValue(HOME_DIR);
         String modelsRoot = configuration.getValue(MODELS_ROOT);
 
-        String mobileYOLO = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_mobileYOLO.onnx";
-        String squeezeYOLO = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_squeezeYOLO.onnx";
-        String rtdetr = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_rtdetr.onnx";
+        String mobileYOLO = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_mobileYOLO.zip";
+        String squeezeYOLO = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_squeezeYOLO.zip";
+        String rtdetr = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_rtdetr.zip";
 
         classifiers = new Classifier[3];
         classifiers[0] = new ONNXClassifier(
                 mobileYOLO, new PreprocessorYOLO(),
                 new MobileYOLOParser(7, 9, classes, 0.5f, 0.55f)
         );
-        classifiers[1] = new classifiers.ONNXClassifier(
+        classifiers[1] = new ONNXClassifier(
                 squeezeYOLO, new PreprocessorYOLO(),
                 new SqueezeYOLOParser(7, 9, classes, 0.25f)
         );
-        classifiers[2] = new classifiers.ONNXClassifier(
+        classifiers[2] = new ONNXClassifier(
                 rtdetr, new PreprocessorRTDETR(),
                 new RTDETRParser(300, classes, 0.25f)
         );
