@@ -823,10 +823,9 @@ public class PRPDTool extends JFrame {
                 if (signalStart) {
                     double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0);
                     double estt0 = ph0 / Math.PI / f0;
-                    System.out.println("est ph=" + (360.0*(estt0 - 0) * f0) % 360.0 + " deg");
-                    System.out.println( "Delta " + Math.abs((((360.0 * (t0 - estt0) * f0 + 180.0) % 360.0 + 360.0) % 360.0) - 180.0));
-                    if ( Math.abs((((360.0 * (t0 - estt0) * f0 + 180.0) % 360.0 + 360.0) % 360.0) - 180.0) > 0.1) {
-                        //System.out.println("Estimated ph0 = " + ph0 + ", t0 = " + estt0 + " t0*f0=" + estt0*f0);
+                    //System.out.println("est ph=" + (360.0*(estt0 - 0) * f0) % 360.0 + " deg");
+                    //System.out.println( "Delta " + Math.abs((((360.0 * (t0 - estt0) * f0 + 180.0) % 360.0 + 360.0) % 360.0) - 180.0));
+                    if (Math.abs((((360.0 * (t0 - estt0) * f0 + 180.0) % 360.0 + 360.0) % 360.0) - 180.0) > 0.1) {
                         JOptionPane.showMessageDialog(
                                 PRPDTool.this,
                                 "The zero-crossing instant estimated from data is " + String.format(Locale.US, "%.6g", estt0) + " s",
