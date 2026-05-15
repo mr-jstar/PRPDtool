@@ -1,9 +1,12 @@
-package parallelprpd.pipeline;
+package pipeline;
 
 /**
  *
  * @author jstar
  */
+import pipeline.PRPDExtractorCore;
+import pipeline.Buffer;
+import pipeline.BinaryReader;
 import javax.swing.SwingUtilities;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;

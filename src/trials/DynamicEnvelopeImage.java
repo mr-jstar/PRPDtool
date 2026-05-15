@@ -4,6 +4,7 @@ package parallelprpd.pipeline;
  *
  * @author jstar
  */
+import pipeline.Buffer;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.Arrays;

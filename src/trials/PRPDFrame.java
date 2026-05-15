@@ -4,6 +4,13 @@ package parallelprpd.pipeline;
  *
  * @author jstar
  */
+import dsp.HighPassFilter;
+import dsp.Filter;
+import pipeline.Pulses;
+import pipeline.PRPDPipelineListener;
+import pipeline.PRPDPipeline;
+import pipeline.PRPDExtractorCore;
+import pipeline.Buffer;
 import prpdtool.ImagePanel;
 import javax.swing.*;
 import java.awt.*;

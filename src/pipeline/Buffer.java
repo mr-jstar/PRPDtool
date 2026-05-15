@@ -1,5 +1,6 @@
-package parallelprpd.pipeline;
+package pipeline;
 
+import pipeline.BufferFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**

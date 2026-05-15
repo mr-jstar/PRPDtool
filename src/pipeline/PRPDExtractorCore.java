@@ -1,4 +1,7 @@
-package parallelprpd.pipeline;
+package pipeline;
+
+import dsp.Filter;
+import pipeline.Buffer;
 
 /**
  *
@@ -48,7 +51,7 @@ public class PRPDExtractorCore {
 
         int deadN = Math.max(1, (int) Math.round(deadUs * 1e-6 * fs));
 
-        double [] filtered = filter.filter(b.u);
+        double [] filtered = filter.filter(b.u, b.used);
 
         int count = 0;
         int i = 1;

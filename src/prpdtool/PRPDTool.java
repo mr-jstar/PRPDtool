@@ -23,17 +23,17 @@ import java.util.function.DoubleSupplier;
 import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
 import javax.imageio.ImageIO;
-import parallelprpd.pipeline.Buffer;
-import parallelprpd.pipeline.BufferFactory;
-import parallelprpd.pipeline.DynamicPRPDHistogram;
-import parallelprpd.pipeline.DynamicSignalImage;
-import parallelprpd.pipeline.Filter;
-import parallelprpd.pipeline.HighPassFilter;
-import parallelprpd.pipeline.LowPassFilter;
-import parallelprpd.pipeline.PRPDExtractorCore;
-import parallelprpd.pipeline.PRPDPipeline;
-import parallelprpd.pipeline.PRPDPipelineListener;
-import parallelprpd.pipeline.Pulses;
+import pipeline.Buffer;
+import pipeline.BufferFactory;
+import pipeline.DynamicPRPDHistogram;
+import pipeline.DynamicSignalImage;
+import dsp.Filter;
+import dsp.HighPassFilter;
+import dsp.LowPassFilter;
+import pipeline.PRPDExtractorCore;
+import pipeline.PRPDPipeline;
+import pipeline.PRPDPipelineListener;
+import pipeline.Pulses;
 
 public class PRPDTool extends JFrame {
 
@@ -722,6 +722,15 @@ public class PRPDTool extends JFrame {
                 double[] o = signal.clone();
                 for (int i = 0; i < o.length; i++) {
                     o[i] = Math.abs(o[i]);
+                }
+                return o;
+            }
+            
+            @Override
+            public double[] filter(double[] signal, int n) {
+                double[] o = new double[n];
+                for (int i = 0; i < n; i++) {
+                    o[i] = Math.abs(signal[i]);
                 }
                 return o;
             }

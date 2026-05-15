@@ -4,6 +4,8 @@ package parallelprpd.pipeline;
  *
  * @author jstar
  */
+import pipeline.PRPDHistogram;
+import pipeline.Pulses;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.Arrays;

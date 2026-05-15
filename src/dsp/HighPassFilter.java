@@ -1,6 +1,6 @@
-package parallelprpd.pipeline;
+package dsp;
 
-import prpdtool.DigitalFilters;
+import dsp.Filter;
 
 /**
  *
@@ -22,6 +22,13 @@ public class HighPassFilter implements Filter {
     @Override
     public double [] filter( double [] signal ) {
         return DigitalFilters.highpassIIRZeroPhase(signal, fs, fc, q, order);
+    }
+    
+    @Override
+    public double [] filter( double [] signal, int n ) {
+        double [] s = new double[n];
+        System.arraycopy(signal, 0, s, 0, n);
+        return DigitalFilters.highpassIIRZeroPhase(s, fs, fc, q, order);
     }
          
     @Override

@@ -1,5 +1,7 @@
 
-package parallelprpd.pipeline;
+package pipeline;
+
+import pipeline.Buffer;
 
 /**
  *
