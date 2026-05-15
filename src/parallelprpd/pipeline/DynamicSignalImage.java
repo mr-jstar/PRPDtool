@@ -7,7 +7,6 @@ package parallelprpd.pipeline;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.Arrays;
-import java.util.Locale;
 import prpdtool.NicerScale;
 
 public class DynamicSignalImage {
@@ -39,7 +38,7 @@ public class DynamicSignalImage {
 
     private final BufferedImage image;
 
-    private final String title;
+    private String title;
 
     private final Color color;
 
@@ -74,6 +73,10 @@ public class DynamicSignalImage {
         this.image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
 
         redrawAll();
+    }
+    
+    public void setTitle( String title ) {
+        this.title = title;
     }
 
     public void resize(int w, int h) {

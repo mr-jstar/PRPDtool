@@ -17,6 +17,10 @@ public interface PRPDHistogram {
     double getMax();
 
     double getMin();
+    
+    public double getDataMin();
+    
+    public double getDataMax();
 
     BufferedImage getPRPD(int w, int h);
 

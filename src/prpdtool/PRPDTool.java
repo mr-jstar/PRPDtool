@@ -29,6 +29,7 @@ import parallelprpd.pipeline.DynamicPRPDHistogram;
 import parallelprpd.pipeline.DynamicSignalImage;
 import parallelprpd.pipeline.Filter;
 import parallelprpd.pipeline.HighPassFilter;
+import parallelprpd.pipeline.LowPassFilter;
 import parallelprpd.pipeline.PRPDExtractorCore;
 import parallelprpd.pipeline.PRPDPipeline;
 import parallelprpd.pipeline.PRPDPipelineListener;
@@ -37,16 +38,16 @@ import parallelprpd.pipeline.Pulses;
 public class PRPDTool extends JFrame {
 
     private boolean inBatchMode;
-    
+
     private String[] classes = {
-            "floating",
-            "corona -",
-            "noise",
-            "corona +",
-            "surface",
-            "void"
+        "floating",
+        "corona -",
+        "noise",
+        "corona +",
+        "surface",
+        "void"
     };
-    
+
     private final Classifier[] classifiers;
 
     private Map<Classifier, JLabel> cResults;
@@ -96,7 +97,8 @@ public class PRPDTool extends JFrame {
     private double fs = 1_000_000;  // próbkowanie 
     private double dfs = fs;  // próbkowanie z danych
     private double threshold = 0.012; //próg detekcji impulsu po odjęciu tła
-    private double ampMax = 0.12; // max amplituda immpulsu
+    private double ampMin = 0.0; // minimum histogramu
+    private double ampMax = 0.12; // maximum histogramu
     private double deadUs = 30; //martwy czas po wykryciu impulsu [µs]
     private double filterQ = 0.707; // Q filtra
     private int filterOrder = 4; // rząd filtra
@@ -107,16 +109,19 @@ public class PRPDTool extends JFrame {
         Param.dbl("Zero-crossing instant", () -> t0, v -> t0 = v),
         Param.dbl("Sampling frequency [Hz]", () -> fs, v -> fs = v),
         Param.dbl("Pulse ampl. threshold", () -> threshold, v -> threshold = v),
-        Param.dbl("Max pulse amplitude", () -> ampMax, v -> ampMax = v),
         Param.dbl("Dead time [us]", () -> deadUs, v -> deadUs = v),
         Param.dbl("HPF cutoff frequency [Hz]", () -> cutF, v -> cutF = v),
         Param.dbl("Filter Q", () -> filterQ, v -> filterQ = v),
-        Param.integer("Filter Order", () -> filterOrder, v -> filterOrder = v)
+        Param.integer("Filter Order", () -> filterOrder, v -> filterOrder = v),
+        Param.dbl("Histogram min", () -> ampMin, v -> ampMin = v),
+        Param.dbl("Histogram max", () -> ampMax, v -> ampMax = v)
     };
 
     // Misc options
     private boolean drawF0 = true;
     private boolean bipolarHistogram;
+
+    private boolean drawBaseline;
 
     // Data
     private ImagePanel signalPanel;
@@ -218,15 +223,20 @@ public class PRPDTool extends JFrame {
 
         String mobileYOLO = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_mobileYOLO.onnx";
         String squeezeYOLO = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_squeezeYOLO.onnx";
+        String rtdetr = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_rtdetr.onnx";
 
-        classifiers = new Classifier[2];
+        classifiers = new Classifier[3];
         classifiers[0] = new ONNXClassifier(
-                mobileYOLO, 
+                mobileYOLO, new PreprocessorYOLO(),
                 new MobileYOLOParser(7, 9, classes, 0.5f, 0.55f)
         );
         classifiers[1] = new classifiers.ONNXClassifier(
-                squeezeYOLO, 
+                squeezeYOLO, new PreprocessorYOLO(),
                 new SqueezeYOLOParser(7, 9, classes, 0.25f)
+        );
+        classifiers[2] = new classifiers.ONNXClassifier(
+                rtdetr, new PreprocessorRTDETR(),
+                new RTDETRParser(300, classes, 0.25f)
         );
         createMenuBar();
         initGui();
@@ -272,7 +282,7 @@ public class PRPDTool extends JFrame {
         optM.add(fontMI);
         ButtonGroup fgroup = new ButtonGroup();
         for (Font f : fonts) {
-            JRadioButtonMenuItem fontOpt = new JRadioButtonMenuItem("\t\t\t" + String.valueOf(f.getSize()));
+            JRadioButtonMenuItem fontOpt = new JRadioButtonMenuItem("\t\t" + String.valueOf(f.getSize()));
             final Font cf = f;
             fontOpt.addActionListener(e -> {
                 currentFont = cf;
@@ -299,28 +309,88 @@ public class PRPDTool extends JFrame {
 
         JCheckBoxMenuItem bipolarMB = new JCheckBoxMenuItem("Bipolar histogram", bipolarHistogram);
         bipolarMB.addActionListener(e -> {
-            bipolarHistogram = bipolarMB.isSelected();
-            histogram = new DynamicPRPDHistogram(
-                    center.getWidth(), center.getHeight(),
-                    360, 200,
-                    (bipolarHistogram ? -ampMax : 0), ampMax,
-                    bipolarHistogram
-            );
-            histogram.drawF0(drawF0);
-            center.setImage(histogram.getImage());
-            center.revalidate();
+            if (bipolarMB.isSelected()) {
+                bipolarHistogram = true;
+                for (Param p : params) {
+                    if (p.name.equals("Histogram min")) {
+                        p.field.setText("-" + roundme(histogram.getDataMax(), 3));
+                    }
+                }
+            } else {
+                bipolarHistogram = false;
+                for (Param p : params) {
+                    if (p.name.equals("Histogram min")) {
+                        p.field.setText("0");
+                    }
+                }
+            }
+            onParameterChanged();
+        });
+        optM.add(bipolarMB);
+
+        JMenuItem ftHistMB = new JMenuItem("Fit histogram to data");
+        ftHistMB.addActionListener(e -> {
+            if (lastDataFile != null) {
+                for (Param p : params) {
+                    if (p.name.equals("Histogram min")) {
+                        p.field.setText("" + roundme(histogram.getDataMin(), 3));
+                    } else if (p.name.equals("Histogram max")) {
+                        p.field.setText("" + roundme(histogram.getDataMax(), 3));
+                    }
+                }
+                bipolarHistogram = bipolarMB.isSelected();
+                onParameterChanged();
+            }
+        });
+        optM.add(ftHistMB);
+        optM.addSeparator();
+
+        optM.add(new JMenuItem("Base signal"));
+        ButtonGroup egroup = new ButtonGroup();
+        JRadioButtonMenuItem eOpt = new JRadioButtonMenuItem("\t\tEnvelope");
+        eOpt.setSelected(true);
+        eOpt.addActionListener(e -> {
+            drawBaseline = false;
             if (lastDataFile != null) {
                 try {
                     readDataFile(lastDataFile);
                 } catch (Exception ex) {
-                    status.setText(ex.getMessage());
+
                 }
+            } else {
+                envelope = new DynamicSignalImage(
+                        "Signal envelope", Color.BLUE,
+                        bottom.getWidth() / 2 - 5, bottom.getHeight(),
+                        -10.0, 10.0, null
+                );
+                envelopePanel.setImage(envelope.getImage());
             }
-            center.repaint();
         });
-        optM.add(bipolarMB);
+        egroup.add(eOpt);
+        optM.add(eOpt);
+        JRadioButtonMenuItem bOpt = new JRadioButtonMenuItem("\t\tBaseline");
+        bOpt.addActionListener(e -> {
+            drawBaseline = true;
+            if (lastDataFile != null) {
+                try {
+                    readDataFile(lastDataFile);
+                } catch (Exception ex) {
+
+                }
+            } else {
+                envelope = new DynamicSignalImage(
+                        "Baseline signal", Color.BLUE,
+                        bottom.getWidth() / 2 - 5, bottom.getHeight(),
+                        -10.0, 10.0, null
+                );
+                envelopePanel.setImage(envelope.getImage());
+            }
+        });
+        egroup.add(bOpt);
+        optM.add(bOpt);
 
         mb.add(optM);
+
         setJMenuBar(mb);
     }
 
@@ -375,11 +445,20 @@ public class PRPDTool extends JFrame {
             );
             histogram.drawF0(drawF0);
 
-            envelope = new DynamicSignalImage(
-                    "Signal envelope", Color.BLUE,
-                    bottom.getWidth() / 2 - 5, bottom.getHeight(),
-                    -10.0, 10.0, null
-            );
+            if (drawBaseline) {
+                envelope = new DynamicSignalImage(
+                        "Baseline signal", Color.BLUE,
+                        bottom.getWidth() / 2 - 5, bottom.getHeight(),
+                        -10.0, 10.0, null
+                );
+            } else {
+                envelope = new DynamicSignalImage(
+                        "Signal envelope", Color.BLUE,
+                        bottom.getWidth() / 2 - 5, bottom.getHeight(),
+                        -10.0, 10.0, null
+                );
+            }
+
             signal = new DynamicSignalImage(
                     "Filtered signal", Color.GREEN,
                     bottom.getWidth() / 2 - 5, bottom.getHeight(),
@@ -391,7 +470,7 @@ public class PRPDTool extends JFrame {
 
             envelopePanel = new ImagePanel(envelope.getImage());
             envelopePanel.setPreferredSize(new Dimension(bottom.getWidth() / 2 - 5, bottom.getHeight()));
-            envelopePanel.setBorder(BorderFactory.createTitledBorder("Envelope"));
+            envelopePanel.setBorder(BorderFactory.createTitledBorder("Base"));
 
             signalPanel = new ImagePanel(signal.getImage());
             signalPanel.setPreferredSize(new Dimension(bottom.getWidth() / 2 - 5, bottom.getHeight()));
@@ -455,12 +534,12 @@ public class PRPDTool extends JFrame {
             cResults = new HashMap<>();
             JLabel c1 = new JLabel("Classifier");
             c1.setBorder(BorderFactory.createLineBorder(Color.black));
-            JLabel c2 = new JLabel("Result");
+            JLabel c2 = new JLabel("Result (confidence)");
             c2.setBorder(BorderFactory.createLineBorder(Color.black));
             modelPanel.add(c1);
             modelPanel.add(c2);
             for (Classifier c : classifiers) {
-                if (c.ok()) {
+                if (c != null && c.ok()) {
                     JLabel name = new JLabel(c.name());
                     name.setBackground(Color.gray);
                     JLabel result = new JLabel("           ");
@@ -502,11 +581,31 @@ public class PRPDTool extends JFrame {
     }
 
     // ------------- Misc. helpers
-    private void onParameterChanged() {
-        for (Param p : params) {
-            p.setFromField();
+    //
+    private double roundme(double d, int n) {
+        double b = Math.pow(10, n - 1);
+        double s = Math.signum(d);
+        d = Math.abs(d);
+        int p = 0;
+        while (d < b) {
+            d *= 10;
+            p++;
         }
+        int i = (int) Math.floor(d) + 1;
+        return s * i / Math.pow(10, p);
+    }
 
+    private void rescaleHistogram() {
+        double min = bipolarHistogram ? (ampMin == 0 ? -ampMax : ampMin) : ampMin;
+        histogram = new DynamicPRPDHistogram(
+                center.getWidth(), center.getHeight(),
+                360, 200,
+                min, ampMax,
+                bipolarHistogram
+        );
+        histogram.drawF0(drawF0);
+        center.setImage(histogram.getImage());
+        center.revalidate();
         if (lastDataFile != null) {
             try {
                 readDataFile(lastDataFile);
@@ -514,8 +613,15 @@ public class PRPDTool extends JFrame {
                 status.setText(ex.getMessage());
             }
         }
-        paramChange.setText(" ");
-        applyButton.setVisible(false);
+        center.repaint();
+    }
+
+    private void onParameterChanged() {
+        for (Param p : params) {
+            p.setFromField();
+        }
+
+        rescaleHistogram();
     }
 
     // Helper -sets font
@@ -608,7 +714,8 @@ public class PRPDTool extends JFrame {
         lasttu[0] = Double.parseDouble(last[0]);
 
         dfs = fs;
-        Filter filter = new HighPassFilter(fs, cutF, filterQ, filterOrder);
+        Filter hfFilter = new HighPassFilter(fs, cutF, filterQ, filterOrder);
+        Filter lfFilter = new LowPassFilter(fs, 10 * f0, filterQ, filterOrder);
         Filter abs = new Filter() {
             @Override
             public double[] filter(double[] signal) {
@@ -634,16 +741,24 @@ public class PRPDTool extends JFrame {
         );
         histogram.drawF0(drawF0);
 
-        envelope = new DynamicSignalImage(
-                "Signal envelope", Color.BLUE,
-                bottom.getWidth() / 2 - 5, bottom.getHeight(),
-                0.0, lasttu[0], abs
-        );
+        if (drawBaseline) {
+            envelope = new DynamicSignalImage(
+                    "Baseline signal", Color.BLUE,
+                    bottom.getWidth() / 2 - 5, bottom.getHeight(),
+                    0.0, lasttu[0], lfFilter
+            );
+        } else {
+            envelope = new DynamicSignalImage(
+                    "Signal envelope", Color.BLUE,
+                    bottom.getWidth() / 2 - 5, bottom.getHeight(),
+                    0.0, lasttu[0], abs
+            );
+        }
 
         signal = new DynamicSignalImage(
                 "Filtered signal", Color.GREEN,
                 bottom.getWidth() / 2 - 5, bottom.getHeight(),
-                0.0, lasttu[0], filter
+                0.0, lasttu[0], hfFilter
         );
 
         center.setImage(histogram.getImage());
@@ -659,7 +774,7 @@ public class PRPDTool extends JFrame {
                 t0,
                 threshold,
                 deadUs,
-                filter
+                hfFilter
         );
 
         int buffer_size = BufferFactory.bufferSize();

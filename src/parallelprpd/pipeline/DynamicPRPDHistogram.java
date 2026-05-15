@@ -102,6 +102,16 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
     }
 
     @Override
+    public double getDataMin() {
+        return data.getDataMin();
+    }
+
+    @Override
+    public double getDataMax() {
+        return data.getDataMax();
+    }
+
+    @Override
     public int[][] getHistogram() {
         return data.getHistogram();
     }
@@ -156,19 +166,19 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
                 yp = y;
             }
         }
-        
+
         int binsPhase = data.getPhaseBins();
         int binsAmp = data.getAmpBins();
 
         for (int xb = 0; xb < binsPhase; xb++) {
             for (int yb = 0; yb < binsAmp; yb++) {
-                int c = data.getBin(xb,yb);
+                int c = data.getBin(xb, yb);
                 if (c == 0) {
                     continue;
                 }
 
                 // <0,maxCount> -> log -> <0,1>
-                double v = Math.log1p(c) / Math.log1p((double)data.getMaxCount());
+                double v = Math.log1p(c) / Math.log1p((double) data.getMaxCount());
 
                 int x0 = left + (int) Math.floor(xb * plotW / (double) binsPhase);
                 int x1 = left + (int) Math.floor((xb + 1) * plotW / (double) binsPhase);

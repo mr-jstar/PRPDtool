@@ -17,6 +17,7 @@ public class ONNXClassifier implements AutoCloseable, Classifier {
     private OrtEnvironment env;
     private OrtSession session;
     private String inputName;
+    private Preprocessor preprocessor;
     private OutputParser parser;
     private String name;
 
@@ -25,8 +26,8 @@ public class ONNXClassifier implements AutoCloseable, Classifier {
 
     private boolean ok;
 
-    public ONNXClassifier(String modelPath, OutputParser parser) {
-        this.name = Paths.get(modelPath).getFileName().toString().replaceAll("\\.[^.]+$","");
+    public ONNXClassifier(String modelPath, Preprocessor preprocessor, OutputParser parser) {
+        this.name = Paths.get(modelPath).getFileName().toString().replaceAll("\\.[^.]+$", "");
         try {
             this.env = OrtEnvironment.getEnvironment();
 
@@ -34,28 +35,31 @@ public class ONNXClassifier implements AutoCloseable, Classifier {
             this.session = env.createSession(modelPath, opts);
 
             this.inputName = session.getInputNames().iterator().next();
+            this.preprocessor = preprocessor;
             this.parser = parser;
             ok = true;
         } catch (Exception ex) {
             ok = false;
         }
     }
+
     @Override
     public boolean ok() {
         return ok;
     }
-    
-    @Override 
+
+    @Override
     public String name() {
         return name;
     }
-    
+
     @Override
     public Prediction classify(BufferedImage image) throws Exception {
-        if( ! ok )
-            throw new IllegalStateException( getClass().getName() + " has not been properly initialized" );
-        
-        float[] chw = preprocessGray3CHW(image);
+        if (!ok) {
+            throw new IllegalStateException(getClass().getName() + " has not been properly initialized");
+        }
+
+        float[] chw = preprocessor.preprocess(image, W, H);
 
         try (OnnxTensor tensor = OnnxTensor.createTensor(
                 env,
@@ -64,45 +68,28 @@ public class ONNXClassifier implements AutoCloseable, Classifier {
         ); OrtSession.Result result = session.run(
                 Collections.singletonMap(inputName, tensor)
         )) {
-
+            // For testing:  System.out.println(name() + ": result shape: " + result.get(0));
             Object value = result.get(0).getValue();
+
+            if (name.contains("TEST")) {  // For testing - F[][][] is good for RTDETR output
+                if (value instanceof float[][][] out) {
+
+                    for (int q = 0; q < 300; q++) {
+                        System.out.print(q + ": ");
+
+                        for (int j = 0; j < 6; j++) {
+                            System.out.print(out[0][q][j] + " ");
+                        }
+
+                        System.out.println();
+                    }
+                }
+            }
+
             float[] flat = flatten(value);
 
             return parser.parse(flat);
         }
-    }
-
-    private static float[] preprocessGray3CHW(BufferedImage src) {
-        BufferedImage gray = new BufferedImage(W, H, BufferedImage.TYPE_BYTE_GRAY);
-
-        Graphics2D g = gray.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
-                RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        g.drawImage(src, 0, 0, W, H, null);
-        g.dispose();
-
-        float[] chw = new float[3 * W * H];
-
-        int plane = W * H;
-        int r = 0;
-        int gch = plane;
-        int b = 2 * plane;
-
-        for (int y = 0; y < H; y++) {
-            for (int x = 0; x < W; x++) {
-                int rgb = gray.getRGB(x, y);
-                int v = rgb & 0xFF;
-
-                // ToTensor + Normalize([0.5]*3,[0.5]*3)
-                float f = (v / 255.0f - 0.5f) / 0.5f;
-
-                chw[r++] = f;
-                chw[gch++] = f;
-                chw[b++] = f;
-            }
-        }
-
-        return chw;
     }
 
     private static float[] flatten(Object value) {
@@ -112,6 +99,26 @@ public class ONNXClassifier implements AutoCloseable, Classifier {
 
         if (value instanceof float[][]) {
             return ((float[][]) value)[0];
+        }
+
+        if (value instanceof float[][][] out) {
+            int n0 = out.length;
+            int n1 = out[0].length;
+            int n2 = out[0][0].length;
+
+            float[] flat = new float[n0 * n1 * n2];
+
+            int k = 0;
+
+            for (int i0 = 0; i0 < n0; i0++) {
+                for (int i1 = 0; i1 < n1; i1++) {
+                    for (int i2 = 0; i2 < n2; i2++) {
+                        flat[k++] = out[i0][i1][i2];
+                    }
+                }
+            }
+
+            return flat;
         }
 
         if (value instanceof float[][][][] out) {

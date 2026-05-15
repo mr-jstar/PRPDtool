@@ -13,6 +13,9 @@ public class DynamicPRPDHistogramData  {
 
     private final double ampMin;
     private final double ampMax;
+    
+    private double dataMin = Double.POSITIVE_INFINITY;
+    private double dataMax = Double.NEGATIVE_INFINITY;
 
     private final int[][] hist;
     private int maxCount = 0;
@@ -59,6 +62,9 @@ public class DynamicPRPDHistogramData  {
 
             double phase = p.phase[i];
             double amp = bipolar ? p.amp[i] : Math.abs(p.amp[i]);
+            
+            if( p.amp[i] < dataMin ) dataMin = p.amp[i];
+            if( p.amp[i] > dataMax ) dataMax = p.amp[i];
 
             int xb = (int) (phase / 360.0 * binsPhase);
             int yb = (int) ((amp - ampMin) / (ampMax - ampMin) * binsAmp);
@@ -91,5 +97,13 @@ public class DynamicPRPDHistogramData  {
 
     public int getBin(int ph, int amp) {
         return hist[ph][amp];
+    }
+    
+    public double getDataMin() {
+        return dataMin == Double.POSITIVE_INFINITY ? -1 : dataMin;
+    }
+    
+    public double getDataMax() {
+        return dataMax == Double.NEGATIVE_INFINITY ? 1 : dataMax;
     }
 }

@@ -107,6 +107,14 @@ public class DynamicPRPDHistogramImage implements PRPDHistogram {
         return ampMax;
     }
 
+    public double getDataMin() {
+        return ampMin;
+    }
+
+    public double getDataMax() {
+        return ampMax;
+    }
+
     public int[][] getHistogram() {
         return hist;
     }
