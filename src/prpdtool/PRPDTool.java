@@ -842,7 +842,7 @@ public class PRPDTool extends JFrame {
                     double estt0 = ph0 / Math.PI / f0;
                     //System.out.println("est ph=" + (360.0*(estt0 - 0) * f0) % 360.0 + " deg");
                     //System.out.println( "Delta " + Math.abs((((360.0 * (t0 - estt0) * f0 + 180.0) % 360.0 + 360.0) % 360.0) - 180.0));
-                    if (estt0 < 1 / fs) {
+                    if (estt0 < 0.5 / fs) {
                         estt0 = 0.0;
                     }
                     if (Math.abs((((360.0 * (t0 - estt0) * f0 + 180.0) % 360.0 + 360.0) % 360.0) - 180.0) > 0.1) {

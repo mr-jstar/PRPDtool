@@ -3,3 +3,4 @@
 /dist/
 data/*.bin
 prpd4YOLO.png
+.prpd.config
