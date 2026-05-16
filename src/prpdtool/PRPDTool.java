@@ -31,6 +31,9 @@ import dsp.Filter;
 import dsp.HighPassFilter;
 import dsp.LowPassFilter;
 import dsp.PhaseEstimator;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import pipeline.PRPDExtractorCore;
 import pipeline.PRPDPipeline;
@@ -50,7 +53,7 @@ public class PRPDTool extends JFrame {
         "void"
     };
 
-    private final Classifier[] classifiers;
+    private final ArrayList<Classifier> classifiers = new ArrayList<>();
 
     private Map<Classifier, JLabel> cResults;
 
@@ -68,19 +71,10 @@ public class PRPDTool extends JFrame {
     private final Configuration configuration = new Configuration(CONFIG_FILE);
 
     private final String LAST_DIR = "PRPDMonitor.last.dir";
-    private final String HOME_DIR = "PRPDMonitor.home.dir";
-    private final String MODELS_ROOT = "PRPDMonitor.models.root";
+    private final String MODELS_DIR = "PRPDMonitor.models.dir";
     private final String FONTSIZE = "PRPDMonitor.font.size";
     private final String FRAMESIZE = "PRPDMonitor.frame.size";
 
-    /* Example configuration
-    PRPDMonitor.font.size=24
-    PRPDMonitor.last.dir=/media/jstar/VIDEO/PRPDtool/data
-    PRPDMonitor.home.dir=/home/jstar/
-    PRPDMonitor.python=/usr/bin/python
-    PRPDMonitor.models.root=oer
-    PRPDMonitor.frame.size=2963x1452
-     */
     private JPanel left;
     private ImagePanel center;
     private JPanel right;
@@ -106,7 +100,7 @@ public class PRPDTool extends JFrame {
     private int filterOrder = 4; // rząd filtra
     private double cutF = 50_000; // f odcięcia
 
-    private AtomicBoolean signalStart= new AtomicBoolean(false);
+    private AtomicBoolean signalStart = new AtomicBoolean(false);
 
     Param<?>[] params = {
         Param.dbl("Basic frequency [Hz]", () -> f0, v -> f0 = v),
@@ -222,26 +216,48 @@ public class PRPDTool extends JFrame {
         } catch (Exception e) {
         }
 
-        String homeDir = configuration.getValue(HOME_DIR);
-        String modelsRoot = configuration.getValue(MODELS_ROOT);
+        try {
+            String modelsDir = configuration.getValue(MODELS_DIR);
+            String[] onnx = Files.list(Paths.get(modelsDir))
+                    .filter(p -> {
+                        String s = p.toString().toLowerCase();
+                        return s.endsWith(".onnx") || s.endsWith(".zip");
+                    }).map(Path::toString).toArray(String[]::new);
 
-        String mobileYOLO = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_mobileYOLO.zip";
-        String squeezeYOLO = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_squeezeYOLO.zip";
-        String rtdetr = homeDir + "NetBeansProjects/PRPDtool/models/" + modelsRoot + "_rtdetr.zip";
-
-        classifiers = new Classifier[3];
-        classifiers[0] = new ONNXClassifier(
-                mobileYOLO, new PreprocessorYOLO(),
-                new MobileYOLOParser(7, 9, classes, 0.5f, 0.55f)
-        );
-        classifiers[1] = new ONNXClassifier(
-                squeezeYOLO, new PreprocessorYOLO(),
-                new SqueezeYOLOParser(7, 9, classes, 0.25f)
-        );
-        classifiers[2] = new ONNXClassifier(
-                rtdetr, new PreprocessorRTDETR(),
-                new RTDETRParser(300, classes, 0.25f)
-        );
+            for (String s : onnx) {
+                System.err.println( "MODEL IN " + s );
+                try {
+                    if (s.toLowerCase().contains("mobileyolo")) {
+                        Classifier c = new ONNXClassifier(
+                                s, new PreprocessorYOLO(),
+                                new MobileYOLOParser(7, 9, classes, 0.5f, 0.55f));
+                        if (c.ok()) {
+                            classifiers.add(c);
+                        }
+                    } else if (s.toLowerCase().contains("squeezeyolo")) {
+                        Classifier c = new ONNXClassifier(
+                                s, new PreprocessorYOLO(),
+                                new SqueezeYOLOParser(7, 9, classes, 0.25f)
+                        );
+                        if (c.ok()) {
+                            classifiers.add(c);
+                        }
+                    } else if (s.toLowerCase().contains("rtdetr")) {
+                        Classifier c = new ONNXClassifier(
+                                s, new PreprocessorRTDETR(),
+                                new RTDETRParser(300, classes, 0.25f)
+                        );
+                        if (c.ok()) {
+                            classifiers.add(c);
+                        }
+                    }
+                } catch (Exception ex) {
+                    System.err.println(ex.getMessage());
+                }
+            }
+        } catch (IOException ex) {
+            System.err.println(ex.getMessage());
+        }
         createMenuBar();
         initGui();
         setCurrentFont();
@@ -533,7 +549,7 @@ public class PRPDTool extends JFrame {
 
             JPanel classifyPanel = new JPanel(new BorderLayout());
 
-            JPanel modelPanel = new JPanel(new GridLayout(classifiers.length + 1, 2, 3, 3));
+            JPanel modelPanel = new JPanel(new GridLayout(classifiers.size() + 1, 2, 3, 3));
             //modelPanel.setBackground(Color.black);
             cResults = new HashMap<>();
             JLabel c1 = new JLabel("Classifier");
@@ -826,8 +842,9 @@ public class PRPDTool extends JFrame {
                     double estt0 = ph0 / Math.PI / f0;
                     //System.out.println("est ph=" + (360.0*(estt0 - 0) * f0) % 360.0 + " deg");
                     //System.out.println( "Delta " + Math.abs((((360.0 * (t0 - estt0) * f0 + 180.0) % 360.0 + 360.0) % 360.0) - 180.0));
-                    if( estt0 < 1/fs )
+                    if (estt0 < 1 / fs) {
                         estt0 = 0.0;
+                    }
                     if (Math.abs((((360.0 * (t0 - estt0) * f0 + 180.0) % 360.0 + 360.0) % 360.0) - 180.0) > 0.1) {
                         JOptionPane.showConfirmDialog(
                                 PRPDTool.this,

@@ -46,7 +46,7 @@ public class ONNXClassifier implements AutoCloseable, Classifier {
                 Path onnx = Files.walk(tempDir)
                         .filter(p -> p.toString().toLowerCase().endsWith(".onnx"))
                         .findFirst()
-                        .orElseThrow(() -> new FileNotFoundException("No ONNX file in zip"));
+                        .orElseThrow(() -> new FileNotFoundException("No ONNX file in zip :" + tempDir));
 
                 this.session = env.createSession(onnx.toString(), opts);
             } else {

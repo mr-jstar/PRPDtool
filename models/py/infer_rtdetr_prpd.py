@@ -77,7 +77,7 @@ if args.onnx is not None:
     exported = model.export(
         format="onnx",
         imgsz=args.imgsz,
-        opset=18,
+        opset=11,
         simplify=True,
         dynamic=False
     )

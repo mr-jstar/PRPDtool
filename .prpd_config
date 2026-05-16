@@ -1,6 +1,4 @@
-PRPDMonitor.font.size=12
-PRPDMonitor.last.dir=/Users/jstar/data
-PRPDMonitor.home.dir=/Users/jstar/
-PRPDMonitor.python=/Users/jstar/anaconda3/bin/python
-PRPDMonitor.frame.size=1614x938
-PRPDMonitor.models.root=mac
+PRPDMonitor.models.dir=/home/jstar/NetBeansProjects/PRPDtool/models/
+PRPDMonitor.font.size=24
+PRPDMonitor.last.dir=/media/jstar/VIDEO1/PRPDtool/data
+PRPDMonitor.frame.size=2587x1361

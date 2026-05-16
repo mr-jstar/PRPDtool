@@ -353,8 +353,8 @@ def main():
             str(onnx_path),
             input_names=["input"],
             output_names=["permute"],
-            opset_version=18,
-            dynamo=False
+            opset_version=11#,
+            #dynamo=False
         )
 
         print("ONNX zapisany.")
