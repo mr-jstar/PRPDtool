@@ -1,8 +1,5 @@
 package pipeline;
 
-import pipeline.SignalReader;
-import pipeline.Buffer;
-import pipeline.BufferFactory;
 import java.io.BufferedReader;
 import java.io.Closeable;
 import java.io.FileReader;

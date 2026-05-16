@@ -1,8 +1,6 @@
 
 package pipeline;
 
-import pipeline.Buffer;
-
 /**
  *
  * @author jstar

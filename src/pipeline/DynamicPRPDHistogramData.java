@@ -5,7 +5,6 @@ package pipeline;
  * @author jstar
  */
 import java.util.Arrays;
-import pipeline.Pulses;
 
 public class DynamicPRPDHistogramData  {
 

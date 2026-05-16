@@ -1,7 +1,6 @@
 package pipeline;
 
 import dsp.Filter;
-import pipeline.Buffer;
 
 /**
  *

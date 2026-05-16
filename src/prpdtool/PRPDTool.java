@@ -31,6 +31,7 @@ import dsp.Filter;
 import dsp.HighPassFilter;
 import dsp.LowPassFilter;
 import dsp.PhaseEstimator;
+import java.util.concurrent.atomic.AtomicBoolean;
 import pipeline.PRPDExtractorCore;
 import pipeline.PRPDPipeline;
 import pipeline.PRPDPipelineListener;
@@ -105,7 +106,7 @@ public class PRPDTool extends JFrame {
     private int filterOrder = 4; // rząd filtra
     private double cutF = 50_000; // f odcięcia
 
-    private boolean signalStart;
+    private AtomicBoolean signalStart= new AtomicBoolean(false);
 
     Param<?>[] params = {
         Param.dbl("Basic frequency [Hz]", () -> f0, v -> f0 = v),
@@ -820,20 +821,21 @@ public class PRPDTool extends JFrame {
                 new PRPDPipelineListener() {
             @Override
             public void bufferRead(Buffer buffer) {
-                if (signalStart) {
+                if (signalStart.compareAndSet(true, false)) {
                     double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0);
                     double estt0 = ph0 / Math.PI / f0;
                     //System.out.println("est ph=" + (360.0*(estt0 - 0) * f0) % 360.0 + " deg");
                     //System.out.println( "Delta " + Math.abs((((360.0 * (t0 - estt0) * f0 + 180.0) % 360.0 + 360.0) % 360.0) - 180.0));
+                    if( estt0 < 1/fs )
+                        estt0 = 0.0;
                     if (Math.abs((((360.0 * (t0 - estt0) * f0 + 180.0) % 360.0 + 360.0) % 360.0) - 180.0) > 0.1) {
-                        JOptionPane.showMessageDialog(
+                        JOptionPane.showConfirmDialog(
                                 PRPDTool.this,
                                 "The zero-crossing instant estimated from data is " + String.format(Locale.US, "%.6g", estt0) + " s",
                                 "Warning",
                                 JOptionPane.WARNING_MESSAGE
                         );
                     }
-                    signalStart = false;
                 }
                 envelope.addBuffer(buffer);
                 envelopePanel.repaint();
@@ -890,7 +892,7 @@ public class PRPDTool extends JFrame {
 
         setTitle("PRPD Viewer - " + Paths.get(filename).getFileName().toString());
         setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-        signalStart = true;
+        signalStart.set(true);
         pipeline.start();
     }
 

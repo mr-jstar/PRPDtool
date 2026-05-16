@@ -1,6 +1,5 @@
 package pipeline;
 
-import pipeline.Pulses;
 import java.awt.image.BufferedImage;
 
 /**
