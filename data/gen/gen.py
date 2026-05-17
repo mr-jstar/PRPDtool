@@ -2,6 +2,8 @@
 import argparse
 import csv
 import numpy as np
+import re
+import random
 
 
 DEFECTS = {
@@ -71,7 +73,7 @@ def add_pulse(u, idx, amp, fs, pulse_us, tau_us):
 
 def generate(
     output,
-    defect,
+    defects,
     duration,
     fs,
     f0,
@@ -97,8 +99,6 @@ def generate(
     T = 1.0 / f0
     cycles = int(duration * f0)
 
-    cfg = DEFECTS[defect]
-
     for c in range(cycles):
         # Niski, losowy „dywan” impulsów w całym zakresie faz.
         n_bg = rng.poisson(background_rate)
@@ -121,28 +121,33 @@ def generate(
                 tau_us * 0.7,
             )
 
-        # Impulsy właściwe dla klasy defektu.
-        for cl in cfg["clusters"]:
-            count = rng.poisson(cl["rate"])
+        nd = random.randint(1, len(defects))
+        #print( "----" )
+        for defect in random.sample(defects, nd):
+            #print( "+", defect )
+            cfg = DEFECTS[defect]
+            # Impulsy właściwe dla klasy defektu.
+            for cl in cfg["clusters"]:
+                count = rng.poisson(cl["rate"])
 
-            for _ in range(count):
-                phase = rng.normal(cl["center"], cl["sigma"]) % 360.0
-                ti = c * T + phase / 360.0 * T
+                for _ in range(count):
+                    phase = rng.normal(cl["center"], cl["sigma"]) % 360.0
+                    ti = c * T + phase / 360.0 * T
 
-                if ti >= duration:
-                    continue
+                    if ti >= duration:
+                        continue
 
-                amp = abs(rng.normal(cl["amp"], cl["amp_sigma"]))
-                amp *= choose_sign(rng, cl["sign"])
+                    amp = abs(rng.normal(cl["amp"], cl["amp_sigma"]))
+                    amp *= choose_sign(rng, cl["sign"])
 
-                add_pulse(
-                    u,
-                    int(ti * fs),
-                    amp,
-                    fs,
-                    pulse_us,
-                    tau_us,
-                )
+                    add_pulse(
+                        u,
+                        int(ti * fs),
+                        amp,
+                        fs,
+                        pulse_us,
+                        tau_us,
+                    )
     if output.endswith(".csv"):
         with open(output, "w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
@@ -162,7 +167,8 @@ def main():
     p.add_argument("-o", "--output", default="pd_stream.csv")
     p.add_argument(
         "--defect",
-        choices=sorted(DEFECTS.keys()),
+        #choices=sorted(DEFECTS.keys()),
+        type=str,
         default="void",
     )
 
@@ -184,7 +190,7 @@ def main():
 
     generate(
         output=args.output,
-        defect=args.defect,
+        defects=re.split(r"[,;]+",args.defect),
         duration=args.duration,
         fs=args.fs,
         f0=args.f0,
