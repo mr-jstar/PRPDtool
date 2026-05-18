@@ -34,6 +34,7 @@ import dsp.PhaseEstimator;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 import pipeline.PRPDExtractorCore;
 import pipeline.PRPDPipeline;
@@ -225,7 +226,7 @@ public class PRPDTool extends JFrame {
                     }).map(Path::toString).toArray(String[]::new);
 
             for (String s : onnx) {
-                System.err.println( "MODEL IN " + s );
+                System.err.println("Found model in " + s);
                 try {
                     if (s.toLowerCase().contains("mobileyolo")) {
                         Classifier c = new ONNXClassifier(
@@ -853,6 +854,7 @@ public class PRPDTool extends JFrame {
                                 JOptionPane.WARNING_MESSAGE
                         );
                     }
+                    classifyButton.setEnabled(true);
                 }
                 envelope.addBuffer(buffer);
                 envelopePanel.repaint();
@@ -1020,10 +1022,11 @@ public class PRPDTool extends JFrame {
     }
 
     private void processDirectoryBatch(File dir) {
-        String[] files = dir.list((d, name) -> {
+        String[] files = Arrays.stream(dir.list((d, name) -> {
             File f = new File(d, name);
             return f.isFile() && name.toLowerCase().endsWith(".bin");
-        });
+        })).sorted()
+        .toArray(String[]::new);
 
         if (files == null) {
             return;
