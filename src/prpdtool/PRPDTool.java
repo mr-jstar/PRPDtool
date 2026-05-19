@@ -873,13 +873,13 @@ public class PRPDTool extends JFrame {
 
             @Override
             public void finished() {
-                setTitle("PRPD Viewer: " + Paths.get(filename).getFileName().toString());
-                setCursor(Cursor.getDefaultCursor());
-                classifyButton.setEnabled(true);
                 if (inBatchMode) {
                     exportPRPD4YOLO(filename);
                     System.out.println("..." + filename + " finished.");
                 }
+                setTitle("PRPD Viewer: " + Paths.get(filename).getFileName().toString());
+                setCursor(Cursor.getDefaultCursor());
+                classifyButton.setEnabled(true);
                 if (Math.abs((dfs - fs) / fs) > 1e-8) {
                     JOptionPane.showMessageDialog(
                             PRPDTool.this,
@@ -1026,13 +1026,13 @@ public class PRPDTool extends JFrame {
             File f = new File(d, name);
             return f.isFile() && name.toLowerCase().endsWith(".bin");
         })).sorted()
-        .toArray(String[]::new);
+                .toArray(String[]::new);
 
         if (files == null) {
             return;
         }
 
-        new Thread(() -> {
+        Thread runner = new Thread(() -> {
             inBatchMode = true;
 
             for (String s : files) {
@@ -1042,26 +1042,23 @@ public class PRPDTool extends JFrame {
                     }
 
                     String ds = dir.getAbsolutePath() + File.separator + s;
-                    System.out.print("Processing " + ds);
+                    System.out.println("Processing " + ds);
 
                     SwingUtilities.invokeAndWait(() -> {
                         try {
+                            System.out.println(" ...started");
                             readDataFile(ds);
                         } catch (Exception ex) {
                             ex.printStackTrace();
                         }
                     });
-
-                    System.out.println(" ...started");
-
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 }
             }
-
-            inBatchMode = false;
-
-        }, "PRPD-batch-thread").start();
+        }, "PRPD-batch-thread");
+        runner.start();
+        inBatchMode = false;
     }
 
     public static void main(String[] args) {
