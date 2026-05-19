@@ -35,6 +35,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import pipeline.PRPDExtractorCore;
 import pipeline.PRPDPipeline;
@@ -43,7 +44,7 @@ import pipeline.Pulses;
 
 public class PRPDTool extends JFrame {
 
-    private boolean inBatchMode;
+    private volatile boolean inBatchMode;
 
     private String[] classes = {
         "floating",
@@ -256,7 +257,7 @@ public class PRPDTool extends JFrame {
                     System.err.println(ex.getMessage());
                 }
             }
-        } catch (IOException ex) {
+        } catch (Exception ex) {
             System.err.println(ex.getMessage());
         }
         createMenuBar();
@@ -1052,13 +1053,14 @@ public class PRPDTool extends JFrame {
                             ex.printStackTrace();
                         }
                     });
+                    pipeline.awaitFinished();
                 } catch (Exception ex) {
                     ex.printStackTrace();
                 }
             }
+            inBatchMode = false;
         }, "PRPD-batch-thread");
         runner.start();
-        inBatchMode = false;
     }
 
     public static void main(String[] args) {

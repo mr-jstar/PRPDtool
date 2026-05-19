@@ -4,6 +4,7 @@ package pipeline;
  *
  * @author jstar
  */
+import java.io.File;
 import javax.swing.SwingUtilities;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
@@ -16,6 +17,7 @@ public class PRPDPipeline implements AutoCloseable {
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicBoolean readerFinished = new AtomicBoolean(false);
     private final AtomicInteger queuedBuffers = new AtomicInteger(0);
+    protected final CountDownLatch doneLatch = new CountDownLatch(1);
 
     private final ExecutorService readerExecutor
             = Executors.newSingleThreadExecutor();
@@ -71,10 +73,22 @@ public class PRPDPipeline implements AutoCloseable {
     private void readerLoop() {
         try {
             SignalReader reader = null;
-            if (filename.endsWith(".csv")) {
-                reader = new TextReader(filename, consumerCount, bufferSize);
+            if (!(new File(filename)).exists()) {
+                String[] hp = filename.split(":");
+                if (hp.length == 2) {
+                    reader = new BinarySocketReader(
+                            hp[0], // host name or IP
+                            Integer.parseInt(hp[1]), // port
+                            consumerCount,
+                            bufferSize
+                    );
+                }
             } else {
-                reader = new BinaryReader(filename, consumerCount, bufferSize);;
+                if (filename.endsWith(".csv")) {
+                    reader = new TextReader(filename, consumerCount, bufferSize);
+                } else {
+                    reader = new BinaryReader(filename, consumerCount, bufferSize);;
+                }
             }
 
             while (running.get()) {
@@ -132,11 +146,13 @@ public class PRPDPipeline implements AutoCloseable {
             }
 
             running.set(false);
-            SwingUtilities.invokeLater(listener::finished);
+            SwingUtilities.invokeAndWait(listener::finished);
 
         } catch (Throwable ex) {
             running.set(false);
             SwingUtilities.invokeLater(() -> listener.error(ex, " in extractorLoop"));
+        } finally {
+            doneLatch.countDown();
         }
     }
 
@@ -157,5 +173,9 @@ public class PRPDPipeline implements AutoCloseable {
         stop();
         readerExecutor.shutdownNow();
         extractorExecutor.shutdownNow();
+    }
+
+    public void awaitFinished() throws InterruptedException {
+        doneLatch.await();
     }
 }
