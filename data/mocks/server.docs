@@ -1,0 +1,123 @@
+# Python — serwer strumienia `t,u` dla WNZ / PRPD
+
+Poniższy program:
+
+* generuje lub wysyła próbki `(t,u)`
+* działa przez TCP
+* używa binarnego formatu little-endian
+* umożliwia transmisję do ok. 5 Ms/s
+* wysyła:
+
+```text
+[t0(double), u0(double)]
+[t1(double), u1(double)]
+...
+```
+
+czyli:
+
+```text
+16 bajtów / próbkę
+```
+
+Przy 5 Ms/s daje to:
+
+```text
+80 MB/s
+```
+
+co wymaga:
+
+* localhost albo bardzo szybkiej sieci,
+* dużych buforów,
+* najlepiej odbiornika w Javie używającego `ByteBuffer`.
+
+---
+
+```
+
+---
+
+# Uruchomienie
+
+```bash
+python tu_server.py --port 9999 --fs 5000000
+```
+
+---
+
+# Format danych
+
+Każda próbka:
+
+```text
+little-endian
+
+t : double (8 B)
+u : double (8 B)
+```
+
+czyli:
+
+```text
+16 bajtów / próbkę
+```
+
+---
+
+# Przykładowy klient Java
+
+```java
+Socket s = new Socket(host, port);
+
+InputStream in = s.getInputStream();
+
+byte[] buf = new byte[16 * 100_000];
+
+while (true) {
+
+    int off = 0;
+
+    while (off < buf.length) {
+        int n = in.read(buf, off, buf.length - off);
+
+        if (n < 0) {
+            throw new EOFException();
+        }
+
+        off += n;
+    }
+
+    ByteBuffer bb = ByteBuffer.wrap(buf)
+            .order(ByteOrder.LITTLE_ENDIAN);
+
+    while (bb.remaining() >= 16) {
+        double t = bb.getDouble();
+        double u = bb.getDouble();
+
+        // processing
+    }
+}
+```
+
+---
+
+# Uwagi praktyczne
+
+Przy 5 Ms/s:
+
+```text
+5 000 000 próbek/s
+× 16 bajtów
+= 80 MB/s
+```
+
+czyli:
+
+* localhost → OK
+* 1 Gbit Ethernet → blisko limitu
+* najlepiej:
+
+  * localhost,
+  * 10G Ethernet,
+  * albo float32 zamiast double.

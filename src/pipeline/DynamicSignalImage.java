@@ -43,6 +43,8 @@ public class DynamicSignalImage {
 
     private final Color color;
 
+    private boolean slidingWindow;
+
     public DynamicSignalImage(String title, Color color, int width, int height, double tMin, double tMax, Filter filter) {
         if (tMax <= tMin) {
             throw new IllegalArgumentException("tMax must be greater than tMin");
@@ -52,8 +54,13 @@ public class DynamicSignalImage {
         this.color = color;
         this.width = width;
         this.height = height;
-        this.tMin = tMin;
-        this.tMax = tMax;
+        xs = NicerScale.niceScale(tMin,tMax);
+        this.tMin = xs.min();
+        this.tMax = xs.max();
+
+        ys = NicerScale.niceScale(yMin, yMax);
+        yMin = ys.min();
+        yMax = ys.max();
 
         this.plotW = width - left - right;
         this.plotH = height - top - bottom;
@@ -75,9 +82,13 @@ public class DynamicSignalImage {
 
         redrawAll();
     }
-    
-    public void setTitle( String title ) {
+
+    public void setTitle(String title) {
         this.title = title;
+    }
+
+    public void setSliding(boolean sliding) {
+        this.slidingWindow = sliding;
     }
 
     public void resize(int w, int h) {
@@ -94,7 +105,7 @@ public class DynamicSignalImage {
         if (b == null) {
             return;
         }
-        if(b.used == 0) {
+        if (b.used == 0) {
             b.release();
             return;
         }
@@ -102,7 +113,11 @@ public class DynamicSignalImage {
         boolean scaleChanged = false;
 
         if (b.t[b.used - 1] > tMax) {
-            expandTimeRange(b.t[b.used - 1]);
+            if (slidingWindow) {
+                slideTimeRange(xs.step() );
+            } else {
+                expandTimeRange(b.t[b.used - 1]);
+            }
             scaleChanged = true;
         }
 
@@ -157,7 +172,8 @@ public class DynamicSignalImage {
     }
 
     private void expandTimeRange(double newTMax) {
-        double timeSqueeze = (tMax - tMin) / (newTMax - tMin);
+        xs = NicerScale.niceScale(tMin, newTMax);
+        double timeSqueeze = (tMax - tMin) / (xs.max() - tMin);
         boolean[] newData = new boolean[plotW];
         for (int x = 0; x < plotW; x++) {
             if (!hasData[x]) {
@@ -178,7 +194,23 @@ public class DynamicSignalImage {
             }
         }
         System.arraycopy(newData, 0, hasData, 0, plotW);
-        tMax = newTMax;
+        tMin = xs.min();
+        tMax = xs.max();
+    }
+
+    private void slideTimeRange(double dT) {
+        int dx = (int) Math.floor(plotW * dT / (tMax - tMin));
+        System.arraycopy(pixMin, dx, pixMin, 0, plotW - dx);
+        Arrays.fill(pixMin, plotW - dx, plotW, Double.POSITIVE_INFINITY);
+        System.arraycopy(pixMax, dx, pixMax, 0, plotW - dx);
+        Arrays.fill(pixMax, plotW - dx, plotW, Double.NEGATIVE_INFINITY);
+        System.arraycopy(hasData, dx, hasData, 0, plotW - dx);
+        Arrays.fill(hasData, plotW - dx, plotW, false);
+        tMin += dT;
+        tMax += dT;
+        xs = new NicerScale.Scale(tMin, tMax, xs.step(), xs.intervals());
+        //System.out.println("dT=" + dT + " dx=" + dx +" t=<" + tMin + ":" + tMax + "> "+(plotW-dx));
+        redrawAll();
     }
 
     private int timeToPixel(double t) {
@@ -209,6 +241,9 @@ public class DynamicSignalImage {
         double margin = 0.10 * span;
         yMin -= margin;
         yMax += margin;
+        ys = NicerScale.niceScale(yMin, yMax);
+        yMin = ys.min();
+        yMax = ys.max();
     }
 
     private void checkYRange() {
@@ -234,6 +269,10 @@ public class DynamicSignalImage {
         double margin = 0.10 * span;
         yMin = currentMin - margin;
         yMax = currentMax + margin;
+
+        ys = NicerScale.niceScale(yMin, yMax);
+        yMin = ys.min();
+        yMax = ys.max();
     }
 
     private void redrawAll() {
@@ -256,24 +295,6 @@ public class DynamicSignalImage {
 
         g.setColor(new Color(230, 230, 230));
 
-        xs = NicerScale.niceScale(tMin, tMax);
-        tMin = xs.min();
-        tMax = xs.max();
-        ys = NicerScale.niceScale(yMin, yMax);
-        yMin = ys.min();
-        yMax = ys.max();
-
-        /*
-        for (int i = 0; i <= 10; i++) {
-            int x = left + (int) Math.round(i / 10.0 * plotW);
-
-        }
-
-        for (int i = 0; i <= 5; i++) {
-            int y = top + (int) Math.round(i / 5.0 * plotH);
-            g.drawLine(left, y, left + plotW, y);
-        }
-         */
         for (double t = xs.min(); t <= xs.max() + 0.5 * xs.step(); t += xs.step()) {
 
             int x = left + (int) Math.round((t - xs.min()) / (xs.max() - xs.min()) * plotW);

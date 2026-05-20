@@ -25,7 +25,7 @@ public class PRPDPipeline implements AutoCloseable {
     private final ExecutorService extractorExecutor
             = Executors.newSingleThreadExecutor();
 
-    private final String filename;
+    private final String dataSource;
     private final int bufferSize;
     private final int maxQueuedBuffers;
     private final int consumerCount;
@@ -38,14 +38,14 @@ public class PRPDPipeline implements AutoCloseable {
     };
 
     public PRPDPipeline(
-            String filename,
+            String datasource,
             int consumerCount,
             int bufferSize,
             int maxQueuedBuffers,
             PRPDExtractorCore extractor,
             PRPDPipelineListener listener
     ) {
-        this.filename = filename;
+        this.dataSource = datasource;
         this.consumerCount = consumerCount;
         this.bufferSize = bufferSize;
         this.maxQueuedBuffers = maxQueuedBuffers;
@@ -73,8 +73,10 @@ public class PRPDPipeline implements AutoCloseable {
     private void readerLoop() {
         try {
             SignalReader reader = null;
-            if (!(new File(filename)).exists()) {
-                String[] hp = filename.split(":");
+            System.out.println(dataSource );
+            if (!(new File(dataSource)).exists()) {
+                String[] hp = dataSource.split(":");
+                System.out.println("\t -> " + hp );
                 if (hp.length == 2) {
                     reader = new BinarySocketReader(
                             hp[0], // host name or IP
@@ -84,10 +86,10 @@ public class PRPDPipeline implements AutoCloseable {
                     );
                 }
             } else {
-                if (filename.endsWith(".csv")) {
-                    reader = new TextReader(filename, consumerCount, bufferSize);
+                if (dataSource.endsWith(".csv")) {
+                    reader = new TextReader(dataSource, consumerCount, bufferSize);
                 } else {
-                    reader = new BinaryReader(filename, consumerCount, bufferSize);;
+                    reader = new BinaryReader(dataSource, consumerCount, bufferSize);;
                 }
             }
 
@@ -147,7 +149,6 @@ public class PRPDPipeline implements AutoCloseable {
 
             running.set(false);
             SwingUtilities.invokeAndWait(listener::finished);
-
         } catch (Throwable ex) {
             running.set(false);
             SwingUtilities.invokeLater(() -> listener.error(ex, " in extractorLoop"));

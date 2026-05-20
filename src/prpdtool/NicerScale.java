@@ -11,7 +11,6 @@ import java.util.Locale;
 public class NicerScale {
 
     public record Scale(double min, double max, double step, int intervals) {
-
     }
 
     public static Scale niceScale(double dataMin, double dataMax) {

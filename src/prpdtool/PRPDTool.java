@@ -45,6 +45,7 @@ import pipeline.Pulses;
 public class PRPDTool extends JFrame {
 
     private volatile boolean inBatchMode;
+    private volatile boolean realTimeData;
 
     private String[] classes = {
         "floating",
@@ -272,6 +273,9 @@ public class PRPDTool extends JFrame {
         JMenuItem fileMI = new JMenuItem("Read (t,u) from file");
         fileMI.addActionListener(e -> loadFile());
         fileM.add(fileMI);
+        JMenuItem socketMI = new JMenuItem("Read (t,u) from socket");
+        socketMI.addActionListener(e -> openSocket());
+        fileM.add(socketMI);
         fileM.addSeparator();
 
         JMenuItem exportMI = new JMenuItem("Export histogram data");
@@ -375,7 +379,7 @@ public class PRPDTool extends JFrame {
             drawBaseline = false;
             if (lastDataFile != null) {
                 try {
-                    readDataFile(lastDataFile);
+                    getData(lastDataFile);
                 } catch (Exception ex) {
 
                 }
@@ -395,7 +399,7 @@ public class PRPDTool extends JFrame {
             drawBaseline = true;
             if (lastDataFile != null) {
                 try {
-                    readDataFile(lastDataFile);
+                    getData(lastDataFile);
                 } catch (Exception ex) {
 
                 }
@@ -630,7 +634,7 @@ public class PRPDTool extends JFrame {
         center.revalidate();
         if (lastDataFile != null) {
             try {
-                readDataFile(lastDataFile);
+                getData(lastDataFile);
             } catch (Exception ex) {
                 status.setText(ex.getMessage());
             }
@@ -718,10 +722,11 @@ public class PRPDTool extends JFrame {
         int result = fileChooser.showOpenDialog(this);
         if (result == JFileChooser.APPROVE_OPTION) {
             inBatchMode = false;
+            realTimeData = false;
             File file = fileChooser.getSelectedFile();
             try {
                 String filename = file.getAbsolutePath();
-                readDataFile(filename);
+                getData(filename);
                 saveLastUsedDirectory(file.getParentFile().getAbsolutePath());
                 dataSource.setText("file (" + file.getName() + ")");
                 lastDataFile = filename;
@@ -733,7 +738,21 @@ public class PRPDTool extends JFrame {
         }
     }
 
-    private void readDataFile(String filename) throws Exception {
+    private void openSocket() {
+        inBatchMode = false;
+        realTimeData = true;
+        String socketAddr = "127.0.0.1:9999";
+        try {
+            getData(socketAddr);
+            dataSource.setText("socket (" + socketAddr + ")");
+        } catch (Exception ex) {
+            System.err.println("Bad socket: " + socketAddr + " : " + ex.getMessage());
+            lastDataFile = null;
+            //ex.printStackTrace();
+        }
+    }
+
+    private void getData(String filename) throws Exception {
 
         stopPipeline();
         try {
@@ -746,14 +765,18 @@ public class PRPDTool extends JFrame {
             cResults.get(c).setText("");
         }
 
-        double[] lasttu = new double[2];
-        String[] last;
-        if (filename.endsWith(".csv")) {
-            last = prpdtool.Utils.readLastLineUtf8(filename).trim().split("[,;\\s]+");
+        double tEnd;
+        if (realTimeData) {
+            tEnd = 10.0;
         } else {
-            last = prpdtool.Utils.readLastPair(filename).trim().split("[,;\\s]+");
+            String[] last;
+            if (filename.endsWith(".csv")) {
+                last = prpdtool.Utils.readLastLineUtf8(filename).trim().split("[,;\\s]+");
+            } else {
+                last = prpdtool.Utils.readLastPair(filename).trim().split("[,;\\s]+");
+            }
+            tEnd = Double.parseDouble(last[0]);
         }
-        lasttu[0] = Double.parseDouble(last[0]);
 
         dfs = fs;
         Filter hfFilter = new HighPassFilter(fs, cutF, filterQ, filterOrder);
@@ -796,21 +819,22 @@ public class PRPDTool extends JFrame {
             envelope = new DynamicSignalImage(
                     "Baseline signal", Color.BLUE,
                     bottom.getWidth() / 2 - 5, bottom.getHeight(),
-                    0.0, lasttu[0], lfFilter
+                    0.0, tEnd, lfFilter
             );
         } else {
             envelope = new DynamicSignalImage(
                     "Signal envelope", Color.BLUE,
                     bottom.getWidth() / 2 - 5, bottom.getHeight(),
-                    0.0, lasttu[0], abs
+                    0.0, tEnd, abs
             );
         }
 
         signal = new DynamicSignalImage(
                 "Filtered signal", Color.GREEN,
                 bottom.getWidth() / 2 - 5, bottom.getHeight(),
-                0.0, lasttu[0], hfFilter
+                0.0, tEnd / 5, hfFilter
         );
+        signal.setSliding(true);
 
         center.setImage(histogram.getImage());
         envelopePanel.setImage(envelope.getImage());
@@ -1048,7 +1072,7 @@ public class PRPDTool extends JFrame {
                     SwingUtilities.invokeAndWait(() -> {
                         try {
                             System.out.println(" ...started");
-                            readDataFile(ds);
+                            getData(ds);
                         } catch (Exception ex) {
                             ex.printStackTrace();
                         }

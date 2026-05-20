@@ -39,7 +39,10 @@ public class BinaryReader implements Closeable, SignalReader {
         int bytesRead = channel.read(byteBuffer);
 
         if (bytesRead < 0) {
-            eof = true;
+            Buffer buf = BufferFactory.acquire(consumerCount);
+            buf.clear();
+            buf.setEOF();
+            return buf;
         }
 
         byteBuffer.flip();
@@ -50,8 +53,9 @@ public class BinaryReader implements Closeable, SignalReader {
         Buffer buf = BufferFactory.acquire(consumerCount);
         if (buf.size() < samplesRead) {
             int size = buf.size();
-            for( int i= 0; i < consumerCount; i++ )
+            for (int i = 0; i < consumerCount; i++) {
                 buf.release();
+            }
             throw new IOException("Buffer is too small: cat read at max " + size + " samples");
         }
         buf.clear();
