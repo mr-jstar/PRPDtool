@@ -4,7 +4,9 @@ package pipeline;
  *
  * @author jstar
  */
+import java.io.Closeable;
 import java.io.File;
+import java.io.IOException;
 import javax.swing.SwingUtilities;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
@@ -71,12 +73,10 @@ public class PRPDPipeline implements AutoCloseable {
     }
 
     private void readerLoop() {
+        SignalReader reader = null;
         try {
-            SignalReader reader = null;
-            System.out.println(dataSource );
             if (!(new File(dataSource)).exists()) {
                 String[] hp = dataSource.split(":");
-                System.out.println("\t -> " + hp );
                 if (hp.length == 2) {
                     reader = new BinarySocketReader(
                             hp[0], // host name or IP
@@ -121,6 +121,14 @@ public class PRPDPipeline implements AutoCloseable {
             running.set(false);
             readerFinished.set(true);
             SwingUtilities.invokeLater(() -> listener.error(ex, " in readerLoop"));
+        } finally {
+            try {
+                if (reader != null) {
+                    ((Closeable) reader).close();
+                }
+            } catch (IOException ex) {
+
+            }
         }
     }
 

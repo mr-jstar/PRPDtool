@@ -35,7 +35,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import pipeline.PRPDExtractorCore;
 import pipeline.PRPDPipeline;
@@ -46,6 +45,7 @@ public class PRPDTool extends JFrame {
 
     private volatile boolean inBatchMode;
     private volatile boolean realTimeData;
+    private String serverPort = "127.0.0.1:9999";
 
     private String[] classes = {
         "floating",
@@ -77,6 +77,7 @@ public class PRPDTool extends JFrame {
     private final String MODELS_DIR = "PRPDMonitor.models.dir";
     private final String FONTSIZE = "PRPDMonitor.font.size";
     private final String FRAMESIZE = "PRPDMonitor.frame.size";
+    private final String DAQ = "PRPDMonitor.daq.address";
 
     private JPanel left;
     private ImagePanel center;
@@ -92,9 +93,9 @@ public class PRPDTool extends JFrame {
 
     // PRPD config
     private double f0 = 50;
-    private double t0 = 0;
-    private double fs = 1_000_000;  // próbkowanie 
-    private double dfs = fs;  // próbkowanie z danych
+    private volatile double t0 = 0;
+    private volatile double fs = 1_000_000;  // próbkowanie 
+    private volatile double dfs = fs;  // próbkowanie z danych
     private double threshold = 0.012; //próg detekcji impulsu po odjęciu tła
     private double ampMin = 0.0; // minimum histogramu
     private double ampMax = 0.12; // maximum histogramu
@@ -133,11 +134,15 @@ public class PRPDTool extends JFrame {
     private DynamicSignalImage envelope;
     private DynamicSignalImage signal;
     private PRPDPipeline pipeline;
+    private PRPDExtractorCore extractor;
 
     private JLabel dataSource;
 
     private JLabel paramChange;
     private JButton applyButton;
+
+    private JTextField dataServer;
+    private JButton stopBtn;
 
     private JButton classifyButton;
 
@@ -226,6 +231,7 @@ public class PRPDTool extends JFrame {
                         String s = p.toString().toLowerCase();
                         return s.endsWith(".onnx") || s.endsWith(".zip");
                     }).map(Path::toString).toArray(String[]::new);
+            Arrays.sort(onnx);
 
             for (String s : onnx) {
                 System.err.println("Found model in " + s);
@@ -274,7 +280,7 @@ public class PRPDTool extends JFrame {
         fileMI.addActionListener(e -> loadFile());
         fileM.add(fileMI);
         JMenuItem socketMI = new JMenuItem("Read (t,u) from socket");
-        socketMI.addActionListener(e -> openSocket());
+        socketMI.addActionListener(e -> {openSocket();});
         fileM.add(socketMI);
         fileM.addSeparator();
 
@@ -337,18 +343,10 @@ public class PRPDTool extends JFrame {
         bipolarMB.addActionListener(e -> {
             if (bipolarMB.isSelected()) {
                 bipolarHistogram = true;
-                for (Param p : params) {
-                    if (p.name.equals("Histogram min")) {
-                        p.field.setText("-" + roundme(histogram.getDataMax(), 3));
-                    }
-                }
+                setParamField("Histogram min", "-" + roundme(histogram.getDataMax(), 3));
             } else {
                 bipolarHistogram = false;
-                for (Param p : params) {
-                    if (p.name.equals("Histogram min")) {
-                        p.field.setText("0");
-                    }
-                }
+                setParamField("Histogram min", "0");
             }
             onParameterChanged();
         });
@@ -357,13 +355,8 @@ public class PRPDTool extends JFrame {
         JMenuItem ftHistMB = new JMenuItem("Fit histogram to data");
         ftHistMB.addActionListener(e -> {
             if (lastDataFile != null) {
-                for (Param p : params) {
-                    if (p.name.equals("Histogram min")) {
-                        p.field.setText("" + roundme(histogram.getDataMin(), 3));
-                    } else if (p.name.equals("Histogram max")) {
-                        p.field.setText("" + roundme(histogram.getDataMax(), 3));
-                    }
-                }
+                setParamField("Histogram min", "" + roundme(histogram.getDataMin(), 3));
+                setParamField("Histogram max", "" + roundme(histogram.getDataMax(), 3));
                 bipolarHistogram = bipolarMB.isSelected();
                 onParameterChanged();
             }
@@ -440,7 +433,7 @@ public class PRPDTool extends JFrame {
                 left,
                 splitCenterRight
         );
-        splitLeft.setResizeWeight(0.05);
+        splitLeft.setResizeWeight(0.1);
 
         // --- góra (80%) + dół (20%) ---
         verticalSplit = new JSplitPane(
@@ -460,8 +453,30 @@ public class PRPDTool extends JFrame {
         // ustawienie początkowych proporcji
         SwingUtilities.invokeLater(() -> {
             verticalSplit.setDividerLocation(0.75);
-            splitLeft.setDividerLocation(0.05);
+            splitLeft.setDividerLocation(0.1);
             splitCenterRight.setDividerLocation(0.8);
+
+            try {
+                String sp = configuration.getValue(DAQ).trim();
+                if( sp != null )
+                    serverPort = sp;
+            } catch( Exception ex ) {
+                
+            }
+            left.add(new JLabel("DAQ Server:"));
+            dataServer = new JTextField(serverPort);
+            dataServer.addActionListener(e->{
+                try {
+                configuration.saveValue(DAQ, dataServer.getText());
+                } catch( IOException ex ) {
+                }  
+            });
+            left.add(dataServer);
+            
+            stopBtn = new JButton("Stop");
+            stopBtn.addActionListener(e -> closeSocket());
+            stopBtn.setVisible(false);
+            left.add(stopBtn);
 
             histogram = new DynamicPRPDHistogram(
                     center.getWidth(), center.getHeight(),
@@ -592,7 +607,7 @@ public class PRPDTool extends JFrame {
             @Override
             public void componentResized(ComponentEvent e) {
                 verticalSplit.setDividerLocation(0.75);
-                splitLeft.setDividerLocation(0.05);
+                splitLeft.setDividerLocation(0.1);
                 splitCenterRight.setDividerLocation(0.8);
                 histogram.resize(center.getWidth(), center.getHeight());
                 envelope.resize(bottom.getWidth() / 2, bottom.getHeight());
@@ -642,12 +657,15 @@ public class PRPDTool extends JFrame {
         center.repaint();
     }
 
-    private void onParameterChanged() {
+    private void setParamField(String key, String text) {
         for (Param p : params) {
-            p.setFromField();
+            if (p.name.equals(key)) {
+                p.field.setText(text);
+                p.field.repaint();
+                return;
+            }
         }
-
-        rescaleHistogram();
+        throw new IllegalArgumentException("Undefined parameter key \"" + key + "\"");
     }
 
     // Helper -sets font
@@ -738,23 +756,41 @@ public class PRPDTool extends JFrame {
         }
     }
 
+    private void onParameterChanged() {
+        for (Param p : params) {
+            p.setFromField();
+        }
+
+        rescaleHistogram();
+    }
+
     private void openSocket() {
         inBatchMode = false;
         realTimeData = true;
-        String socketAddr = "127.0.0.1:9999";
+        String daqSocketAddr = dataServer.getText();
         try {
-            getData(socketAddr);
-            dataSource.setText("socket (" + socketAddr + ")");
+            getData(daqSocketAddr);
+            stopBtn.setVisible(true);
+            dataSource.setText("socket (" + daqSocketAddr + ")");
         } catch (Exception ex) {
-            System.err.println("Bad socket: " + socketAddr + " : " + ex.getMessage());
+            System.err.println("Bad socket: " + daqSocketAddr + " : " + ex.getMessage());
             lastDataFile = null;
             //ex.printStackTrace();
         }
     }
 
-    private void getData(String filename) throws Exception {
+    private void closeSocket() {
+        if (realTimeData) {
+            pipeline.stop();
+            stopBtn.setVisible(false);
+        }
+    }
 
+    private void getData(String filename) throws Exception {
+        boolean tmp = realTimeData;
+        realTimeData = false; // patch - to be corrected!
         stopPipeline();
+        realTimeData = tmp;
         try {
             Thread.sleep(200);
         } catch (InterruptedException ex) {
@@ -828,13 +864,14 @@ public class PRPDTool extends JFrame {
                     0.0, tEnd, abs
             );
         }
+        envelope.setSliding(realTimeData);
 
         signal = new DynamicSignalImage(
                 "Filtered signal", Color.GREEN,
                 bottom.getWidth() / 2 - 5, bottom.getHeight(),
                 0.0, tEnd / 5, hfFilter
         );
-        signal.setSliding(true);
+        signal.setSliding(realTimeData);
 
         center.setImage(histogram.getImage());
         envelopePanel.setImage(envelope.getImage());
@@ -844,7 +881,7 @@ public class PRPDTool extends JFrame {
         envelopePanel.repaint();
         signalPanel.repaint();
 
-        PRPDExtractorCore extractor = new PRPDExtractorCore(
+        extractor = new PRPDExtractorCore(
                 f0,
                 t0,
                 threshold,
@@ -878,6 +915,11 @@ public class PRPDTool extends JFrame {
                                 "Warning",
                                 JOptionPane.WARNING_MESSAGE
                         );
+                        if (realTimeData) {
+                            t0 = estt0;
+                            extractor.setT0(t0);
+                            setParamField("Zero crossing instant", "" + t0);
+                        }
                     }
                     classifyButton.setEnabled(true);
                 }
@@ -892,6 +934,16 @@ public class PRPDTool extends JFrame {
                 if (pulses.fs != fs) {
                     dfs = pulses.fs;
                 }
+                if (Math.abs((dfs - fs) / fs) > 1e-8) {
+                    fs = dfs;
+                    setParamField("Sampling frequency [Hz]", String.format(Locale.US, "%.6g", fs));
+                    JOptionPane.showMessageDialog(
+                            PRPDTool.this,
+                            "The sampling frequency estimated from data is " + String.format(Locale.US, "%.6g", fs) + " Hz",
+                            "Error",
+                            JOptionPane.ERROR_MESSAGE
+                    );
+                }
                 histogram.addPulses(pulses);
                 center.repaint();
             }
@@ -905,14 +957,6 @@ public class PRPDTool extends JFrame {
                 setTitle("PRPD Viewer: " + Paths.get(filename).getFileName().toString());
                 setCursor(Cursor.getDefaultCursor());
                 classifyButton.setEnabled(true);
-                if (Math.abs((dfs - fs) / fs) > 1e-8) {
-                    JOptionPane.showMessageDialog(
-                            PRPDTool.this,
-                            "The sampling frequency estimated from data is " + String.format(Locale.US, "%.6g", dfs) + " Hz",
-                            "Error",
-                            JOptionPane.ERROR_MESSAGE
-                    );
-                }
             }
 
             @Override
@@ -924,6 +968,10 @@ public class PRPDTool extends JFrame {
                         "Error",
                         JOptionPane.ERROR_MESSAGE
                 );
+                if (realTimeData) {
+                    stopBtn.setVisible(false);
+                    realTimeData = false;
+                }
             }
         }
         );
@@ -945,6 +993,10 @@ public class PRPDTool extends JFrame {
             pipeline.close();
             BufferFactory.reset();
             pipeline = null;
+            if (realTimeData) {
+                stopBtn.setVisible(false);
+                realTimeData = false;
+            }
         }
     }
 

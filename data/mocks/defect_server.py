@@ -30,7 +30,7 @@ import random
 # ==========================================================
 
 DEFAULT_HOST = "127.0.0.1"
-DEFAULT_PORT = 9999
+DEFAULT_PORT = 7777
 
 
 # ==========================================================
@@ -298,11 +298,12 @@ def run_server(
 
 def main():
     p = argparse.ArgumentParser(
-        description="High-speed t,u streaming server"
+        description="High-speed t,u streaming server with PD simulation"
     )
 
     p.add_argument("--host", default=DEFAULT_HOST)
     p.add_argument("--port", type=int, default=DEFAULT_PORT)
+    p.add_argument("--daemon", action="store_true")
 
     p.add_argument("--fs", type=float, default=5_000_000)
 
@@ -340,23 +341,28 @@ def main():
 
     args = p.parse_args()
 
-    run_server(
-        host=args.host,
-        port=args.port,
-        fs=args.fs,
-        chunk_samples=args.chunk,
-        f0=args.f0,
-        baseline_amp=args.baseline_amp,
-				defects=re.split(r"[,;]+",args.defects),
-        limit_msps=args.limit_msps,
-        seed=args.seed,
-        noise_std=args.noise_std,
-        pulse_us=args.pulse_us,
-        tau_us=args.tau_us,
-        background_rate=args.background_rate,
-        background_amp=args.background_amp
-    )
+    while True:
+        run_server(
+            host=args.host,
+            port=args.port,
+            fs=args.fs,
+            chunk_samples=args.chunk,
+            f0=args.f0,
+            baseline_amp=args.baseline_amp,
+            defects=re.split(r"[,;]+",args.defects),
+            limit_msps=args.limit_msps,
+            seed=args.seed,
+            noise_std=args.noise_std,
+            pulse_us=args.pulse_us,
+            tau_us=args.tau_us,
+            background_rate=args.background_rate,
+            background_amp=args.background_amp
+        )
 
+        if args.daemon:
+            print( "Daemon mode, restarting" )
+        else:
+            break
 
 if __name__ == "__main__":
     main()

@@ -8,11 +8,11 @@ import dsp.Filter;
  */
 public class PRPDExtractorCore {
 
-    private final double f0;
-    private final double t0;
-    private final double threshold;
-    private final double deadUs;
-    private final Filter filter;
+    private double f0;
+    private double t0;
+    private double threshold;
+    private double deadUs;
+    private Filter filter;
     private Pulses pulses;
 
     private double lastT = Double.NaN;
@@ -29,6 +29,10 @@ public class PRPDExtractorCore {
         this.threshold = threshold;
         this.deadUs = deadUs;
         this.filter = filter;
+    }
+    
+    public void setT0( double t0 ) {
+        this.t0 = t0;
     }
 
     public Pulses extract(Buffer b) {
