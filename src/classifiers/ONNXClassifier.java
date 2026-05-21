@@ -74,7 +74,7 @@ public class ONNXClassifier implements AutoCloseable, Classifier {
     }
 
     @Override
-    public Prediction classify(BufferedImage image) throws Exception {
+    public Prediction [] classify(BufferedImage image) throws Exception {
         if (!ok) {
             throw new IllegalStateException(getClass().getName() + " has not been properly initialized");
         }
@@ -91,10 +91,9 @@ public class ONNXClassifier implements AutoCloseable, Classifier {
             // For testing:  System.out.println(name() + ": result shape: " + result.get(0));
             Object value = result.get(0).getValue();
 
-            if (name.contains("TEST")) {  // For testing - F[][][] is good for RTDETR output
+            if (name.contains("TEST")) {  // For testing - output format should be eventually modified: F[][][] is good for RTDETR output
                 if (value instanceof float[][][] out) {
-
-                    for (int q = 0; q < 300; q++) {
+                    for (int q = 0; q < out.length; q++) {
                         System.out.print(q + ": ");
 
                         for (int j = 0; j < 6; j++) {
@@ -103,6 +102,7 @@ public class ONNXClassifier implements AutoCloseable, Classifier {
 
                         System.out.println();
                     }
+                    System.out.println("Total: " + (out.length/6) );
                 }
             }
 

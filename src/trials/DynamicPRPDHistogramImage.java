@@ -295,4 +295,19 @@ public class DynamicPRPDHistogramImage implements PRPDHistogram {
 
         return new Color(r, g, b);
     }
+
+    @Override
+    public void addLabel(double xc, double yc, double w, double h, String label, Color color) {
+        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+    }
+
+    @Override
+    public boolean removeLabel(String label) {
+        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+    }
+
+    @Override
+    public void clearLabels() {
+        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+    }
 }

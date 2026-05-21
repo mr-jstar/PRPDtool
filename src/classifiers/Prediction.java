@@ -15,6 +15,7 @@ public class Prediction {
         int gx;
         int gy;
         int anchor;
+        public float [] box;
          
     public Prediction(
         int classId,             
@@ -34,6 +35,28 @@ public class Prediction {
         this.gx = gx;
         this.gy = gy;
         this.anchor = anchor;
+    }
+    
+        public Prediction(
+        int classId,             
+        String className,
+        float confidence,
+        float objectness,
+        float classProbability,
+        int gx,
+        int gy,
+        int anchor,
+        float [] box
+    ) {
+        this.classId = classId;
+        this.className = className;
+        this.confidence = confidence;
+        this.objectness = objectness;
+        this.classProbability = classProbability;
+        this.gx = gx;
+        this.gy = gy;
+        this.anchor = anchor;
+        this.box = box;
     }
     
         @Override

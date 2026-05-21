@@ -21,7 +21,7 @@ public class RTDETRParser implements OutputParser {
     }
 
     @Override
-    public Prediction parse(float[] flat) {
+    public Prediction [] parse(float[] flat) {
 
         final int STRIDE = 6;
 
@@ -44,15 +44,15 @@ public class RTDETRParser implements OutputParser {
             }
         }
 
-        int classId =
-                bestConf >= confTh ? bestCls : -1;
+        int classId
+                = bestConf >= confTh ? bestCls : -1;
 
-        String className =
-                (classId >= 0 && classId < classNames.length)
+        String className
+                = (classId >= 0 && classId < classNames.length)
                         ? classNames[classId]
                         : "none";
 
-        return new Prediction(
+        return new Prediction [] { new Prediction(
                 classId,
                 className,
                 bestConf,
@@ -60,7 +60,8 @@ public class RTDETRParser implements OutputParser {
                 bestConf,
                 bestQuery,
                 0,
-                0
-        );
+                0,
+                new float[]{flat[bestQuery * STRIDE], flat[bestQuery * STRIDE + 1], flat[bestQuery * STRIDE + 2], flat[bestQuery * STRIDE + 3]}
+        ) };
     }
 }

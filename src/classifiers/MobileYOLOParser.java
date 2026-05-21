@@ -35,7 +35,7 @@ public class MobileYOLOParser implements OutputParser {
     }
 
     @Override
-    public Prediction parse(float[] flat) {
+    public Prediction[] parse(float[] flat) {
 
         int bestGy = 0;
         int bestGx = 0;
@@ -47,8 +47,8 @@ public class MobileYOLOParser implements OutputParser {
             for (int gx = 0; gx < grid; gx++) {
                 for (int a = 0; a < anchors; a++) {
 
-                    int base =
-                            (((gy * grid + gx) * anchors + a) * stride);
+                    int base
+                            = (((gy * grid + gx) * anchors + a) * stride);
 
                     float obj = flat[base + 4];
 
@@ -62,8 +62,8 @@ public class MobileYOLOParser implements OutputParser {
             }
         }
 
-        int base =
-                (((bestGy * grid + bestGx) * anchors + bestAnchor) * stride);
+        int base
+                = (((bestGy * grid + bestGx) * anchors + bestAnchor) * stride);
 
         int bestCls = 0;
         float bestClassProb = -Float.MAX_VALUE;
@@ -79,24 +79,24 @@ public class MobileYOLOParser implements OutputParser {
 
         float confidence = bestObjectness * bestClassProb;
 
-        boolean accepted =
-                bestObjectness >= confObjTh &&
-                bestClassProb >= confClsTh;
+        boolean accepted
+                = bestObjectness >= confObjTh
+                && bestClassProb >= confClsTh;
 
         int classId = accepted ? bestCls : -1;
 
-        String className =
-                accepted ? classNames[bestCls] : "none";
+        String className
+                = accepted ? classNames[bestCls] : "none";
 
-        return new Prediction(
-                classId,
-                className,
-                confidence,
-                bestObjectness,
-                bestClassProb,
-                bestGx,
-                bestGy,
-                bestAnchor
-        );
+        return new Prediction[] {new Prediction(
+            classId,
+            className,
+            confidence,
+            bestObjectness,
+            bestClassProb,
+            bestGx,
+            bestGy,
+            bestAnchor
+            )};
     }
 }

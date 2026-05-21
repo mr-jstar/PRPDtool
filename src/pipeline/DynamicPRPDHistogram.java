@@ -6,6 +6,7 @@ package pipeline;
  */
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
 import java.util.Locale;
 
 public class DynamicPRPDHistogram implements PRPDHistogram {
@@ -22,6 +23,8 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
     private final DynamicPRPDHistogramData data;
 
     private boolean addF0;
+
+    private ArrayList<Label> labels = new ArrayList<>();
 
     private final BufferedImage image;
 
@@ -56,7 +59,30 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         drawEmpty();
     }
 
+    @Override
+    public void addLabel(double xc, double yc, double w, double h, String label, Color color) {
+        labels.add(new Label(xc, yc, w, h, label, color));
+    }
+
+    @Override
+    public boolean removeLabel(String label) {
+        int removed = 0;
+        for (int i = 0; i < labels.size(); i++) {
+            if (labels.get(i).equals(label)) {
+                labels.remove(i);
+                removed++;
+            }
+        }
+        return removed > 0;
+    }
+    
+    @Override
+    public void clearLabels() {
+        labels.clear();
+    }
+
     public BufferedImage getImage() {
+        redraw();
         return image;
     }
 
@@ -116,16 +142,18 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         return data.getHistogram();
     }
 
+    @Override
     public void drawF0(boolean doIt) {
         addF0 = doIt;
-        redraw(image);
+        redraw();
     }
 
+    @Override
     public void resize(int width, int height) {
         this.width = width;
         this.height = height;
 
-        redraw(image);
+        redraw();
     }
 
     @Override
@@ -133,7 +161,7 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
 
         data.addPulses(p);
 
-        redraw(image);
+        redraw();
     }
 
     private void drawEmpty() {
@@ -147,11 +175,11 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
 
         g.dispose();
 
-        drawAxes(image);
+        drawAxes();
     }
 
-    private void drawImg(BufferedImage img) {
-        Graphics2D g = img.createGraphics();
+    private void drawImg( ) {
+        Graphics2D g = image.createGraphics();
 
         g.setColor(Color.BLACK);
         g.fillRect(left, top, plotW, plotH);
@@ -191,16 +219,23 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
             }
         }
 
+        for (Label l : labels) {
+            g.setColor(l.getColor());
+            g.drawRect(left+l.leftx(plotW), top+l.boty(plotH), l.getW(plotW), l.getH(plotH));
+            g.setFont(new Font("Arial", Font.PLAIN, 13));
+            g.drawString(l.getLabel(), left+l.leftx(plotW), top+l.boty(plotH));
+        }
+
         g.dispose();
     }
 
-    private void redraw(BufferedImage img) {
-        drawImg(img);
-        drawAxes(img);
+    private void redraw() {
+        drawImg();
+        drawAxes();
     }
 
-    private void drawAxes(BufferedImage img) {
-        Graphics2D g = img.createGraphics();
+    private void drawAxes() {
+        Graphics2D g = image.createGraphics();
 
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
                 RenderingHints.VALUE_ANTIALIAS_ON);

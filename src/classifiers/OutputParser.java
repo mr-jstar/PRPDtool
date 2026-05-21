@@ -7,5 +7,5 @@ package classifiers;
  */
 @FunctionalInterface
 public interface OutputParser {
-    Prediction parse(float[] flatOutput);
+    Prediction [] parse(float[] flatOutput);
 }

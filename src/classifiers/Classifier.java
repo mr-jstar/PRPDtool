@@ -8,7 +8,7 @@ import java.awt.image.BufferedImage;
  */
 public interface Classifier {
 
-    Prediction classify(BufferedImage image) throws Exception;
+    Prediction [] classify(BufferedImage image) throws Exception;
 
     boolean ok();
 

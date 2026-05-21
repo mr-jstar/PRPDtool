@@ -32,7 +32,7 @@ public class SqueezeYOLOParser implements OutputParser {
     }
 
     @Override
-    public Prediction parse(float[] flat) {
+    public Prediction[] parse(float[] flat) {
 
         int bestGy = 0;
         int bestGx = 0;
@@ -47,8 +47,8 @@ public class SqueezeYOLOParser implements OutputParser {
             for (int gx = 0; gx < grid; gx++) {
                 for (int a = 0; a < anchors; a++) {
 
-                    int base =
-                            (((gy * grid + gx) * anchors + a) * stride);
+                    int base
+                            = (((gy * grid + gx) * anchors + a) * stride);
 
                     float objectness = flat[base + 4];
 
@@ -56,8 +56,8 @@ public class SqueezeYOLOParser implements OutputParser {
 
                         float clsProb = flat[base + 5 + c];
 
-                        float confidence =
-                                objectness * clsProb;
+                        float confidence
+                                = objectness * clsProb;
 
                         if (confidence > bestConfidence) {
                             bestConfidence = confidence;
@@ -74,21 +74,21 @@ public class SqueezeYOLOParser implements OutputParser {
             }
         }
 
-        int classId =
-                bestConfidence >= confTh ? bestCls : -1;
+        int classId
+                = bestConfidence >= confTh ? bestCls : -1;
 
-        String className =
-                classId >= 0 ? classNames[classId] : "none";
+        String className
+                = classId >= 0 ? classNames[classId] : "none";
 
-        return new Prediction(
-                classId,
-                className,
-                bestConfidence,
-                bestObjectness,
-                bestClassProb,
-                bestGx,
-                bestGy,
-                bestAnchor
-        );
+        return new Prediction[]{new Prediction(
+            classId,
+            className,
+            bestConfidence,
+            bestObjectness,
+            bestClassProb,
+            bestGx,
+            bestGy,
+            bestAnchor
+            )};
     }
 }

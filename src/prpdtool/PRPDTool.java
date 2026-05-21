@@ -37,6 +37,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 import pipeline.PRPDExtractorCore;
+import pipeline.PRPDHistogram;
 import pipeline.PRPDPipeline;
 import pipeline.PRPDPipelineListener;
 import pipeline.Pulses;
@@ -130,7 +131,7 @@ public class PRPDTool extends JFrame {
     private ImagePanel envelopePanel;
 
     private String lastDataFile;
-    private DynamicPRPDHistogram histogram;
+    private PRPDHistogram histogram;
     private DynamicSignalImage envelope;
     private DynamicSignalImage signal;
     private PRPDPipeline pipeline;
@@ -280,7 +281,9 @@ public class PRPDTool extends JFrame {
         fileMI.addActionListener(e -> loadFile());
         fileM.add(fileMI);
         JMenuItem socketMI = new JMenuItem("Read (t,u) from socket");
-        socketMI.addActionListener(e -> {openSocket();});
+        socketMI.addActionListener(e -> {
+            openSocket();
+        });
         fileM.add(socketMI);
         fileM.addSeparator();
 
@@ -335,7 +338,7 @@ public class PRPDTool extends JFrame {
         sinMB.addActionListener(e -> {
             drawF0 = sinMB.isSelected();
             histogram.drawF0(drawF0);
-            center.repaint();
+            center.setImage(histogram.getImage());
         });
         optM.add(sinMB);
 
@@ -458,21 +461,22 @@ public class PRPDTool extends JFrame {
 
             try {
                 String sp = configuration.getValue(DAQ).trim();
-                if( sp != null )
+                if (sp != null) {
                     serverPort = sp;
-            } catch( Exception ex ) {
-                
+                }
+            } catch (Exception ex) {
+
             }
             left.add(new JLabel("DAQ Server:"));
             dataServer = new JTextField(serverPort);
-            dataServer.addActionListener(e->{
+            dataServer.addActionListener(e -> {
                 try {
-                configuration.saveValue(DAQ, dataServer.getText());
-                } catch( IOException ex ) {
-                }  
+                    configuration.saveValue(DAQ, dataServer.getText());
+                } catch (IOException ex) {
+                }
             });
             left.add(dataServer);
-            
+
             stopBtn = new JButton("Stop");
             stopBtn.addActionListener(e -> closeSocket());
             stopBtn.setVisible(false);
@@ -485,6 +489,8 @@ public class PRPDTool extends JFrame {
                     bipolarHistogram
             );
             histogram.drawF0(drawF0);
+            center.setImage(histogram.getImage());
+            center.revalidate();
 
             if (drawBaseline) {
                 envelope = new DynamicSignalImage(
@@ -505,9 +511,6 @@ public class PRPDTool extends JFrame {
                     bottom.getWidth() / 2 - 5, bottom.getHeight(),
                     -10.0, 10.0, null
             );
-
-            center.setImage(histogram.getImage());
-            center.revalidate();
 
             envelopePanel = new ImagePanel(envelope.getImage());
             envelopePanel.setPreferredSize(new Dimension(bottom.getWidth() / 2 - 5, bottom.getHeight()));
@@ -610,6 +613,7 @@ public class PRPDTool extends JFrame {
                 splitLeft.setDividerLocation(0.1);
                 splitCenterRight.setDividerLocation(0.8);
                 histogram.resize(center.getWidth(), center.getHeight());
+                center.setImage(histogram.getImage());
                 envelope.resize(bottom.getWidth() / 2, bottom.getHeight());
                 //prpdPanel.setPreferredSize(new Dimension(center.getWidth(), center.getHeight()));
                 envelopePanel.setPreferredSize(new Dimension(bottom.getWidth() / 2, bottom.getHeight()));
@@ -850,6 +854,8 @@ public class PRPDTool extends JFrame {
                 bipolarHistogram
         );
         histogram.drawF0(drawF0);
+        center.setImage(histogram.getImage());
+        center.revalidate();
 
         if (drawBaseline) {
             envelope = new DynamicSignalImage(
@@ -873,7 +879,6 @@ public class PRPDTool extends JFrame {
         );
         signal.setSliding(realTimeData);
 
-        center.setImage(histogram.getImage());
         envelopePanel.setImage(envelope.getImage());
         signalPanel.setImage(signal.getImage());
 
@@ -1061,15 +1066,28 @@ public class PRPDTool extends JFrame {
 
     private void classifyPRPD(Classifier classifier, JLabel resultView) {
         if (prpd4YOLO != null) {
+            histogram.clearLabels();
             setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
             resultView.setText("..working...");
             resultView.repaint();
             SwingUtilities.invokeLater(() -> {
                 try {
                     ImageIO.write(prpd4YOLO, "png", new File("prpd4YOLO.png"));
-                    Prediction result = classifier.classify(prpd4YOLO);
+                    Prediction[] result = classifier.classify(prpd4YOLO);
                     resultView.setBackground(Color.white);
-                    resultView.setText(result.toString());
+                    resultView.setText("");
+                    String sep ="";
+                    for (Prediction p : result) {
+                        resultView.setText(resultView.getText() + sep + p.toString());
+                        sep = ",";
+                        if (p.box != null) {
+                            float[] b = p.box;
+                            histogram.addLabel(b[0], b[1], b[2], b[3], p.toString(), Color.yellow);
+                        }
+                    }
+                    center.setImage(histogram.getImage());
+                    center.revalidate();
+                    center.repaint();
                     resultView.repaint();
                     setCursor(Cursor.getDefaultCursor());
                 } catch (Exception ex) {
