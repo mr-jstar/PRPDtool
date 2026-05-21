@@ -57,6 +57,15 @@ public class PRPDTool extends JFrame {
         "void"
     };
 
+    Map<String, Color> CLASS_COLORS = Map.of(
+            "floating", new Color(255, 200, 0),
+            "corona -", new Color(0, 180, 255),
+            "noise", new Color(140, 140, 140),
+            "corona +", new Color(255, 60, 60),
+            "surface", new Color(0, 220, 120),
+            "void", new Color(180, 0, 255)
+    );
+
     private final ArrayList<Classifier> classifiers = new ArrayList<>();
 
     private Map<Classifier, JLabel> cResults;
@@ -1074,15 +1083,16 @@ public class PRPDTool extends JFrame {
                 try {
                     ImageIO.write(prpd4YOLO, "png", new File("prpd4YOLO.png"));
                     Prediction[] result = classifier.classify(prpd4YOLO);
+                    System.out.println(classifier.name() + ":");
                     resultView.setBackground(Color.white);
                     resultView.setText("");
-                    String sep ="";
+                    String sep = "";
                     for (Prediction p : result) {
                         resultView.setText(resultView.getText() + sep + p.toString());
                         sep = ",";
                         if (p.box != null) {
                             float[] b = p.box;
-                            histogram.addLabel(b[0], b[1], b[2], b[3], p.toString(), Color.yellow);
+                            histogram.addLabel(b[0], b[1], b[2], b[3], p.toString(), CLASS_COLORS.get(p.className()));
                         }
                     }
                     center.setImage(histogram.getImage());

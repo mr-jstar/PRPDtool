@@ -5,6 +5,7 @@ package pipeline;
  * @author jstar
  */
 import java.awt.*;
+import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Locale;
@@ -21,6 +22,10 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
     private final int plotW;
     private final int plotH;
     private final DynamicPRPDHistogramData data;
+
+    private Font smallFont = new Font("Arial", Font.PLAIN, 12);
+    private Font font = new Font("Arial", Font.PLAIN, 13);
+    private Font bigFont = new Font("Arial", Font.BOLD, 16);
 
     private boolean addF0;
 
@@ -75,7 +80,7 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         }
         return removed > 0;
     }
-    
+
     @Override
     public void clearLabels() {
         labels.clear();
@@ -178,7 +183,7 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         drawAxes();
     }
 
-    private void drawImg( ) {
+    private void drawImg() {
         Graphics2D g = image.createGraphics();
 
         g.setColor(Color.BLACK);
@@ -221,9 +226,14 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
 
         for (Label l : labels) {
             g.setColor(l.getColor());
-            g.drawRect(left+l.leftx(plotW), top+l.boty(plotH), l.getW(plotW), l.getH(plotH));
-            g.setFont(new Font("Arial", Font.PLAIN, 13));
-            g.drawString(l.getLabel(), left+l.leftx(plotW), top+l.boty(plotH));
+            g.drawRect(left + l.leftx(plotW), top + l.boty(plotH), l.getW(plotW), l.getH(plotH));
+            g.setFont(font);
+            Rectangle2D rect = g.getFontMetrics(font).getStringBounds(l.getLabel(), g);
+            g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.5f));
+            g.fillRect(left + l.leftx(plotW), top + l.boty(plotH), (int) rect.getWidth() + 1, (int) rect.getHeight() + 3);
+             g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
+            g.setColor(Color.white);
+            g.drawString(l.getLabel(), left + l.leftx(plotW), top + l.boty(plotH) + (int) rect.getHeight());
         }
 
         g.dispose();
@@ -250,7 +260,7 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         g.setColor(Color.BLACK);
         g.drawRect(left, top, plotW, plotH);
 
-        g.setFont(new Font("Arial", Font.PLAIN, 13));
+        g.setFont(font);
 
         // Osie
         for (int deg = 0; deg <= 360; deg += 60) {
@@ -270,10 +280,10 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         }
 
         // Opis
-        g.setFont(new Font("Arial", Font.BOLD, 16));
+        g.setFont(bigFont);
         g.drawString("PRPD", left, 20);
 
-        g.setFont(new Font("Arial", Font.PLAIN, 12));
+        g.setFont(smallFont);
         g.drawString("Phase [deg]", left + plotW / 2 - 40, height - 13);
 
         g.rotate(-Math.PI / 2);

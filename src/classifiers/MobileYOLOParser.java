@@ -96,7 +96,13 @@ public class MobileYOLOParser implements OutputParser {
             bestClassProb,
             bestGx,
             bestGy,
-            bestAnchor
+            bestAnchor,
+                new float[]{
+                flat[base + 0],
+                flat[base + 1],
+                flat[base + 2],
+                flat[base + 3]
+                }
             )};
     }
 }

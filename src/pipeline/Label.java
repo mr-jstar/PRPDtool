@@ -19,6 +19,7 @@ public class Label {
         this.h = h;
         this.label = label;
         this.color = color;
+        System.out.println(this);
     }
 
     public int leftx(int plotW) {
@@ -26,15 +27,15 @@ public class Label {
     }
 
     public int rightx(int plotW) {
-        return (int) ((xc - w / 2) * plotW);
+        return (int) ((xc + w / 2) * plotW);
     }
 
     public int boty(int plotH) {
-        return plotH - (int) ((yc - h / 2) * plotH);
+        return (int) ((yc - h / 2) * plotH);
     }
 
     public int topy(int plotH) {
-        return plotH - (int) ((yc - h / 2) * plotH);
+        return (int) ((yc + h / 2) * plotH);
     }
 
     public int getW(int plotW) {
@@ -51,5 +52,10 @@ public class Label {
 
     public Color getColor() {
         return color;
+    }
+    
+    @Override
+    public String toString() {
+        return label + " [" + xc + " " + yc + " " + w + " " +h + "]";
     }
 }

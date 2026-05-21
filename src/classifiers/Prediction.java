@@ -7,25 +7,26 @@ import java.util.Locale;
  * @author jstar
  */
 public class Prediction {
-        int classId;            // -1 jeśli brak detekcji
-        String className;
-        float confidence;
-        float objectness;
-        float classProbability;
-        int gx;
-        int gy;
-        int anchor;
-        public float [] box;
-         
+
+    int classId;            // -1 jeśli brak detekcji
+    String className;
+    float confidence;
+    float objectness;
+    float classProbability;
+    int gx;
+    int gy;
+    int anchor;
+    public float[] box;
+
     public Prediction(
-        int classId,             
-        String className,
-        float confidence,
-        float objectness,
-        float classProbability,
-        int gx,
-        int gy,
-        int anchor
+            int classId,
+            String className,
+            float confidence,
+            float objectness,
+            float classProbability,
+            int gx,
+            int gy,
+            int anchor
     ) {
         this.classId = classId;
         this.className = className;
@@ -36,17 +37,17 @@ public class Prediction {
         this.gy = gy;
         this.anchor = anchor;
     }
-    
-        public Prediction(
-        int classId,             
-        String className,
-        float confidence,
-        float objectness,
-        float classProbability,
-        int gx,
-        int gy,
-        int anchor,
-        float [] box
+
+    public Prediction(
+            int classId,
+            String className,
+            float confidence,
+            float objectness,
+            float classProbability,
+            int gx,
+            int gy,
+            int anchor,
+            float[] box
     ) {
         this.classId = classId;
         this.className = className;
@@ -58,13 +59,17 @@ public class Prediction {
         this.anchor = anchor;
         this.box = box;
     }
-    
-        @Override
+
+    public String className() {
+        return className;
+    }
+
+    @Override
     public String toString() {
         if (classId == -1) {
             return "no defect";
         } else {
-            return className + String.format(Locale.US, " (%3.0f%%)", confidence*100);
+            return className + String.format(Locale.US, " (%3.0f%%)", confidence * 100);
         }
     }
 }

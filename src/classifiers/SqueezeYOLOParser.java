@@ -80,6 +80,8 @@ public class SqueezeYOLOParser implements OutputParser {
         String className
                 = classId >= 0 ? classNames[classId] : "none";
 
+        int base = (((bestGy * grid + bestGy) * anchors + bestAnchor) * stride);
+
         return new Prediction[]{new Prediction(
             classId,
             className,
@@ -88,7 +90,12 @@ public class SqueezeYOLOParser implements OutputParser {
             bestClassProb,
             bestGx,
             bestGy,
-            bestAnchor
-            )};
+            bestAnchor,
+            new float[]{
+                flat[base + 0],
+                flat[base + 1],
+                flat[base + 2],
+                flat[base + 3]
+            })};
     }
 }
