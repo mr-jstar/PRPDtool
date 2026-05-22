@@ -19,7 +19,7 @@ public class Label {
         this.h = h;
         this.label = label;
         this.color = color;
-        System.out.println(this);
+        System.out.println("\t" + this);
     }
 
     public int leftx(int plotW) {
