@@ -31,6 +31,9 @@ import dsp.Filter;
 import dsp.HighPassFilter;
 import dsp.LowPassFilter;
 import dsp.PhaseEstimator;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.awt.event.WindowListener;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -44,9 +47,11 @@ import pipeline.Pulses;
 
 public class PRPDTool extends JFrame {
 
+    private static double DEFAULT_THRESHOLD = 0.012;
+
     private volatile boolean inBatchMode;
     private volatile boolean realTimeData;
-    private String serverPort = "127.0.0.1:9999";
+    private String serverPort = "127.0.0.1:7777";
 
     private String[] classes = {
         "floating",
@@ -106,7 +111,7 @@ public class PRPDTool extends JFrame {
     private volatile double t0 = 0;
     private volatile double fs = 1_000_000;  // próbkowanie 
     private volatile double dfs = fs;  // próbkowanie z danych
-    private double threshold = 0.012; //próg detekcji impulsu po odjęciu tła
+    private double threshold = DEFAULT_THRESHOLD; //próg detekcji impulsu po odjęciu tła
     private double ampMin = 0.0; // minimum histogramu
     private double ampMax = 0.12; // maximum histogramu
     private double deadUs = 30; //martwy czas po wykryciu impulsu [µs]
@@ -212,7 +217,12 @@ public class PRPDTool extends JFrame {
     public PRPDTool() {
         super("PRPDtool");
 
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                onExit();
+            }
+        });
 
         try {
             String[] wh = configuration.getValue(FRAMESIZE).trim().split("x");
@@ -311,7 +321,7 @@ public class PRPDTool extends JFrame {
         fileM.addSeparator();
 
         JMenuItem exitMI = new JMenuItem("Exit");
-        exitMI.addActionListener(e -> System.exit(0));
+        exitMI.addActionListener(e -> onExit());
         fileM.add(exitMI);
         mb.add(fileM);
 
@@ -493,7 +503,7 @@ public class PRPDTool extends JFrame {
 
             histogram = new DynamicPRPDHistogram(
                     center.getWidth(), center.getHeight(),
-                    360, 200,
+                    360, 224,
                     (bipolarHistogram ? -ampMax : 0), ampMax,
                     bipolarHistogram
             );
@@ -613,6 +623,7 @@ public class PRPDTool extends JFrame {
             setFontRecursively(classifyPanel, currentFont, 0);
 
             right.add(classifyPanel, BorderLayout.SOUTH);
+            setCurrentFont();
         });
 
         addComponentListener(new ComponentAdapter() {
@@ -668,6 +679,15 @@ public class PRPDTool extends JFrame {
             }
         }
         center.repaint();
+    }
+
+    private String getParamField(String key) {
+        for (Param p : params) {
+            if (p.name.equals(key)) {
+                return p.field.getText();
+            }
+        }
+        throw new IllegalArgumentException("Undefined parameter key \"" + key + "\"");
     }
 
     private void setParamField(String key, String text) {
@@ -727,6 +747,19 @@ public class PRPDTool extends JFrame {
     }
 
     //---------------- Actions ------
+    private void onExit() {
+        closeSocket();
+        try {
+            if (pipeline != null) {
+                pipeline.awaitFinished(1);
+            }
+        } catch (Exception ex) {
+
+        } finally {
+            System.exit(0);
+        }
+    }
+
     private void loadFile() {
         JFileChooser fileChooser = new JFileChooser(getLastUsedDirectory());
         fileChooser.setFileFilter(new javax.swing.filechooser.FileFilter() {
@@ -773,7 +806,13 @@ public class PRPDTool extends JFrame {
         for (Param p : params) {
             p.setFromField();
         }
-
+        try {
+            if (pipeline != null) {
+                pipeline.setThreshold(Double.parseDouble(getParamField("Pulse ampl. threshold")));
+            }
+        } catch (Exception ex) {
+            setParamField("Pulse ampl. threshold", "" + DEFAULT_THRESHOLD);
+        }
         rescaleHistogram();
     }
 
@@ -828,7 +867,7 @@ public class PRPDTool extends JFrame {
         }
 
         dfs = fs;
-        Filter hfFilter = new HighPassFilter(fs, cutF, filterQ, filterOrder);
+        Filter hfFilter = new HighPassFilter(fs, cutF, filterQ, filterOrder); //???
         Filter lfFilter = new LowPassFilter(fs, 10 * f0, filterQ, filterOrder);
         Filter abs = new Filter() {
             @Override

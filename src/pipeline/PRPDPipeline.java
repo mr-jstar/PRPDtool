@@ -71,6 +71,10 @@ public class PRPDPipeline implements AutoCloseable {
         readerExecutor.execute(this::readerLoop);
         extractorExecutor.execute(this::extractorLoop);
     }
+    
+    public void setThreshold( double threshold ) {
+        extractor.setThreshold(threshold);
+    }
 
     private void readerLoop() {
         SignalReader reader = null;
@@ -186,5 +190,9 @@ public class PRPDPipeline implements AutoCloseable {
 
     public void awaitFinished() throws InterruptedException {
         doneLatch.await();
+    }
+    
+   public void awaitFinished(int secs) throws InterruptedException {
+        doneLatch.await(secs, TimeUnit.SECONDS);
     }
 }

@@ -34,6 +34,10 @@ public class PRPDExtractorCore {
     public void setT0( double t0 ) {
         this.t0 = t0;
     }
+    
+    public void setThreshold( double threshold ) {
+        this.threshold = threshold;
+    }
 
     public Pulses extract(Buffer b) {
         int n = b.used;
@@ -68,16 +72,17 @@ public class PRPDExtractorCore {
             }
 
             double x = b.u[i] - filtered[i];
+            double y = filtered[i];
 
-            if (Math.abs(x) >= threshold) {
+            if (Math.abs(y) >= threshold) { // x <->y
                 int j0 = i;
                 int j1 = Math.min(n, i + deadN);
 
                 int best = j0;
-                double bestAbs = Math.abs(b.u[j0] - filtered[j0]);
+                double bestAbs = Math.abs(filtered[j0]); //Math.abs(b.u[j0] - filtered[j0]);
 
                 for (int j = j0 + 1; j < j1; j++) {
-                    double a = Math.abs(b.u[j] - filtered[j]);
+                    double a = Math.abs(filtered[j]); //Math.abs(b.u[j] - filtered[j]);
 
                     if (a > bestAbs) {
                         bestAbs = a;
