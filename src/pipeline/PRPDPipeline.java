@@ -96,6 +96,8 @@ public class PRPDPipeline implements AutoCloseable {
                     reader = new BinaryReader(dataSource, consumerCount, bufferSize);;
                 }
             }
+            if( reader == null )
+                throw new IOException("Unable to init reader " + dataSource );
 
             while (running.get()) {
                 int n = readLoops.incrementAndGet();

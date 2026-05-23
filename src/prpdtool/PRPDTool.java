@@ -33,7 +33,11 @@ import dsp.LowPassFilter;
 import dsp.PhaseEstimator;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.awt.event.WindowListener;
+import java.io.FileOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.DoubleBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -47,7 +51,9 @@ import pipeline.Pulses;
 
 public class PRPDTool extends JFrame {
 
-    private static double DEFAULT_THRESHOLD = 0.012;
+    private static final double DEFAULT_THRESHOLD = 0.012;
+    private static final double DEFAULT_FS = 1e6;
+    private static final double DEFAULT_CUTOFF = 1e5;
 
     private volatile boolean inBatchMode;
     private volatile boolean realTimeData;
@@ -109,15 +115,16 @@ public class PRPDTool extends JFrame {
     // PRPD config
     private double f0 = 50;
     private volatile double t0 = 0;
-    private volatile double fs = 1_000_000;  // próbkowanie 
+    private volatile double fs = DEFAULT_FS;  // próbkowanie 
     private volatile double dfs = fs;  // próbkowanie z danych
     private double threshold = DEFAULT_THRESHOLD; //próg detekcji impulsu po odjęciu tła
+    private double cutF = DEFAULT_CUTOFF; // f odcięcia
+
     private double ampMin = 0.0; // minimum histogramu
     private double ampMax = 0.12; // maximum histogramu
     private double deadUs = 30; //martwy czas po wykryciu impulsu [µs]
     private double filterQ = 0.707; // Q filtra
     private int filterOrder = 4; // rząd filtra
-    private double cutF = 50_000; // f odcięcia
 
     private AtomicBoolean signalStart = new AtomicBoolean(false);
 
@@ -157,7 +164,14 @@ public class PRPDTool extends JFrame {
     private JButton applyButton;
 
     private JTextField dataServer;
+    private JButton startBtn;
     private JButton stopBtn;
+    private JButton startRecordButton;
+    private JButton stopRecordButton;
+    private FileChannel recordedData;
+    private int recordLimit = 1024; // Maximal size of the registerd signal (in MB == 1 GB)
+    private int recordedMB;
+    private JLabel recordSizeLabel;
 
     private JButton classifyButton;
 
@@ -495,11 +509,50 @@ public class PRPDTool extends JFrame {
                 }
             });
             left.add(dataServer);
+            startBtn = new JButton("Start listening");
+            startBtn.addActionListener(e -> openSocket());
+            left.add(startBtn);
 
-            stopBtn = new JButton("Stop");
+            stopBtn = new JButton("Stop listening");
             stopBtn.addActionListener(e -> closeSocket());
-            stopBtn.setVisible(false);
+            stopBtn.setEnabled(false);
             left.add(stopBtn);
+
+            JPanel recordPanel = new JPanel();
+            recordPanel.setLayout(new GridLayout(0, 1, 5, 5));
+            recordPanel.setBorder(BorderFactory.createEmptyBorder(5, 15, 5, 5));
+
+            //recordPanel.add(new JSeparator(JSeparator.HORIZONTAL));
+
+            recordPanel.add(new JLabel("Signal recording:"));
+            startRecordButton = new JButton("Start recording");
+            startRecordButton.addActionListener(e -> {
+                try {
+                    String recordFileName = getLastUsedDirectory() + File.separator + "recorded_data.bin";
+                    recordedData = new FileOutputStream(new File(recordFileName)).getChannel();
+                    recordedMB = 0;
+                    stopRecordButton.setEnabled(true);
+                } catch (IOException ex) {
+
+                }
+            });
+            startRecordButton.setEnabled(false);
+            recordPanel.add(startRecordButton);
+
+            recordPanel.add(new JLabel("Limit [MB]"));
+            JTextField limitTF = new JTextField("" + recordLimit);
+            limitTF.addActionListener(e -> {
+                recordLimit = Integer.parseInt(limitTF.getText());
+            });
+            recordPanel.add(limitTF);
+            recordSizeLabel = new JLabel("0 MB used");
+            recordPanel.add(recordSizeLabel);
+
+            stopRecordButton = new JButton("Stop recording");
+            stopRecordButton.setEnabled(false);
+            stopRecordButton.addActionListener(e -> stopRecorder());
+            recordPanel.add(stopRecordButton);
+            left.add(recordPanel);
 
             histogram = new DynamicPRPDHistogram(
                     center.getWidth(), center.getHeight(),
@@ -746,6 +799,35 @@ public class PRPDTool extends JFrame {
         }
     }
 
+    // Record data
+    public static double writeBuffer(FileChannel channel, Buffer buf) throws IOException {
+
+        int samples = buf.used;
+
+        int bytesToWrite = samples * 2 * Double.BYTES;
+
+        ByteBuffer byteBuffer
+                = ByteBuffer.allocateDirect(bytesToWrite);
+
+        byteBuffer.order(ByteOrder.LITTLE_ENDIAN);
+
+        DoubleBuffer db = byteBuffer.asDoubleBuffer();
+
+        for (int i = 0; i < samples; i++) {
+            db.put(buf.t[i]);
+            db.put(buf.u[i]);
+        }
+
+        byteBuffer.position(0);
+        byteBuffer.limit(bytesToWrite);
+
+        while (byteBuffer.hasRemaining()) {
+            channel.write(byteBuffer);
+        }
+
+        return bytesToWrite / (1024.0 * 1024.0);
+    }
+
     //---------------- Actions ------
     private void onExit() {
         closeSocket();
@@ -822,8 +904,10 @@ public class PRPDTool extends JFrame {
         String daqSocketAddr = dataServer.getText();
         try {
             getData(daqSocketAddr);
-            stopBtn.setVisible(true);
+            stopBtn.setEnabled(true);
             dataSource.setText("socket (" + daqSocketAddr + ")");
+            startRecordButton.setEnabled(true);
+            stopRecordButton.setEnabled(true);
         } catch (Exception ex) {
             System.err.println("Bad socket: " + daqSocketAddr + " : " + ex.getMessage());
             lastDataFile = null;
@@ -833,8 +917,10 @@ public class PRPDTool extends JFrame {
 
     private void closeSocket() {
         if (realTimeData) {
+            startRecordButton.setEnabled(false);
+            stopRecordButton.setEnabled(false);
             pipeline.stop();
-            stopBtn.setVisible(false);
+            stopBtn.setEnabled(false);
         }
     }
 
@@ -953,6 +1039,31 @@ public class PRPDTool extends JFrame {
                 new PRPDPipelineListener() {
             @Override
             public void bufferRead(Buffer buffer) {
+                if (realTimeData && recordedData != null && recordedData.isOpen()) {
+                    if (recordedMB < recordLimit) {
+                        try {
+                            recordedMB += (int) writeBuffer(recordedData, buffer);
+                            recordSizeLabel.setText(recordedMB + " MB used");
+                        } catch (IOException ex) {
+                            JOptionPane.showConfirmDialog(
+                                    PRPDTool.this,
+                                    "Error while recording",
+                                    "Warning",
+                                    JOptionPane.WARNING_MESSAGE
+                            );
+                            stopRecorder();
+                        }
+                    } else {
+                        JOptionPane.showConfirmDialog(
+                                PRPDTool.this,
+                                "Record size limit reached",
+                                "Warning",
+                                JOptionPane.WARNING_MESSAGE
+                        );
+                        stopRecorder();
+                        recordSizeLabel.setText(recordedMB + " MB used");
+                    }
+                }
                 if (signalStart.compareAndSet(true, false)) {
                     double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0);
                     double estt0 = ph0 / Math.PI / f0;
@@ -1022,7 +1133,7 @@ public class PRPDTool extends JFrame {
                         JOptionPane.ERROR_MESSAGE
                 );
                 if (realTimeData) {
-                    stopBtn.setVisible(false);
+                    stopBtn.setEnabled(false);
                     realTimeData = false;
                 }
             }
@@ -1047,7 +1158,7 @@ public class PRPDTool extends JFrame {
             BufferFactory.reset();
             pipeline = null;
             if (realTimeData) {
-                stopBtn.setVisible(false);
+                stopBtn.setEnabled(false);
                 realTimeData = false;
             }
         }
@@ -1076,12 +1187,18 @@ public class PRPDTool extends JFrame {
     }
 
     private void exportImage() {
+        BufferedImage img = histogram.getImage();
         JFileChooser fileChooser = new JFileChooser(getLastUsedDirectory());
         setFontRecursively(fileChooser, currentFont, 0);
         int result = fileChooser.showSaveDialog(this);
         if (result == JFileChooser.APPROVE_OPTION) {
+            File file = fileChooser.getSelectedFile();
+            String path = file.getAbsolutePath();
+            if (!path.toLowerCase().endsWith(".png")) {
+                file = new File(path + ".png");
+            }
             try {
-                ImageIO.write(histogram.getImage(), "png", fileChooser.getSelectedFile());
+                ImageIO.write(img, "png", file);
                 status.setText("image saved to " + fileChooser.getSelectedFile().getName());
             } catch (IOException ex) {
                 status.setText(ex.getMessage());
@@ -1109,6 +1226,21 @@ public class PRPDTool extends JFrame {
             for (Classifier c : map.keySet()) {
                 classifyPRPD(c, map.get(c));
             }
+        }
+    }
+
+    private void stopRecorder() {
+        try {
+            recordedData.close();
+            stopRecordButton.setEnabled(false);
+            startRecordButton.setEnabled(true);
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(
+                    PRPDTool.this,
+                    ex.getMessage(),
+                    "Warning",
+                    JOptionPane.WARNING_MESSAGE
+            );
         }
     }
 
