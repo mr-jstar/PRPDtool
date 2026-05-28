@@ -28,6 +28,7 @@ public class RedPitayaTriggerDialog extends JDialog {
 
     private final RedPitayaConfig baseConfig;
     private final int channel;
+    private final double acquisitionDurationS;
     private RedPitayaCapture reference;
     private RedPitayaCapture defect;
     private double[] referenceValues;
@@ -54,6 +55,7 @@ public class RedPitayaTriggerDialog extends JDialog {
         this.baseConfig.visualChannel = channel;
         this.baseConfig.triggerSource = "NOW";
         this.baseConfig.triggerLevel = 0.0;
+        this.acquisitionDurationS = Math.max(1.0e-9, this.baseConfig.normalizedDurationS());
         setSize(1100, 800);
         setLocationRelativeTo(owner);
 
@@ -108,6 +110,8 @@ public class RedPitayaTriggerDialog extends JDialog {
         mode.removeAllItems();
         mode.addItem("ABS | abs(IN" + channel + ")");
         mode.addItem("+/- | IN" + channel);
+        referencePlot.setTimeRange(0.0, acquisitionDurationS);
+        defectPlot.setTimeRange(0.0, acquisitionDurationS);
         updateTheme();
     }
 
@@ -116,7 +120,20 @@ public class RedPitayaTriggerDialog extends JDialog {
     }
 
     public double triggerLevel() {
+        commitTriggerValue();
         return ((Number) triggerValue.getValue()).doubleValue();
+    }
+
+    private void commitTriggerValue() {
+        if (triggerValue.getEditor() instanceof JSpinner.DefaultEditor editor) {
+            String text = editor.getTextField().getText().trim().replace(',', '.');
+            try {
+                triggerValue.setValue(Double.parseDouble(text));
+                editor.getTextField().setBackground(Color.WHITE);
+            } catch (NumberFormatException ex) {
+                editor.getTextField().setBackground(new Color(255, 200, 200));
+            }
+        }
     }
 
     private void startAcquisition(boolean referenceKind) {
@@ -185,11 +202,13 @@ public class RedPitayaTriggerDialog extends JDialog {
         if (reference != null) {
             referenceValues = valuesForMode(reference.volts(), signed);
             referencePlot.setData(reference.t, referenceValues);
+            referencePlot.setTimeRange(0.0, acquisitionDurationS);
             referencePlot.setLabels("Time [s]", yAxisLabel(signed));
         }
         if (defect != null) {
             defectValues = valuesForMode(defect.volts(), signed);
             defectPlot.setData(defect.t, defectValues);
+            defectPlot.setTimeRange(0.0, acquisitionDurationS);
             defectPlot.setLabels("Time [s]", yAxisLabel(signed));
         }
         if (reference != null && defect != null) {
@@ -319,6 +338,8 @@ public class RedPitayaTriggerDialog extends JDialog {
         private double[] t = new double[0];
         private double[] y = new double[0];
         private double trigger;
+        private double minTime = 0.0;
+        private double maxTime = 1.0;
         private boolean darkTheme;
         private String xLabel = "Time [s]";
         private String yLabel = "Amplitude [V]";
@@ -332,6 +353,12 @@ public class RedPitayaTriggerDialog extends JDialog {
         void setData(double[] t, double[] y) {
             this.t = t == null ? new double[0] : t;
             this.y = y == null ? new double[0] : y;
+            repaint();
+        }
+
+        void setTimeRange(double minTime, double maxTime) {
+            this.minTime = minTime;
+            this.maxTime = maxTime > minTime ? maxTime : minTime + 1.0;
             repaint();
         }
 
@@ -383,11 +410,8 @@ public class RedPitayaTriggerDialog extends JDialog {
                 if (maxY <= minY) {
                     maxY = minY + 1.0;
                 }
-                double minT = t.length > 0 ? t[0] : 0.0;
-                double maxT = t.length > 0 ? t[t.length - 1] : 1.0;
-                if (maxT <= minT) {
-                    maxT = minT + 1.0;
-                }
+                double minT = minTime;
+                double maxT = maxTime;
 
                 drawTicks(g, left, top, w, h, minT, maxT, minY, maxY, foreground, axis, grid);
 
@@ -411,7 +435,7 @@ public class RedPitayaTriggerDialog extends JDialog {
                 g.drawLine(left, triggerY, left + w, triggerY);
                 drawTriggerLabel(g, left, top, w, h, triggerY, trigger, foreground, labelBackground, triggerColor);
             } else {
-                drawTicks(g, left, top, w, h, 0.0, 1.0, -1.0, 1.0, foreground, axis, grid);
+                drawTicks(g, left, top, w, h, minTime, maxTime, -1.0, 1.0, foreground, axis, grid);
             }
             drawAxisLabels(g, left, top, w, h, foreground);
             g.dispose();

@@ -12,6 +12,9 @@ import pipeline.SignalReader;
 
 public class RedPitayaSignalReader implements SignalReader, Closeable {
 
+    private static final long SAFE_AXI_USABLE_BYTES = 33_000_000L;
+    private static final int BYTES_PER_SAMPLE = 2;
+
     private final RedPitayaConfig config;
     private final boolean live;
     private final int consumerCount;
@@ -19,9 +22,14 @@ public class RedPitayaSignalReader implements SignalReader, Closeable {
     private final Path saveDirectory;
     private final Consumer<Path> savedCaptureConsumer;
     private final long liveRestartDelayMillis;
+    private final long requestedSamplesPerWindow;
+    private final long maxSamplesPerAcquisition;
     private RedPitayaSession session;
     private RedPitayaFileWriter writer;
     private long sampleOffset;
+    private long windowSamplesRemaining;
+    private boolean windowActive;
+    private boolean onceWindowDone;
     private volatile boolean closed;
 
     public RedPitayaSignalReader(RedPitayaConfig config, boolean live, int consumerCount, int maxSamples) {
@@ -44,40 +52,42 @@ public class RedPitayaSignalReader implements SignalReader, Closeable {
         this.saveDirectory = saveDirectory;
         this.savedCaptureConsumer = savedCaptureConsumer;
         this.liveRestartDelayMillis = Math.max(0L, liveRestartDelayMillis);
+        this.requestedSamplesPerWindow = this.config.totalSamples();
+        this.maxSamplesPerAcquisition = maxSamplesPerAcquisition(this.config);
     }
 
     @Override
     public Buffer read() throws IOException {
         while (!closed) {
+            if (!windowActive) {
+                if (!live && onceWindowDone) {
+                    return eofBuffer();
+                }
+                startWindow();
+            }
+
             if (session == null) {
-                session = new RedPitayaSession(config);
-                openWriter();
-                if (!live) {
-                    sampleOffset = 0;
+                openNextSession();
+                if (session == null) {
+                    continue;
                 }
             }
 
             RedPitayaFrame frame = session.readFrame();
             if (frame == null) {
                 closeSession();
-                if (live) {
-                    sleepBeforeNextLiveWindow();
-                    continue;
+                if (windowSamplesRemaining <= 0) {
+                    finishWindow();
                 }
-                Buffer eof = BufferFactory.acquire(consumerCount);
-                eof.clear();
-                eof.setEOF();
-                return eof;
+                continue;
             }
             if (writer != null) {
                 writer.writeFrame(frame);
             }
+            windowSamplesRemaining = Math.max(0L, windowSamplesRemaining - frame.sampleCount);
             return frameToBuffer(frame);
         }
-        Buffer eof = BufferFactory.acquire(consumerCount);
-        eof.clear();
-        eof.setEOF();
-        return eof;
+        return eofBuffer();
     }
 
     private Buffer frameToBuffer(RedPitayaFrame frame) throws IOException {
@@ -110,7 +120,6 @@ public class RedPitayaSignalReader implements SignalReader, Closeable {
     }
 
     private void closeSession() throws IOException {
-        closeWriter();
         if (session != null) {
             try {
                 session.close();
@@ -120,12 +129,47 @@ public class RedPitayaSignalReader implements SignalReader, Closeable {
         }
     }
 
-    private void openWriter() throws IOException {
-        if (saveDirectory == null || session == null) {
+    private void startWindow() {
+        windowSamplesRemaining = requestedSamplesPerWindow;
+        windowActive = true;
+        if (!live) {
+            sampleOffset = 0;
+        }
+    }
+
+    private void finishWindow() throws IOException {
+        closeWriter();
+        windowActive = false;
+        if (live && !closed) {
+            sleepBeforeNextLiveWindow();
+        } else {
+            onceWindowDone = true;
+        }
+    }
+
+    private void openNextSession() throws IOException {
+        long sessionSamples = Math.min(windowSamplesRemaining, maxSamplesPerAcquisition);
+        if (sessionSamples <= 0) {
+            finishWindow();
             return;
         }
-        Path path = RedPitayaFileWriter.buildOutputPath(saveDirectory.toFile(), session.metadata());
-        writer = new RedPitayaFileWriter(path, session.metadata());
+        RedPitayaConfig sessionConfig = config.forTotalSamples(sessionSamples);
+        session = new RedPitayaSession(sessionConfig);
+        openWriter(session.metadata());
+    }
+
+    private void openWriter(java.util.Map<String, Object> metadata) throws IOException {
+        if (writer != null || saveDirectory == null) {
+            return;
+        }
+        java.util.Map<String, Object> fileMetadata = new java.util.LinkedHashMap<>(metadata);
+        fileMetadata.put("total_samples", requestedSamplesPerWindow);
+        fileMetadata.put("frame_count", (requestedSamplesPerWindow + config.normalizedFrameSize() - 1L) / config.normalizedFrameSize());
+        fileMetadata.put("duration_s", requestedSamplesPerWindow / config.sampleRate());
+        fileMetadata.put("java_chunked_acquisition", requestedSamplesPerWindow > maxSamplesPerAcquisition);
+        fileMetadata.put("java_max_samples_per_acquisition", maxSamplesPerAcquisition);
+        Path path = RedPitayaFileWriter.buildOutputPath(saveDirectory.toFile(), fileMetadata);
+        writer = new RedPitayaFileWriter(path, fileMetadata);
     }
 
     private void closeWriter() throws IOException {
@@ -155,9 +199,27 @@ public class RedPitayaSignalReader implements SignalReader, Closeable {
         }
     }
 
+    private static long maxSamplesPerAcquisition(RedPitayaConfig config) {
+        int channelCount = Math.max(1, config.channels.length);
+        long samples = SAFE_AXI_USABLE_BYTES / channelCount / BYTES_PER_SAMPLE;
+        samples = Math.max(2L, samples);
+        if ((samples & 1L) != 0L) {
+            samples--;
+        }
+        return samples;
+    }
+
+    private Buffer eofBuffer() {
+        Buffer eof = BufferFactory.acquire(consumerCount);
+        eof.clear();
+        eof.setEOF();
+        return eof;
+    }
+
     @Override
     public void close() throws IOException {
         closed = true;
         closeSession();
+        closeWriter();
     }
 }

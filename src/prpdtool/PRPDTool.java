@@ -45,6 +45,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.text.ParseException;
 import pipeline.PRPDExtractorCore;
 import pipeline.PRPDHistogram;
 import pipeline.PRPDPipeline;
@@ -1266,9 +1267,10 @@ public class PRPDTool extends JFrame {
     }
 
     private RedPitayaConfig readRedPitayaConfig() {
+        commitRedPitayaSpinnerEdits();
         RedPitayaConfig config = new RedPitayaConfig();
         config.host = rpHostField.getText().trim();
-        config.port = ((Number) rpPortSpinner.getValue()).intValue();
+        config.port = spinnerIntValue(rpPortSpinner);
         config.channels = switch ((String) rpChannelsCombo.getSelectedItem()) {
             case "IN2" ->
                 new int[]{2};
@@ -1280,18 +1282,69 @@ public class PRPDTool extends JFrame {
         config.visualChannel = "IN2".equals(rpVisualChannelCombo.getSelectedItem()) ? 2 : 1;
         config.gainCh1 = (String) rpGain1Combo.getSelectedItem();
         config.gainCh2 = (String) rpGain2Combo.getSelectedItem();
-        config.decimation = ((Number) rpDecimationSpinner.getValue()).intValue();
+        config.decimation = spinnerIntValue(rpDecimationSpinner);
         config.averaging = rpAveragingBox.isSelected();
         config.triggerSource = (String) rpTriggerCombo.getSelectedItem();
-        config.triggerLevel = ((Number) rpTriggerLevelSpinner.getValue()).doubleValue();
-        config.triggerDelay = ((Number) rpTriggerDelaySpinner.getValue()).intValue();
-        config.triggerTimeoutS = ((Number) rpTriggerTimeoutSpinner.getValue()).doubleValue();
+        config.triggerLevel = spinnerDoubleValue(rpTriggerLevelSpinner);
+        config.triggerDelay = spinnerIntValue(rpTriggerDelaySpinner);
+        config.triggerTimeoutS = spinnerDoubleValue(rpTriggerTimeoutSpinner);
         config.durationMode = "duration".equals(rpModeCombo.getSelectedItem());
-        config.durationS = ((Number) rpDurationSpinner.getValue()).doubleValue();
-        config.frameSize = ((Number) rpFrameSizeSpinner.getValue()).intValue();
-        config.frameCount = ((Number) rpFrameCountSpinner.getValue()).intValue();
+        config.durationS = spinnerDoubleValue(rpDurationSpinner);
+        config.frameSize = spinnerIntValue(rpFrameSizeSpinner);
+        config.frameCount = spinnerIntValue(rpFrameCountSpinner);
         config.validate(BufferFactory.bufferSize());
         return config;
+    }
+
+    private void commitRedPitayaSpinnerEdits() {
+        JSpinner[] spinners = {
+            rpPortSpinner,
+            rpDecimationSpinner,
+            rpTriggerLevelSpinner,
+            rpTriggerDelaySpinner,
+            rpTriggerTimeoutSpinner,
+            rpDurationSpinner,
+            rpFrameSizeSpinner,
+            rpFrameCountSpinner
+        };
+        for (JSpinner spinner : spinners) {
+            commitSpinnerEdit(spinner);
+        }
+    }
+
+    private void commitSpinnerEdit(JSpinner spinner) {
+        if (spinner.getEditor() instanceof JSpinner.DefaultEditor editor) {
+            String text = editor.getTextField().getText().trim().replace(',', '.');
+            SpinnerModel model = spinner.getModel();
+            if (model instanceof SpinnerNumberModel numberModel) {
+                Number current = numberModel.getNumber();
+                try {
+                    if (current instanceof Integer || current instanceof Long) {
+                        spinner.setValue(Integer.parseInt(text));
+                    } else {
+                        spinner.setValue(Double.parseDouble(text));
+                    }
+                    editor.getTextField().setBackground(Color.WHITE);
+                    return;
+                } catch (NumberFormatException ex) {
+                    editor.getTextField().setBackground(new Color(255, 200, 200));
+                }
+            }
+        }
+        try {
+            spinner.commitEdit();
+        } catch (ParseException ex) {
+        }
+    }
+
+    private double spinnerDoubleValue(JSpinner spinner) {
+        commitSpinnerEdit(spinner);
+        return ((Number) spinner.getValue()).doubleValue();
+    }
+
+    private int spinnerIntValue(JSpinner spinner) {
+        commitSpinnerEdit(spinner);
+        return ((Number) spinner.getValue()).intValue();
     }
 
     private void saveRedPitayaConfig(RedPitayaConfig config) {

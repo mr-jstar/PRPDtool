@@ -93,6 +93,23 @@ public class RedPitayaConfig {
         return (int) count;
     }
 
+    public RedPitayaConfig forTotalSamples(long requestedSamples) {
+        RedPitayaConfig c = copy();
+        long total = Math.max(2L, requestedSamples);
+        if ((total & 1L) != 0L) {
+            total++;
+        }
+        int normalizedFrameSize = c.normalizedFrameSize();
+        long count = (total + normalizedFrameSize - 1L) / normalizedFrameSize;
+        if (count > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("Liczba ramek jest zbyt duza");
+        }
+        c.durationMode = true;
+        c.frameCount = (int) count;
+        c.durationS = total / c.sampleRate();
+        return c;
+    }
+
     public double normalizedDurationS() {
         return totalSamples() / sampleRate();
     }
