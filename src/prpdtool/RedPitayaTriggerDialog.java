@@ -40,7 +40,7 @@ public class RedPitayaTriggerDialog extends JDialog {
     private final JButton cancelButton = new JButton("Cancel");
     private final JComboBox<String> mode = new JComboBox<>(new String[]{"ABS | abs(IN1)", "+/- | IN1"});
     private final JComboBox<String> theme = new JComboBox<>(new String[]{"Light", "Dark"});
-    private final JSpinner triggerValue = new JSpinner(new SpinnerNumberModel(0.0, -20.0, 20.0, 0.001));
+    private final JSpinner triggerValue = new JSpinner(new SpinnerNumberModel(0.0, -20.0, 20.0, 0.000001));
     private final JLabel status = new JLabel("Collect reference without defect first.");
     private final JLabel stats = new JLabel(" ");
     private final PlotPanel referencePlot = new PlotPanel(Color.BLUE);
@@ -65,6 +65,10 @@ public class RedPitayaTriggerDialog extends JDialog {
         toolbar.add(new JLabel("Theme"));
         toolbar.add(theme);
         toolbar.add(new JLabel("Trigger [V]"));
+        triggerValue.setEditor(new JSpinner.NumberEditor(triggerValue, "0.###############"));
+        if (triggerValue.getEditor() instanceof JSpinner.DefaultEditor editor) {
+            editor.getTextField().setColumns(14);
+        }
         toolbar.add(triggerValue);
         toolbar.add(okButton);
         toolbar.add(cancelButton);
@@ -193,7 +197,7 @@ public class RedPitayaTriggerDialog extends JDialog {
             triggerValue.setValue(proposal.value);
             okButton.setEnabled(true);
             stats.setText(String.format(
-                    "proposal=%.6f V | background=%.6f V | defect=%.6f V | polarity=%s",
+                    "proposal=%.9f V | background=%.9f V | defect=%.9f V | polarity=%s",
                     proposal.value,
                     proposal.referenceNoise,
                     proposal.defectLevel,
@@ -480,7 +484,7 @@ public class RedPitayaTriggerDialog extends JDialog {
                 Color labelBackground,
                 Color triggerColor
         ) {
-            String text = String.format("trigger %.6f V", trigger);
+            String text = String.format("trigger %.9f V", trigger);
             FontMetrics fm = g.getFontMetrics();
             int labelW = fm.stringWidth(text) + 12;
             int labelH = fm.getHeight() + 4;
@@ -503,12 +507,12 @@ public class RedPitayaTriggerDialog extends JDialog {
         private static String formatTick(double value) {
             double abs = Math.abs(value);
             if ((abs > 0.0 && abs < 0.001) || abs >= 10_000.0) {
-                return String.format("%.2e", value);
+                return String.format("%.6e", value);
             }
             if (abs < 10.0) {
-                return String.format("%.4g", value);
+                return String.format("%.8g", value);
             }
-            return String.format("%.0f", value);
+            return String.format("%.8g", value);
         }
     }
 }

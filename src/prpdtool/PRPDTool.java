@@ -894,14 +894,23 @@ public class PRPDTool extends JFrame {
         rpAveragingBox = new JCheckBox("enabled", configBoolean(RP_AVERAGING, false));
         rpTriggerCombo = new JComboBox<>(new String[]{"NOW", "CH1_PE", "CH1_NE", "CH2_PE", "CH2_NE", "EXT_PE", "EXT_NE"});
         rpTriggerCombo.setSelectedItem(configValue(RP_TRIGGER_SOURCE, "NOW"));
-        rpTriggerLevelSpinner = new JSpinner(new SpinnerNumberModel(configDouble(RP_TRIGGER_LEVEL, 0.0), -20.0, 20.0, 0.001));
+        rpTriggerLevelSpinner = new JSpinner(new SpinnerNumberModel(configDouble(RP_TRIGGER_LEVEL, 0.0), -20.0, 20.0, 0.000001));
         rpTriggerDelaySpinner = new JSpinner(new SpinnerNumberModel(configInt(RP_TRIGGER_DELAY, 0), -100_000_000, 100_000_000, 1));
-        rpTriggerTimeoutSpinner = new JSpinner(new SpinnerNumberModel(configDouble(RP_TRIGGER_TIMEOUT, 10.0), 0.1, 600.0, 0.1));
+        rpTriggerTimeoutSpinner = new JSpinner(new SpinnerNumberModel(configDouble(RP_TRIGGER_TIMEOUT, 10.0), 0.1, 600.0, 0.001));
         rpModeCombo = new JComboBox<>(new String[]{"duration", "frames"});
         rpModeCombo.setSelectedItem(configValue(RP_MODE, "duration"));
-        rpDurationSpinner = new JSpinner(new SpinnerNumberModel(configDouble(RP_DURATION, 0.01), 0.000001, 3600.0, 0.001));
+        rpDurationSpinner = new JSpinner(new SpinnerNumberModel(configDouble(RP_DURATION, 0.01), 0.000001, 3600.0, 0.000001));
         rpFrameSizeSpinner = new JSpinner(new SpinnerNumberModel(configInt(RP_FRAME_SIZE, 65_536), 2, BufferFactory.bufferSize(), 2));
         rpFrameCountSpinner = new JSpinner(new SpinnerNumberModel(configInt(RP_FRAME_COUNT, 1), 1, 1_000_000, 1));
+
+        setIntegerSpinnerEditor(rpPortSpinner);
+        setIntegerSpinnerEditor(rpDecimationSpinner);
+        setDecimalSpinnerEditor(rpTriggerLevelSpinner);
+        setIntegerSpinnerEditor(rpTriggerDelaySpinner);
+        setDecimalSpinnerEditor(rpTriggerTimeoutSpinner);
+        setDecimalSpinnerEditor(rpDurationSpinner);
+        setIntegerSpinnerEditor(rpFrameSizeSpinner);
+        setIntegerSpinnerEditor(rpFrameCountSpinner);
 
         addFormRow(formPanel, "Host", rpHostField, helpText("host"));
         addFormRow(formPanel, "Port", rpPortSpinner, helpText("port"));
@@ -986,6 +995,20 @@ public class PRPDTool extends JFrame {
         labelPanel.add(help, BorderLayout.EAST);
         panel.add(labelPanel);
         panel.add(component);
+    }
+
+    private void setDecimalSpinnerEditor(JSpinner spinner) {
+        spinner.setEditor(new JSpinner.NumberEditor(spinner, "0.###############"));
+        if (spinner.getEditor() instanceof JSpinner.DefaultEditor editor) {
+            editor.getTextField().setColumns(12);
+        }
+    }
+
+    private void setIntegerSpinnerEditor(JSpinner spinner) {
+        spinner.setEditor(new JSpinner.NumberEditor(spinner, "#"));
+        if (spinner.getEditor() instanceof JSpinner.DefaultEditor editor) {
+            editor.getTextField().setColumns(10);
+        }
     }
 
     private String helpText(String key) {
@@ -1245,7 +1268,7 @@ public class PRPDTool extends JFrame {
             dialog.setVisible(true);
             if (dialog.accepted()) {
                 rpTriggerLevelSpinner.setValue(dialog.triggerLevel());
-                status.setText(String.format(Locale.US, "IN%d trigger set to %.6f V", channel, dialog.triggerLevel()));
+                status.setText(String.format(Locale.US, "IN%d trigger set to %.9f V", channel, dialog.triggerLevel()));
             }
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, ex.getMessage(), "Red Pitaya trigger", JOptionPane.ERROR_MESSAGE);
@@ -1521,7 +1544,7 @@ public class PRPDTool extends JFrame {
 
         fs = config.sampleRate();
         dfs = fs;
-        setParamField("Sampling frequency [Hz]", String.format(Locale.US, "%.6g", fs));
+        setParamField("Sampling frequency [Hz]", String.format(Locale.US, "%.12g", fs));
         double tEnd = live ? Math.max(10.0, config.normalizedDurationS()) : config.normalizedDurationS();
 
         Filter hfFilter = new HighPassFilter(fs, cutF, filterQ, filterOrder);
@@ -1643,7 +1666,7 @@ public class PRPDTool extends JFrame {
                     if (Math.abs((((360.0 * (t0 - estt0) * f0 + 180.0) % 360.0 + 360.0) % 360.0) - 180.0) > 0.1) {
                         JOptionPane.showConfirmDialog(
                                 PRPDTool.this,
-                                "The zero-crossing instant estimated from data is " + String.format(Locale.US, "%.6g", estt0) + " s",
+                                "The zero-crossing instant estimated from data is " + String.format(Locale.US, "%.12g", estt0) + " s",
                                 "Warning",
                                 JOptionPane.WARNING_MESSAGE
                         );
@@ -1665,10 +1688,10 @@ public class PRPDTool extends JFrame {
                 }
                 if (Math.abs((dfs - fs) / fs) > 1e-8) {
                     fs = dfs;
-                    setParamField("Sampling frequency [Hz]", String.format(Locale.US, "%.6g", fs));
+                    setParamField("Sampling frequency [Hz]", String.format(Locale.US, "%.12g", fs));
                     JOptionPane.showMessageDialog(
                             PRPDTool.this,
-                            "The sampling frequency estimated from data is " + String.format(Locale.US, "%.6g", fs) + " Hz",
+                            "The sampling frequency estimated from data is " + String.format(Locale.US, "%.12g", fs) + " Hz",
                             "Error",
                             JOptionPane.ERROR_MESSAGE
                     );
@@ -1746,7 +1769,7 @@ public class PRPDTool extends JFrame {
 
         if (RpprFileSignalReader.isRpprFile(filename)) {
             fs = RpprFileSignalReader.sampleRate(filename, fs);
-            setParamField("Sampling frequency [Hz]", String.format(Locale.US, "%.6g", fs));
+            setParamField("Sampling frequency [Hz]", String.format(Locale.US, "%.12g", fs));
         }
         dfs = fs;
         Filter hfFilter = new HighPassFilter(fs, cutF, filterQ, filterOrder); //???
@@ -1854,7 +1877,7 @@ public class PRPDTool extends JFrame {
                     if (Math.abs((((360.0 * (t0 - estt0) * f0 + 180.0) % 360.0 + 360.0) % 360.0) - 180.0) > 0.1) {
                         JOptionPane.showConfirmDialog(
                                 PRPDTool.this,
-                                "The zero-crossing instant estimated from data is " + String.format(Locale.US, "%.6g", estt0) + " s",
+                                "The zero-crossing instant estimated from data is " + String.format(Locale.US, "%.12g", estt0) + " s",
                                 "Warning",
                                 JOptionPane.WARNING_MESSAGE
                         );
@@ -1876,10 +1899,10 @@ public class PRPDTool extends JFrame {
                 }
                 if (Math.abs((dfs - fs) / fs) > 1e-8) {
                     fs = dfs;
-                    setParamField("Sampling frequency [Hz]", String.format(Locale.US, "%.6g", fs));
+                    setParamField("Sampling frequency [Hz]", String.format(Locale.US, "%.12g", fs));
                     JOptionPane.showMessageDialog(
                             PRPDTool.this,
-                            "The sampling frequency estimated from data is " + String.format(Locale.US, "%.6g", fs) + " Hz",
+                            "The sampling frequency estimated from data is " + String.format(Locale.US, "%.12g", fs) + " Hz",
                             "Error",
                             JOptionPane.ERROR_MESSAGE
                     );

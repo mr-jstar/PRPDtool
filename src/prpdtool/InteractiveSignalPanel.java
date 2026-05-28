@@ -443,12 +443,12 @@ public class InteractiveSignalPanel extends JPanel {
     private static String formatTick(double value) {
         double abs = Math.abs(value);
         if ((abs > 0.0 && abs < 0.001) || abs >= 10_000.0) {
-            return String.format("%.2e", value);
+            return String.format("%.6e", value);
         }
         if (abs < 10.0) {
-            return String.format("%.4g", value);
+            return String.format("%.8g", value);
         }
-        return String.format("%.0f", value);
+        return String.format("%.8g", value);
     }
 
     private static final class SwingUtilitiesCompat {
