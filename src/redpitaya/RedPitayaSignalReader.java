@@ -12,7 +12,9 @@ import pipeline.SignalReader;
 
 public class RedPitayaSignalReader implements SignalReader, Closeable {
 
-    private static final long SAFE_AXI_USABLE_BYTES = 33_000_000L;
+    private static final long DEFAULT_AXI_USABLE_BYTES = 0x6400000L;
+    private static final String AXI_BYTES_PROPERTY = "prpd.axiDmaBytes";
+    private static final String AXI_BYTES_ENV = "PRPD_AXI_DMA_BYTES";
     private static final int BYTES_PER_SAMPLE = 2;
 
     private final RedPitayaConfig config;
@@ -168,6 +170,7 @@ public class RedPitayaSignalReader implements SignalReader, Closeable {
         fileMetadata.put("duration_s", requestedSamplesPerWindow / config.sampleRate());
         fileMetadata.put("java_chunked_acquisition", requestedSamplesPerWindow > maxSamplesPerAcquisition);
         fileMetadata.put("java_max_samples_per_acquisition", maxSamplesPerAcquisition);
+        fileMetadata.put("java_axi_dma_bytes", configuredAxiUsableBytes());
         Path path = RedPitayaFileWriter.buildOutputPath(saveDirectory.toFile(), fileMetadata);
         writer = new RedPitayaFileWriter(path, fileMetadata);
     }
@@ -201,12 +204,29 @@ public class RedPitayaSignalReader implements SignalReader, Closeable {
 
     private static long maxSamplesPerAcquisition(RedPitayaConfig config) {
         int channelCount = Math.max(1, config.channels.length);
-        long samples = SAFE_AXI_USABLE_BYTES / channelCount / BYTES_PER_SAMPLE;
+        long samples = configuredAxiUsableBytes() / channelCount / BYTES_PER_SAMPLE;
         samples = Math.max(2L, samples);
         if ((samples & 1L) != 0L) {
             samples--;
         }
         return samples;
+    }
+
+    private static long configuredAxiUsableBytes() {
+        String configured = System.getProperty(AXI_BYTES_PROPERTY);
+        if (configured == null || configured.isBlank()) {
+            configured = System.getenv(AXI_BYTES_ENV);
+        }
+        if (configured != null && !configured.isBlank()) {
+            try {
+                long bytes = Long.decode(configured.trim());
+                if (bytes > 0L) {
+                    return bytes;
+                }
+            } catch (NumberFormatException ex) {
+            }
+        }
+        return DEFAULT_AXI_USABLE_BYTES;
     }
 
     private Buffer eofBuffer() {
