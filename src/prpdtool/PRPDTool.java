@@ -41,6 +41,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import pipeline.PRPDExtractorCore;
 import pipeline.PRPDHistogram;
@@ -141,7 +142,7 @@ public class PRPDTool extends JFrame {
 
     private double ampMin = 0.0; // minimum histogramu
     private double ampMax = 0.12; // maximum histogramu
-    private double deadUs = 30; //martwy czas po wykryciu impulsu [µs]
+    private double deadUs = 0; //martwy czas po wykryciu impulsu [µs]
     private double filterQ = 0.707; // Q filtra
     private int filterOrder = 4; // rząd filtra
 
@@ -168,6 +169,8 @@ public class PRPDTool extends JFrame {
 
     // Data
     private InteractiveSignalPanel interactiveSignalPanel;
+    private static final int MAX_CACHED_SIGNAL_SAMPLES = 2_000_000;
+    private final ReceivedSignalCache receivedSignalCache = new ReceivedSignalCache(MAX_CACHED_SIGNAL_SAMPLES);
 
     private String lastDataFile;
     private PRPDHistogram histogram;
@@ -213,6 +216,56 @@ public class PRPDTool extends JFrame {
     private JButton classifyButton;
     private DefaultListModel<File> receivedSignalsModel;
     private JList<File> receivedSignalsList;
+
+    private static final class CachedBuffer {
+
+        final double[] t;
+        final double[] u;
+        final int used;
+
+        CachedBuffer(double[] t, double[] u, int used) {
+            this.t = t;
+            this.u = u;
+            this.used = used;
+        }
+    }
+
+    private static final class ReceivedSignalCache {
+
+        private final int maxSamples;
+        private final ArrayList<CachedBuffer> buffers = new ArrayList<>();
+        private int samples;
+
+        ReceivedSignalCache(int maxSamples) {
+            this.maxSamples = maxSamples;
+        }
+
+        synchronized void reset() {
+            buffers.clear();
+            samples = 0;
+        }
+
+        synchronized void add(Buffer buffer) {
+            if (buffer == null || buffer.used <= 0) {
+                return;
+            }
+            int n = buffer.used;
+            buffers.add(new CachedBuffer(
+                    Arrays.copyOf(buffer.t, n),
+                    Arrays.copyOf(buffer.u, n),
+                    n
+            ));
+            samples += n;
+            while (samples > maxSamples && !buffers.isEmpty()) {
+                CachedBuffer removed = buffers.remove(0);
+                samples -= removed.used;
+            }
+        }
+
+        synchronized List<CachedBuffer> snapshot() {
+            return new ArrayList<>(buffers);
+        }
+    }
 
     private static abstract class Param<T> {
 
@@ -602,7 +655,6 @@ public class PRPDTool extends JFrame {
                         field.setBackground(Color.WHITE);
                         status.setText("Some parameter changes may not have been applied!");
                         paramChange.setText("Param(s) change!");
-                        applyButton.setVisible(true);
                         applyButton.setBackground(Color.red);
                     } catch (NumberFormatException ex) {
                         field.setBackground(new Color(255, 200, 200));
@@ -614,7 +666,7 @@ public class PRPDTool extends JFrame {
                     public void focusLost(java.awt.event.FocusEvent e) {
                         status.setText("Some parameter changes may not have been applied!");
                         paramChange.setText("Param(s) change!");
-                        applyButton.setVisible(true);
+                        applyButton.setBackground(Color.red);
                     }
                 });
                 paramPanel.add(label);
@@ -623,7 +675,6 @@ public class PRPDTool extends JFrame {
             paramChange = new JLabel(" ");
             applyButton = new JButton("APPLY");
             applyButton.addActionListener(e -> onParameterChanged());
-            applyButton.setVisible(false);
             paramPanel.add(paramChange);
             paramPanel.add(applyButton);
             setFontRecursively(paramPanel, currentFont, 0);
@@ -1291,6 +1342,22 @@ public class PRPDTool extends JFrame {
     }
 
     private void rescaleHistogram() {
+        recreateHistogram();
+        if (!realTimeData && lastDataFile != null) {
+            try {
+                getData(lastDataFile);
+            } catch (Exception ex) {
+                status.setText(ex.getMessage());
+            }
+        } else {
+            rebuildHistogramFromCachedSignal();
+        }
+        applyButton.setBackground(UIManager.getColor("Button.background"));
+        paramChange.setText(" ");
+        center.repaint();
+    }
+
+    private void recreateHistogram() {
         double min = bipolarHistogram ? (ampMin == 0 ? -ampMax : ampMin) : ampMin;
         histogram = new DynamicPRPDHistogram(
                 center.getWidth(), center.getHeight(),
@@ -1301,12 +1368,38 @@ public class PRPDTool extends JFrame {
         histogram.drawF0(drawF0);
         center.setImage(histogram.getImage());
         center.revalidate();
-        if (lastDataFile != null) {
-            try {
-                getData(lastDataFile);
-            } catch (Exception ex) {
-                status.setText(ex.getMessage());
+    }
+
+    private void rebuildHistogramFromCachedSignal() {
+        List<CachedBuffer> snapshot = receivedSignalCache.snapshot();
+        if (snapshot.isEmpty()) {
+            center.repaint();
+            status.setText("No cached signal to refresh PRPD.");
+            return;
+        }
+
+        PRPDExtractorCore refreshExtractor = new PRPDExtractorCore(
+                f0,
+                t0,
+                threshold,
+                deadUs,
+                new HighPassFilter(fs, cutF, filterQ, filterOrder)
+        );
+        for (CachedBuffer cached : snapshot) {
+            Buffer buffer = new Buffer(cached.t, cached.u, cached.used, false);
+            buffer.resetForUse(1);
+            buffer.setUsed(cached.used);
+            Pulses pulses = refreshExtractor.extract(buffer);
+            if (pulses.n > 0) {
+                histogram.addPulses(pulses);
             }
+            if (pulses.fs > 0.0 && Double.isFinite(pulses.fs)) {
+                dfs = pulses.fs;
+            }
+        }
+        if (Math.abs((dfs - fs) / fs) > 1e-8) {
+            fs = dfs;
+            setParamField("Sampling frequency [Hz]", String.format(Locale.US, "%.12g", fs));
         }
         center.repaint();
     }
@@ -1532,6 +1625,7 @@ public class PRPDTool extends JFrame {
         realTimeData = false;
         stopPipeline();
         realTimeData = tmp;
+        receivedSignalCache.reset();
         try {
             Thread.sleep(200);
         } catch (InterruptedException ex) {
@@ -1632,6 +1726,7 @@ public class PRPDTool extends JFrame {
         return new PRPDPipelineListener() {
             @Override
             public void bufferRead(Buffer buffer) {
+                receivedSignalCache.add(buffer);
                 if (realTimeData && recordedData != null && recordedData.isOpen()) {
                     if (recordedMB < recordLimit) {
                         try {
@@ -1697,6 +1792,7 @@ public class PRPDTool extends JFrame {
                     );
                 }
                 histogram.addPulses(pulses);
+                center.setImage(histogram.getImage());
                 center.repaint();
             }
 
@@ -1742,6 +1838,7 @@ public class PRPDTool extends JFrame {
         realTimeData = false; // patch - to be corrected!
         stopPipeline();
         realTimeData = tmp;
+        receivedSignalCache.reset();
         try {
             Thread.sleep(200);
         } catch (InterruptedException ex) {
@@ -1841,6 +1938,7 @@ public class PRPDTool extends JFrame {
                 new PRPDPipelineListener() {
             @Override
             public void bufferRead(Buffer buffer) {
+                receivedSignalCache.add(buffer);
                 if (realTimeData && recordedData != null && recordedData.isOpen()) {
                     if (recordedMB < recordLimit) {
                         try {
@@ -1908,6 +2006,7 @@ public class PRPDTool extends JFrame {
                     );
                 }
                 histogram.addPulses(pulses);
+                center.setImage(histogram.getImage());
                 center.repaint();
             }
 
