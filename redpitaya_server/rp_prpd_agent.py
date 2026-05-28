@@ -373,11 +373,14 @@ def run_server(host: str, port: int) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Red Pitaya PRPD acquisition agent")
-    parser.add_argument("--host", default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    parser = argparse.ArgumentParser(description="Red Pitaya PRPD Data Acquisition Agent")
+    parser.add_argument("--bind-address", default="0.0.0.0", 
+                        help="IPv4 address to bind the listening socket to (default: 0.0.0.0 - all interfaces)")
+    parser.add_argument("--listen-port", type=int, default=DEFAULT_PORT, 
+                        help="TCP port to listen for incoming GUI connections")
     args = parser.parse_args()
-    run_server(args.host, args.port)
+    
+    run_server(args.bind_address, args.listen_port)
     return 0
 
 

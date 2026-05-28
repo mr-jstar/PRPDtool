@@ -1,0 +1,28 @@
+[Unit]
+Description=Red Pitaya PRPD Data Acquisition Service
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+(Python działa na pierwszym planie)
+Type=simple
+User=root
+
+WorkingDirectory=/root/wnz
+
+
+ExecStart=/usr/bin/python3 /root/wnz/rp_prpd_agent.py --bind-address 0.0.0.0 --listen-port 9999
+
+
+Restart=on-failure
+
+RestartSec=5s
+
+
+StandardOutput=journal
+StandardError=journal
+
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
