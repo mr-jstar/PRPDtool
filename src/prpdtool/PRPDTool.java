@@ -39,6 +39,8 @@ import java.nio.DoubleBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -170,6 +172,7 @@ public class PRPDTool extends JFrame {
     // Data
     private InteractiveSignalPanel interactiveSignalPanel;
     private static final int MAX_CACHED_SIGNAL_SAMPLES = 2_000_000;
+    private static final long RP_LIVE_RESTART_DELAY_MS = 500L;
     private final ReceivedSignalCache receivedSignalCache = new ReceivedSignalCache(MAX_CACHED_SIGNAL_SAMPLES);
 
     private String lastDataFile;
@@ -209,6 +212,7 @@ public class PRPDTool extends JFrame {
     private JButton startRecordButton;
     private JButton stopRecordButton;
     private FileChannel recordedData;
+    private File recordedFile;
     private int recordLimit = 1024; // Maximal size of the registerd signal (in MB == 1 GB)
     private int recordedMB;
     private JLabel recordSizeLabel;
@@ -588,12 +592,14 @@ public class PRPDTool extends JFrame {
             startRecordButton = new JButton("Start recording");
             startRecordButton.addActionListener(e -> {
                 try {
-                    String recordFileName = getLastUsedDirectory() + File.separator + "recorded_data.bin";
-                    recordedData = new FileOutputStream(new File(recordFileName)).getChannel();
+                    Files.createDirectories(receivedSignalsDir.toPath());
+                    recordedFile = buildReceivedSignalRecordFile();
+                    recordedData = new FileOutputStream(recordedFile).getChannel();
                     recordedMB = 0;
                     stopRecordButton.setEnabled(true);
+                    status.setText("Recording to " + recordedFile.getName());
                 } catch (IOException ex) {
-
+                    status.setText(ex.getMessage());
                 }
             });
             startRecordButton.setEnabled(false);
@@ -1702,7 +1708,15 @@ public class PRPDTool extends JFrame {
         RedPitayaConfig readerConfig = config.copy();
         pipeline = new PRPDPipeline(
                 "RedPitaya",
-                () -> new RedPitayaSignalReader(readerConfig, live, 3, bufferSize),
+                () -> new RedPitayaSignalReader(
+                        readerConfig,
+                        live,
+                        3,
+                        bufferSize,
+                        receivedSignalsDir.toPath(),
+                        this::onRedPitayaCaptureSaved,
+                        RP_LIVE_RESTART_DELAY_MS
+                ),
                 3,
                 bufferSize,
                 2,
@@ -1720,6 +1734,18 @@ public class PRPDTool extends JFrame {
         setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
         signalStart.set(true);
         pipeline.start();
+    }
+
+    private void onRedPitayaCaptureSaved(Path path) {
+        SwingUtilities.invokeLater(() -> {
+            refreshReceivedSignals();
+            status.setText("Saved Red Pitaya signal: " + path.getFileName());
+        });
+    }
+
+    private File buildReceivedSignalRecordFile() {
+        String stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss_SSS"));
+        return new File(receivedSignalsDir, "recorded_" + stamp + ".prpdtool.bin");
     }
 
     private PRPDPipelineListener createPipelineListener(String displayName, String exportName) {
@@ -2132,9 +2158,16 @@ public class PRPDTool extends JFrame {
 
     private void stopRecorder() {
         try {
-            recordedData.close();
+            if (recordedData != null) {
+                recordedData.close();
+            }
+            recordedData = null;
             stopRecordButton.setEnabled(false);
             startRecordButton.setEnabled(true);
+            if (recordedFile != null) {
+                status.setText("Saved recording: " + recordedFile.getName());
+            }
+            refreshReceivedSignals();
         } catch (IOException ex) {
             JOptionPane.showMessageDialog(
                     PRPDTool.this,

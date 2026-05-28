@@ -4,6 +4,8 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.file.Path;
+import java.util.function.Consumer;
 import pipeline.Buffer;
 import pipeline.BufferFactory;
 import pipeline.SignalReader;
@@ -14,15 +16,34 @@ public class RedPitayaSignalReader implements SignalReader, Closeable {
     private final boolean live;
     private final int consumerCount;
     private final int maxSamples;
+    private final Path saveDirectory;
+    private final Consumer<Path> savedCaptureConsumer;
+    private final long liveRestartDelayMillis;
     private RedPitayaSession session;
+    private RedPitayaFileWriter writer;
     private long sampleOffset;
     private volatile boolean closed;
 
     public RedPitayaSignalReader(RedPitayaConfig config, boolean live, int consumerCount, int maxSamples) {
+        this(config, live, consumerCount, maxSamples, null, null, 250L);
+    }
+
+    public RedPitayaSignalReader(
+            RedPitayaConfig config,
+            boolean live,
+            int consumerCount,
+            int maxSamples,
+            Path saveDirectory,
+            Consumer<Path> savedCaptureConsumer,
+            long liveRestartDelayMillis
+    ) {
         this.config = config.copy();
         this.live = live;
         this.consumerCount = consumerCount;
         this.maxSamples = maxSamples;
+        this.saveDirectory = saveDirectory;
+        this.savedCaptureConsumer = savedCaptureConsumer;
+        this.liveRestartDelayMillis = Math.max(0L, liveRestartDelayMillis);
     }
 
     @Override
@@ -30,6 +51,7 @@ public class RedPitayaSignalReader implements SignalReader, Closeable {
         while (!closed) {
             if (session == null) {
                 session = new RedPitayaSession(config);
+                openWriter();
                 if (!live) {
                     sampleOffset = 0;
                 }
@@ -39,12 +61,16 @@ public class RedPitayaSignalReader implements SignalReader, Closeable {
             if (frame == null) {
                 closeSession();
                 if (live) {
+                    sleepBeforeNextLiveWindow();
                     continue;
                 }
                 Buffer eof = BufferFactory.acquire(consumerCount);
                 eof.clear();
                 eof.setEOF();
                 return eof;
+            }
+            if (writer != null) {
+                writer.writeFrame(frame);
             }
             return frameToBuffer(frame);
         }
@@ -84,12 +110,48 @@ public class RedPitayaSignalReader implements SignalReader, Closeable {
     }
 
     private void closeSession() throws IOException {
+        closeWriter();
         if (session != null) {
             try {
                 session.close();
             } finally {
                 session = null;
             }
+        }
+    }
+
+    private void openWriter() throws IOException {
+        if (saveDirectory == null || session == null) {
+            return;
+        }
+        Path path = RedPitayaFileWriter.buildOutputPath(saveDirectory.toFile(), session.metadata());
+        writer = new RedPitayaFileWriter(path, session.metadata());
+    }
+
+    private void closeWriter() throws IOException {
+        if (writer == null) {
+            return;
+        }
+        Path savedPath = writer.path();
+        try {
+            writer.close();
+        } finally {
+            writer = null;
+        }
+        if (savedCaptureConsumer != null && savedPath != null) {
+            savedCaptureConsumer.accept(savedPath);
+        }
+    }
+
+    private void sleepBeforeNextLiveWindow() throws IOException {
+        if (liveRestartDelayMillis <= 0L || closed) {
+            return;
+        }
+        try {
+            Thread.sleep(liveRestartDelayMillis);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted before next live acquisition", ex);
         }
     }
 
