@@ -11,6 +11,7 @@ import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Shape;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
@@ -81,19 +82,21 @@ public class InteractiveSignalPanel extends JPanel {
                     return;
                 }
                 Rectangle plot = plotBounds(Math.max(0, dragPlot));
-                if (dragY && dragPlot >= 0) {
+                double xSpan = dragTMax - dragTMin;
+                double dx = (e.getX() - dragStart.x) * xSpan / Math.max(1, plot.width);
+                if (!dragY) {
+                    viewTMin = dragTMin - dx;
+                    viewTMax = dragTMax - dx;
+                    clampXView();
+                    autoX = false;
+                }
+
+                if (dragPlot >= 0) {
                     double span = dragYMax[dragPlot] - dragYMin[dragPlot];
                     double dy = (e.getY() - dragStart.y) * span / Math.max(1, plot.height);
                     viewYMin[dragPlot] = dragYMin[dragPlot] + dy;
                     viewYMax[dragPlot] = dragYMax[dragPlot] + dy;
                     autoY[dragPlot] = false;
-                } else {
-                    double span = dragTMax - dragTMin;
-                    double dx = (e.getX() - dragStart.x) * span / Math.max(1, plot.width);
-                    viewTMin = dragTMin - dx;
-                    viewTMax = dragTMax - dx;
-                    clampXView();
-                    autoX = false;
                 }
                 repaint();
             }
@@ -358,6 +361,8 @@ public class InteractiveSignalPanel extends JPanel {
         g.drawString(title, plot.x, plot.y - 8);
 
         if (size > 1) {
+            Shape oldClip = g.getClip();
+            g.clipRect(plot.x + 1, plot.y + 1, Math.max(1, plot.width - 1), Math.max(1, plot.height - 1));
             g.setColor(color);
             g.setStroke(new BasicStroke(1.2f));
             int lastX = Integer.MIN_VALUE;
@@ -384,6 +389,7 @@ public class InteractiveSignalPanel extends JPanel {
             if (lastX != Integer.MIN_VALUE) {
                 g.drawLine(lastX, minY, lastX, maxY);
             }
+            g.setClip(oldClip);
         }
         drawAxisLabels(g, plot, plotIndex);
     }
@@ -427,7 +433,7 @@ public class InteractiveSignalPanel extends JPanel {
     }
 
     private void drawInteractionHint(Graphics2D g) {
-        String text = "Wheel: zoom time | Drag: pan time | Shift+wheel: zoom Y | Shift/right drag: pan Y | Double click: reset";
+        String text = "Wheel: zoom time | Drag: pan time + active Y | Shift+wheel: zoom Y | Shift/right drag: pan Y | Double click: reset";
         g.setFont(new Font("Arial", Font.PLAIN, 11));
         FontMetrics fm = g.getFontMetrics();
         g.setColor(new Color(80, 80, 80));

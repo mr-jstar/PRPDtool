@@ -523,7 +523,6 @@ public class PRPDTool extends JFrame {
             splitCenterRight.setDividerLocation(0.8);
 
             initRedPitayaControls();
-            initReceivedSignalsPanel();
             initLegacySocketControls();
 
             JPanel recordPanel = new JPanel();
@@ -581,6 +580,7 @@ public class PRPDTool extends JFrame {
                     false
             );
             bottom.setLayout(new BorderLayout());
+            bottom.add(createReceivedSignalsPanel(), BorderLayout.WEST);
             bottom.add(interactiveSignalPanel, BorderLayout.CENTER);
 
             paramPanel = new JPanel();
@@ -715,12 +715,14 @@ public class PRPDTool extends JFrame {
         left.add(legacyPanel);
     }
 
-    private void initReceivedSignalsPanel() {
+    private JPanel createReceivedSignalsPanel() {
         JPanel panel = new JPanel(new BorderLayout(4, 4));
         panel.setBorder(BorderFactory.createTitledBorder("Received signals"));
+        panel.setPreferredSize(new Dimension(330, 1));
+        panel.setMinimumSize(new Dimension(260, 1));
         receivedSignalsModel = new DefaultListModel<>();
         receivedSignalsList = new JList<>(receivedSignalsModel);
-        receivedSignalsList.setVisibleRowCount(8);
+        receivedSignalsList.setVisibleRowCount(6);
         receivedSignalsList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         receivedSignalsList.setCellRenderer((list, value, index, selected, focus) -> {
             JLabel label = new JLabel(value.getName());
@@ -755,8 +757,8 @@ public class PRPDTool extends JFrame {
 
         panel.add(new JScrollPane(receivedSignalsList), BorderLayout.CENTER);
         panel.add(buttons, BorderLayout.SOUTH);
-        left.add(panel);
         refreshReceivedSignals();
+        return panel;
     }
 
     private void refreshReceivedSignals() {
