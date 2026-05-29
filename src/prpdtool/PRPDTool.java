@@ -1377,8 +1377,18 @@ public class PRPDTool extends JFrame {
             RedPitayaTriggerDialog dialog = new RedPitayaTriggerDialog(this, config, channel);
             dialog.setVisible(true);
             if (dialog.accepted()) {
-                rpTriggerLevelSpinner.setValue(dialog.triggerLevel());
-                status.setText(String.format(Locale.US, "IN%d trigger set to %.9f V", channel, dialog.triggerLevel()));
+                double triggerLevel = dialog.triggerLevel();
+                rpTriggerCombo.setSelectedItem(dialog.triggerSource());
+                rpTriggerLevelSpinner.setValue(triggerLevel);
+                RedPitayaConfig updatedConfig = readRedPitayaConfig();
+                saveRedPitayaConfig(updatedConfig);
+                status.setText(String.format(
+                        Locale.US,
+                        "IN%d trigger set to %.9f V (%s)",
+                        channel,
+                        triggerLevel,
+                        dialog.triggerSource()
+                ));
             }
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, ex.getMessage(), "Red Pitaya trigger", JOptionPane.ERROR_MESSAGE);

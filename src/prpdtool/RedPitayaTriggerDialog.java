@@ -33,6 +33,7 @@ public class RedPitayaTriggerDialog extends JDialog {
     private RedPitayaCapture defect;
     private double[] referenceValues;
     private double[] defectValues;
+    private String recommendedTriggerSource;
     private boolean accepted;
 
     private final JButton referenceButton = new JButton("Start: reference");
@@ -50,6 +51,7 @@ public class RedPitayaTriggerDialog extends JDialog {
     public RedPitayaTriggerDialog(java.awt.Frame owner, RedPitayaConfig config, int channel) {
         super(owner, "IN" + channel + " trigger calibration", true);
         this.channel = channel;
+        this.recommendedTriggerSource = "CH" + channel + "_PE";
         this.baseConfig = config.copy();
         this.baseConfig.channels = new int[]{channel};
         this.baseConfig.visualChannel = channel;
@@ -121,6 +123,14 @@ public class RedPitayaTriggerDialog extends JDialog {
 
     public double triggerLevel() {
         commitTriggerValue();
+        return currentTriggerLevel();
+    }
+
+    public String triggerSource() {
+        return triggerSourceForLevel(currentTriggerLevel(), mode.getSelectedIndex() == 1);
+    }
+
+    private double currentTriggerLevel() {
         return ((Number) triggerValue.getValue()).doubleValue();
     }
 
@@ -195,7 +205,7 @@ public class RedPitayaTriggerDialog extends JDialog {
     private void recompute() {
         boolean signed = mode.getSelectedIndex() == 1;
         ((SpinnerNumberModel) triggerValue.getModel()).setMinimum(signed ? -20.0 : 0.0);
-        if (!signed && triggerLevel() < 0.0) {
+        if (!signed && currentTriggerLevel() < 0.0) {
             triggerValue.setValue(0.0);
         }
 
@@ -213,11 +223,13 @@ public class RedPitayaTriggerDialog extends JDialog {
         }
         if (reference != null && defect != null) {
             TriggerProposal proposal = proposeTrigger(reference.volts(), defect.volts(), signed);
+            recommendedTriggerSource = triggerSourceForProposal(proposal, signed);
             triggerValue.setValue(proposal.value);
             okButton.setEnabled(true);
             stats.setText(String.format(
-                    "proposal=%.9f V | background=%.9f V | defect=%.9f V | polarity=%s",
+                    "proposal=%.9f V | source=%s | background=%.9f V | defect=%.9f V | polarity=%s",
                     proposal.value,
+                    recommendedTriggerSource,
                     proposal.referenceNoise,
                     proposal.defectLevel,
                     proposal.polarity
@@ -248,9 +260,23 @@ public class RedPitayaTriggerDialog extends JDialog {
     }
 
     private void updateTriggerLines() {
-        double value = triggerLevel();
+        double value = currentTriggerLevel();
         referencePlot.setTrigger(value);
         defectPlot.setTrigger(value);
+    }
+
+    private String triggerSourceForProposal(TriggerProposal proposal, boolean signed) {
+        if (signed && "negative".equals(proposal.polarity)) {
+            return "CH" + channel + "_NE";
+        }
+        return "CH" + channel + "_PE";
+    }
+
+    private String triggerSourceForLevel(double level, boolean signed) {
+        if (signed && level < 0.0) {
+            return "CH" + channel + "_NE";
+        }
+        return "CH" + channel + "_PE";
     }
 
     private static TriggerProposal proposeTrigger(double[] referenceRaw, double[] defectRaw, boolean signed) {
