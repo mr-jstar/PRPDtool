@@ -205,6 +205,8 @@ public class PRPDTool extends JFrame {
     private JSpinner rpDurationSpinner;
     private JSpinner rpFrameSizeSpinner;
     private JSpinner rpFrameCountSpinner;
+    private JLabel rpEstimatedSizeLabel;
+    private boolean updatingRedPitayaDerivedFields;
     private JButton rpStartOnceButton;
     private JButton rpStartLiveButton;
     private JButton rpStopButton;
@@ -959,7 +961,9 @@ public class PRPDTool extends JFrame {
         rpModeCombo.setSelectedItem(configValue(RP_MODE, "duration"));
         rpDurationSpinner = new JSpinner(new SpinnerNumberModel(configDouble(RP_DURATION, 0.01), 0.000001, 3600.0, 0.000001));
         rpFrameSizeSpinner = new JSpinner(new SpinnerNumberModel(configInt(RP_FRAME_SIZE, 65_536), 2, BufferFactory.bufferSize(), 2));
-        rpFrameCountSpinner = new JSpinner(new SpinnerNumberModel(configInt(RP_FRAME_COUNT, 1), 1, 1_000_000, 1));
+        rpFrameCountSpinner = new JSpinner(new SpinnerNumberModel(configInt(RP_FRAME_COUNT, 1), 1, Integer.MAX_VALUE, 1));
+        rpEstimatedSizeLabel = new JLabel(" ");
+        rpEstimatedSizeLabel.setForeground(Color.DARK_GRAY);
 
         setIntegerSpinnerEditor(rpPortSpinner);
         setIntegerSpinnerEditor(rpDecimationSpinner);
@@ -986,6 +990,7 @@ public class PRPDTool extends JFrame {
         addFormRow(formPanel, "Duration [s]", rpDurationSpinner, helpText("duration"));
         addFormRow(formPanel, "Frame size", rpFrameSizeSpinner, helpText("frameSize"));
         addFormRow(formPanel, "Frame count", rpFrameCountSpinner, helpText("frameCount"));
+        updateRedPitayaEstimateFont();
 
         rpTriggerIn1Button = new JButton("Auto trigger IN1");
         rpTriggerIn1Button.setToolTipText(htmlTooltip(helpText("autoTriggerIn1")));
@@ -1027,12 +1032,21 @@ public class PRPDTool extends JFrame {
         gbc.gridwidth = 2;
         actions.add(rpStopButton, gbc);
 
-        rpPanel.add(formPanel, BorderLayout.CENTER);
+        JPanel formWithEstimate = new JPanel(new BorderLayout(0, 2));
+        formWithEstimate.add(formPanel, BorderLayout.CENTER);
+        rpEstimatedSizeLabel.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
+        formWithEstimate.add(rpEstimatedSizeLabel, BorderLayout.SOUTH);
+
+        rpPanel.add(formWithEstimate, BorderLayout.CENTER);
         rpPanel.add(actions, BorderLayout.SOUTH);
         left.add(rpPanel);
 
         rpChannelsCombo.addActionListener(e -> updateRedPitayaChannelControls());
         rpModeCombo.addActionListener(e -> updateRedPitayaModeControls());
+        rpDecimationSpinner.addChangeListener(e -> updateRedPitayaDerivedControls());
+        rpDurationSpinner.addChangeListener(e -> updateRedPitayaDerivedControls());
+        rpFrameSizeSpinner.addChangeListener(e -> updateRedPitayaDerivedControls());
+        rpFrameCountSpinner.addChangeListener(e -> updateRedPitayaDerivedControls());
         updateRedPitayaChannelControls();
         updateRedPitayaModeControls();
     }
@@ -1258,15 +1272,66 @@ public class PRPDTool extends JFrame {
         if (selectedVisual != null) {
             rpVisualChannelCombo.setSelectedItem(selectedVisual);
         }
+        updateRedPitayaDerivedControls();
     }
 
     private void updateRedPitayaModeControls() {
         boolean duration = "duration".equals(rpModeCombo.getSelectedItem());
         rpDurationSpinner.setEnabled(duration);
         rpFrameCountSpinner.setEnabled(!duration);
+        updateRedPitayaDerivedControls();
+    }
+
+    private void updateRedPitayaDerivedControls() {
+        if (updatingRedPitayaDerivedFields || rpEstimatedSizeLabel == null) {
+            return;
+        }
+        updatingRedPitayaDerivedFields = true;
+        try {
+            boolean durationMode = "duration".equals(rpModeCombo.getSelectedItem());
+            int decimation = Math.max(1, spinnerIntValue(rpDecimationSpinner));
+            double sampleRate = RedPitayaConfig.ADC_BASE_RATE / decimation;
+            int frameSize = normalizedEven(Math.max(1, spinnerIntValue(rpFrameSizeSpinner)));
+            long frameCount;
+            long totalSamples;
+            double durationS;
+
+            if (durationMode) {
+                durationS = Math.max(0.0, spinnerDoubleValue(rpDurationSpinner));
+                totalSamples = normalizedEven(Math.max(1L, Math.round(durationS * sampleRate)));
+                frameCount = ceilDiv(totalSamples, frameSize);
+                setSpinnerLongValue(rpFrameCountSpinner, frameCount);
+            } else {
+                frameCount = Math.max(1L, spinnerIntValue(rpFrameCountSpinner));
+                totalSamples = normalizedEven((long) frameSize * frameCount);
+                durationS = totalSamples / sampleRate;
+                setSpinnerDoubleValue(rpDurationSpinner, durationS);
+            }
+
+            int channelCount = redPitayaChannelCount();
+            long payloadBytes = multiplySaturating(multiplySaturating(totalSamples, channelCount), 2L);
+            long frameHeaderBytes = multiplySaturating(frameCount, 34L);
+            long approximateFileBytes = addSaturating(addSaturating(payloadBytes, frameHeaderBytes), 4096L);
+
+            rpEstimatedSizeLabel.setText(String.format(
+                    Locale.US,
+                    "<html>Approx. file/data: %s<br>Samples: %s | Frames: %s | %d ch | fs=%.6g Hz</html>",
+                    formatBytes(approximateFileBytes),
+                    formatInteger(totalSamples),
+                    formatInteger(frameCount),
+                    channelCount,
+                    sampleRate
+            ));
+            updateRedPitayaEstimateFont();
+        } catch (Exception ex) {
+            rpEstimatedSizeLabel.setText("Approx. file/data size: unavailable");
+        } finally {
+            updatingRedPitayaDerivedFields = false;
+        }
     }
 
     private RedPitayaConfig readRedPitayaConfig() {
+        updateRedPitayaDerivedControls();
         commitRedPitayaSpinnerEdits();
         RedPitayaConfig config = new RedPitayaConfig();
         config.host = rpHostField.getText().trim();
@@ -1345,6 +1410,86 @@ public class PRPDTool extends JFrame {
     private int spinnerIntValue(JSpinner spinner) {
         commitSpinnerEdit(spinner);
         return ((Number) spinner.getValue()).intValue();
+    }
+
+    private int normalizedEven(int value) {
+        int normalized = Math.max(1, value);
+        return (normalized & 1) == 0 ? normalized : normalized + 1;
+    }
+
+    private long normalizedEven(long value) {
+        long normalized = Math.max(1L, value);
+        return (normalized & 1L) == 0L ? normalized : normalized + 1L;
+    }
+
+    private long ceilDiv(long a, long b) {
+        return (a + b - 1L) / b;
+    }
+
+    private int redPitayaChannelCount() {
+        String channels = (String) rpChannelsCombo.getSelectedItem();
+        return "IN1+IN2".equals(channels) ? 2 : 1;
+    }
+
+    private void setSpinnerLongValue(JSpinner spinner, long value) {
+        long bounded = Math.max(1L, Math.min(Integer.MAX_VALUE, value));
+        spinner.setValue((int) bounded);
+    }
+
+    private void setSpinnerDoubleValue(JSpinner spinner, double value) {
+        if (spinner.getModel() instanceof SpinnerNumberModel model) {
+            Comparable<?> min = model.getMinimum();
+            Comparable<?> max = model.getMaximum();
+            if (min instanceof Number number && value < number.doubleValue()) {
+                model.setMinimum(value);
+            }
+            if (max instanceof Number number && value > number.doubleValue()) {
+                model.setMaximum(value);
+            }
+        }
+        spinner.setValue(value);
+    }
+
+    private long multiplySaturating(long a, long b) {
+        if (a == 0L || b == 0L) {
+            return 0L;
+        }
+        if (a > Long.MAX_VALUE / b) {
+            return Long.MAX_VALUE;
+        }
+        return a * b;
+    }
+
+    private long addSaturating(long a, long b) {
+        if (Long.MAX_VALUE - a < b) {
+            return Long.MAX_VALUE;
+        }
+        return a + b;
+    }
+
+    private String formatInteger(long value) {
+        return String.format(Locale.US, "%,d", value);
+    }
+
+    private String formatBytes(long bytes) {
+        String[] units = {"B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"};
+        double value = bytes;
+        int unit = 0;
+        while (value >= 1024.0 && unit < units.length - 1) {
+            value /= 1024.0;
+            unit++;
+        }
+        if (unit == 0) {
+            return String.format(Locale.US, "%d %s", bytes, units[unit]);
+        }
+        return String.format(Locale.US, value < 10.0 ? "%.2f %s" : "%.1f %s", value, units[unit]);
+    }
+
+    private void updateRedPitayaEstimateFont() {
+        if (rpEstimatedSizeLabel != null) {
+            float size = Math.max(9.0f, currentFont.getSize2D() - 3.0f);
+            rpEstimatedSizeLabel.setFont(currentFont.deriveFont(size));
+        }
     }
 
     private void saveRedPitayaConfig(RedPitayaConfig config) {
@@ -1496,6 +1641,7 @@ public class PRPDTool extends JFrame {
     // Helper -sets font
     private void setCurrentFont() {
         setFontRecursively(this, currentFont, 0);
+        updateRedPitayaEstimateFont();
         UIManager.put("OptionPane.messageFont", currentFont);
         UIManager.put("OptionPane.buttonFont", currentFont);
         UIManager.put("OptionPane.messageFont", currentFont);
