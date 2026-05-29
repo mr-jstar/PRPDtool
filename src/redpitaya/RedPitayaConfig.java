@@ -8,6 +8,8 @@ public class RedPitayaConfig {
 
     public static final double ADC_BASE_RATE = 125_000_000.0;
     public static final String BOARD_MODEL = "STEMlab 125-14 Pro Z7020 Gen 2";
+    private static final double TRIGGER_CALIBRATION_DURATION_S = 0.02;
+    private static final long TRIGGER_CALIBRATION_MAX_SAMPLES = 5_000_000L;
 
     public String host = "rp-f0f84e.local";
     public int port = 9999;
@@ -48,11 +50,27 @@ public class RedPitayaConfig {
     }
 
     public RedPitayaConfig forTriggerCalibration() {
+        return forTriggerCalibration(1);
+    }
+
+    public RedPitayaConfig forTriggerCalibration(int channel) {
         RedPitayaConfig c = copy();
-        c.channels = new int[]{1};
-        c.visualChannel = 1;
+        int calibrationChannel = channel == 2 ? 2 : 1;
+        c.channels = new int[]{calibrationChannel};
+        c.visualChannel = calibrationChannel;
         c.triggerSource = "NOW";
         c.triggerLevel = 0.0;
+        c.triggerDelay = 0;
+        c.durationMode = true;
+        long requestedSamples = totalSamples();
+        long calibrationSamples = Math.round(c.sampleRate() * TRIGGER_CALIBRATION_DURATION_S);
+        long cappedSamples = Math.min(requestedSamples, Math.min(calibrationSamples, TRIGGER_CALIBRATION_MAX_SAMPLES));
+        cappedSamples = Math.max(2L, cappedSamples);
+        if ((cappedSamples & 1L) != 0L) {
+            cappedSamples++;
+        }
+        c.durationS = cappedSamples / c.sampleRate();
+        c.frameCount = c.normalizedFrameCount();
         return c;
     }
 

@@ -52,11 +52,7 @@ public class RedPitayaTriggerDialog extends JDialog {
         super(owner, "IN" + channel + " trigger calibration", true);
         this.channel = channel;
         this.recommendedTriggerSource = "CH" + channel + "_PE";
-        this.baseConfig = config.copy();
-        this.baseConfig.channels = new int[]{channel};
-        this.baseConfig.visualChannel = channel;
-        this.baseConfig.triggerSource = "NOW";
-        this.baseConfig.triggerLevel = 0.0;
+        this.baseConfig = config.forTriggerCalibration(channel);
         this.acquisitionDurationS = Math.max(1.0e-9, this.baseConfig.normalizedDurationS());
         setSize(1100, 800);
         setLocationRelativeTo(owner);

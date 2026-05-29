@@ -1289,20 +1289,20 @@ public class PRPDTool extends JFrame {
         updatingRedPitayaDerivedFields = true;
         try {
             boolean durationMode = "duration".equals(rpModeCombo.getSelectedItem());
-            int decimation = Math.max(1, spinnerIntValue(rpDecimationSpinner));
+            int decimation = Math.max(1, currentSpinnerIntValue(rpDecimationSpinner));
             double sampleRate = RedPitayaConfig.ADC_BASE_RATE / decimation;
-            int frameSize = normalizedEven(Math.max(1, spinnerIntValue(rpFrameSizeSpinner)));
+            int frameSize = normalizedEven(Math.max(1, currentSpinnerIntValue(rpFrameSizeSpinner)));
             long frameCount;
             long totalSamples;
             double durationS;
 
             if (durationMode) {
-                durationS = Math.max(0.0, spinnerDoubleValue(rpDurationSpinner));
+                durationS = Math.max(0.0, currentSpinnerDoubleValue(rpDurationSpinner));
                 totalSamples = normalizedEven(Math.max(1L, Math.round(durationS * sampleRate)));
                 frameCount = ceilDiv(totalSamples, frameSize);
                 setSpinnerLongValue(rpFrameCountSpinner, frameCount);
             } else {
-                frameCount = Math.max(1L, spinnerIntValue(rpFrameCountSpinner));
+                frameCount = Math.max(1L, currentSpinnerIntValue(rpFrameCountSpinner));
                 totalSamples = normalizedEven((long) frameSize * frameCount);
                 durationS = totalSamples / sampleRate;
                 setSpinnerDoubleValue(rpDurationSpinner, durationS);
@@ -1331,8 +1331,8 @@ public class PRPDTool extends JFrame {
     }
 
     private RedPitayaConfig readRedPitayaConfig() {
-        updateRedPitayaDerivedControls();
         commitRedPitayaSpinnerEdits();
+        updateRedPitayaDerivedControls();
         RedPitayaConfig config = new RedPitayaConfig();
         config.host = rpHostField.getText().trim();
         config.port = spinnerIntValue(rpPortSpinner);
@@ -1409,6 +1409,14 @@ public class PRPDTool extends JFrame {
 
     private int spinnerIntValue(JSpinner spinner) {
         commitSpinnerEdit(spinner);
+        return ((Number) spinner.getValue()).intValue();
+    }
+
+    private double currentSpinnerDoubleValue(JSpinner spinner) {
+        return ((Number) spinner.getValue()).doubleValue();
+    }
+
+    private int currentSpinnerIntValue(JSpinner spinner) {
         return ((Number) spinner.getValue()).intValue();
     }
 
