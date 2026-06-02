@@ -27,6 +27,47 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
     private Font font = new Font("Arial", Font.PLAIN, 13);
     private Font bigFont = new Font("Arial", Font.BOLD, 16);
 
+    private double zoomY = 1.0;
+    private double offsetY = 0.0;
+    private double zoomX = 1.0;
+    private double offsetX = 0.0;
+
+    public double getZoomY() {
+        return zoomY;
+    }
+
+    public void setZoomY(double zoomY) {
+        this.zoomY = zoomY;
+        redraw();
+    }
+
+    public double getOffsetY() {
+        return offsetY;
+    }
+
+    public void setOffsetY(double offsetY) {
+        this.offsetY = offsetY;
+        redraw();
+    }
+
+    public double getZoomX() {
+        return zoomX;
+    }
+
+    public void setZoomX(double zoomX) {
+        this.zoomX = zoomX;
+        redraw();
+    }
+
+    public double getOffsetX() {
+        return offsetX;
+    }
+
+    public void setOffsetX(double offsetX) {
+        this.offsetX = offsetX;
+        redraw();
+    }
+
     private boolean addF0;
 
     private ArrayList<Label> labels = new ArrayList<>();
@@ -188,15 +229,25 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
 
         g.setColor(Color.BLACK);
         g.fillRect(left, top, plotW, plotH);
+        
+        g.setClip(left, top, plotW, plotH);
 
         if (addF0) {
-            int yp = top + plotH / 2;
-            for (int x = left + 1; x < plotW + left; x++) {
-                double ph = 2 * Math.PI * (x - left) / plotW;
-                int y = top + plotH / 2 - (int) (plotH / 4 * Math.sin(ph));
-                g.setColor(Color.gray);
-                g.drawLine(x - 1, yp, x, y);
-                yp = y;
+            Integer last_y = null;
+            for (int x = left; x <= left + plotW; x++) {
+                double bx = (x - left - offsetX) / zoomX;
+                if (bx >= 0 && bx <= plotW) {
+                    double ph = 2 * Math.PI * bx / plotW;
+                    int baseY = top + plotH / 2 - (int) (plotH / 4 * Math.sin(ph));
+                    int y = (int) ((baseY - (top + plotH)) * zoomY + (top + plotH) + offsetY);
+                    if (last_y != null) {
+                        g.setColor(Color.gray);
+                        g.drawLine(x - 1, last_y, x, y);
+                    }
+                    last_y = y;
+                } else {
+                    last_y = null;
+                }
             }
         }
 
@@ -213,16 +264,24 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
                 // <0,maxCount> -> log -> <0,1>
                 double v = Math.log1p(c) / Math.log1p((double) data.getMaxCount());
 
-                int x0 = left + (int) Math.floor(xb * plotW / (double) binsPhase);
-                int x1 = left + (int) Math.floor((xb + 1) * plotW / (double) binsPhase);
+                int baseX0 = left + (int) Math.floor(xb * plotW / (double) binsPhase);
+                int baseX1 = left + (int) Math.floor((xb + 1) * plotW / (double) binsPhase);
+                
+                int x0 = (int) ((baseX0 - left) * zoomX + left + offsetX);
+                int x1 = (int) ((baseX1 - left) * zoomX + left + offsetX);
 
-                int y0 = top + plotH - (int) Math.floor((yb + 1) * plotH / (double) binsAmp);
-                int y1 = top + plotH - (int) Math.floor(yb * plotH / (double) binsAmp);
+                int baseY0 = top + plotH - (int) Math.floor((yb + 1) * plotH / (double) binsAmp);
+                int baseY1 = top + plotH - (int) Math.floor(yb * plotH / (double) binsAmp);
+                
+                int y0 = (int) ((baseY0 - (top + plotH)) * zoomY + (top + plotH) + offsetY);
+                int y1 = (int) ((baseY1 - (top + plotH)) * zoomY + (top + plotH) + offsetY);
 
                 g.setColor(heatColor(v));
                 g.fillRect(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
             }
         }
+
+        g.setClip(null);
 
         for (Label l : labels) {
             g.setColor(l.getColor());
@@ -262,18 +321,22 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
 
         g.setFont(font);
 
-        // Osie
-        for (int deg = 0; deg <= 360; deg += 60) {
-            int x = left + (int) Math.round(deg / 360.0 * plotW);
+        // Osie X
+        for (int i = 0; i <= 6; i++) {
+            int x = left + (int) Math.round(i / 6.0 * plotW);
+            double x_old = left + (x - left - offsetX) / zoomX;
+            double val = (x_old - left) / (double)plotW * 360.0;
             g.drawLine(x, top + plotH, x, top + plotH + 5);
-            g.drawString(Integer.toString(deg), x - 10, top + plotH + 22);
+            g.drawString(String.format(Locale.US, "%.1f", val), x - 15, top + plotH + 22);
         }
 
         double delta = data.getMax() - data.getMin();
         double min = data.getMin();
         for (int i = 0; i <= 4; i++) {
-            double val = min + i * delta / 4.0;
             int y = top + plotH - (int) Math.round(i / 4.0 * plotH);
+            
+            double y_old = (top + plotH) + (y - (top + plotH) - offsetY) / zoomY;
+            double val = min + ((top + plotH) - y_old) / (double)plotH * delta;
 
             g.drawLine(left - 5, y, left, y);
             g.drawString(String.format(Locale.US, "%.3f", val), 25, y + 5);
