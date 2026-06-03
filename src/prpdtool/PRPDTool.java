@@ -662,9 +662,23 @@ public class PRPDTool extends JFrame {
             paramPanel.add(status);
 
             for (Param p : params) {
+                JPanel labelPanel = new JPanel(new BorderLayout(4, 0));
+                labelPanel.setOpaque(false);
                 JLabel label = new JLabel(p.name);
+                String tooltipText = paramHelpText(p.name);
+                label.setToolTipText(tooltipText);
+                
+                JLabel help = new JLabel(new HelpIcon());
+                help.setToolTipText(htmlTooltip(tooltipText));
+                help.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+                help.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
+                
+                labelPanel.add(label, BorderLayout.CENTER);
+                labelPanel.add(help, BorderLayout.EAST);
+
                 JTextField field = new JTextField(p.getText(), 8);
                 p.setField(field);
+                field.setToolTipText(tooltipText);
                 field.addActionListener(e -> {
                     try {
                         p.setFromText(field.getText());
@@ -685,7 +699,7 @@ public class PRPDTool extends JFrame {
                         applyButton.setBackground(Color.red);
                     }
                 });
-                paramPanel.add(label);
+                paramPanel.add(labelPanel);
                 paramPanel.add(field);
             }
             paramChange = new JLabel(" ");
@@ -1094,12 +1108,10 @@ public class PRPDTool extends JFrame {
         labelPanel.setOpaque(false);
         JLabel labelComponent = new JLabel(label);
         labelComponent.setToolTipText(tooltip);
-        JButton help = new JButton();
-        help.setText("?");
+        JLabel help = new JLabel(new HelpIcon());
         help.setToolTipText(htmlTooltip(tooltip));
-        help.setFocusable(false);
-        help.setMargin(new Insets(0, 4, 0, 4));
-        help.setPreferredSize(new Dimension(22, 22));
+        help.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+        help.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
         component.setToolTipText(tooltip);
         labelPanel.add(labelComponent, BorderLayout.CENTER);
         labelPanel.add(help, BorderLayout.EAST);
@@ -1239,6 +1251,62 @@ public class PRPDTool extends JFrame {
             default ->
                 "";
         };
+    }
+
+    private String paramHelpText(String key) {
+        return switch (key) {
+            case "Basic frequency [Hz]" ->
+                "Base frequency of the AC power system (e.g., 50.0 Hz or 60.0 Hz).\n"
+                + "Used to determine the period for phase-resolved partial discharge patterns.";
+            case "Zero-crossing instant" ->
+                "Phase shift or time offset to align the start of the PRPD pattern\n"
+                + "with the true zero-crossing of the AC voltage wave.";
+            case "Sampling frequency [Hz]" ->
+                "The rate at which the signal is sampled by the ADC.\n"
+                + "Must match the actual acquisition rate (e.g., 1000000.0 for 1 MS/s).";
+            case "Pulse ampl. threshold" ->
+                "Minimum amplitude for a peak to be considered a valid partial discharge pulse.\n"
+                + "Peaks below this threshold are ignored as background noise.";
+            case "Dead time [us]" ->
+                "Minimum time required between consecutive pulses.\n"
+                + "Prevents multiple detections from a single oscillating or ringing pulse.";
+            case "HPF cutoff frequency [Hz]" ->
+                "Cutoff frequency for the High-Pass Filter (HPF).\n"
+                + "Filters out the low-frequency AC voltage component and baseline wander.";
+            case "Filter Q" ->
+                "Quality factor of the filter.\n"
+                + "Determines the sharpness and damping of the filter's frequency response.";
+            case "Filter Order" ->
+                "The number of poles in the filter.\n"
+                + "Higher order means steeper roll-off but requires more computational power.";
+            case "Histogram min" ->
+                "Minimum amplitude displayed on the Y-axis of the PRPD histogram.";
+            case "Histogram max" ->
+                "Maximum amplitude displayed on the Y-axis of the PRPD histogram.";
+            default ->
+                "";
+        };
+    }
+
+    private static class HelpIcon implements javax.swing.Icon {
+        @Override
+        public void paintIcon(Component c, Graphics g, int x, int y) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(new Color(150, 150, 150));
+            g2.fillOval(x, y, getIconWidth(), getIconHeight());
+            g2.setColor(Color.WHITE);
+            g2.setFont(new Font("SansSerif", Font.BOLD, 12));
+            FontMetrics fm = g2.getFontMetrics();
+            int textWidth = fm.stringWidth("?");
+            int textHeight = fm.getAscent();
+            g2.drawString("?", x + (getIconWidth() - textWidth) / 2, y + (getIconHeight() + textHeight) / 2 - 2);
+            g2.dispose();
+        }
+        @Override
+        public int getIconWidth() { return 18; }
+        @Override
+        public int getIconHeight() { return 18; }
     }
 
     private String htmlTooltip(String text) {
