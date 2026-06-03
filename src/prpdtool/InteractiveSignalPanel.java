@@ -23,11 +23,11 @@ public class InteractiveSignalPanel extends JPanel {
 
     private static final int MAX_POINTS = 700_000;
     private static final int TARGET_POINTS_PER_BUFFER = 25_000;
-    private static final int LEFT = 72;
+    private static final int LEFT = 110;
     private static final int RIGHT = 18;
     private static final int TOP = 28;
     private static final int BOTTOM = 45;
-    private static final int GAP = 18;
+    private static final int GAP = 45;
 
     private String upperTitle = "Signal envelope";
     private String lowerTitle = "Filtered signal";
@@ -244,6 +244,12 @@ public class InteractiveSignalPanel extends JPanel {
             min = -1.0;
             max = 1.0;
         }
+        if (min > 0.0) {
+            min = 0.0;
+        }
+        if (max < 0.0) {
+            max = 0.0;
+        }
         if (max <= min) {
             max = min + 1.0;
         }
@@ -413,9 +419,28 @@ public class InteractiveSignalPanel extends JPanel {
             double value = viewYMin[plotIndex] + r * (viewYMax[plotIndex] - viewYMin[plotIndex]);
             g.setColor(new Color(230, 230, 230));
             g.drawLine(plot.x, y, plot.x + plot.width, y);
+            
+            boolean skipLabel = false;
+            if (viewYMin[plotIndex] < 0 && viewYMax[plotIndex] > 0) {
+                double range = viewYMax[plotIndex] - viewYMin[plotIndex];
+                if (Math.abs(value) < range * 0.05) {
+                    skipLabel = true;
+                }
+            }
+            if (!skipLabel) {
+                g.setColor(Color.BLACK);
+                String text = formatTick(value);
+                g.drawString(text, plot.x - fm.stringWidth(text) - 8, y + 4);
+            }
+        }
+        
+        if (viewYMin[plotIndex] <= 0.0 && viewYMax[plotIndex] >= 0.0) {
+            int y0 = plot.y + plot.height - (int) Math.round((0.0 - viewYMin[plotIndex]) / (viewYMax[plotIndex] - viewYMin[plotIndex]) * plot.height);
+            g.setColor(new Color(255, 140, 0));
+            g.drawLine(plot.x, y0, plot.x + plot.width, y0);
             g.setColor(Color.BLACK);
-            String text = formatTick(value);
-            g.drawString(text, plot.x - fm.stringWidth(text) - 8, y + 4);
+            String text = "0";
+            g.drawString(text, plot.x - fm.stringWidth(text) - 8, y0 + 4);
         }
     }
 
@@ -425,10 +450,10 @@ public class InteractiveSignalPanel extends JPanel {
         String xLabel = "Time [s]";
         g.setColor(Color.BLACK);
         g.drawString(xLabel, plot.x + plot.width / 2 - fm.stringWidth(xLabel) / 2, plot.y + plot.height + 34);
-        String yLabel = "Amplitude";
+        String yLabel = "Amplitude [ADC]";
         Graphics2D copy = (Graphics2D) g.create();
         copy.rotate(-Math.PI / 2);
-        copy.drawString(yLabel, -(plot.y + plot.height / 2 + fm.stringWidth(yLabel) / 2), 18);
+        copy.drawString(yLabel, -(plot.y + plot.height / 2 + fm.stringWidth(yLabel) / 2), 22);
         copy.dispose();
     }
 
@@ -441,14 +466,13 @@ public class InteractiveSignalPanel extends JPanel {
     }
 
     private static String formatTick(double value) {
-        double abs = Math.abs(value);
-        if ((abs > 0.0 && abs < 0.001) || abs >= 10_000.0) {
-            return String.format("%.6e", value);
+        if (Math.abs(value) < 1e-12) return "0";
+        String s = String.format(java.util.Locale.US, "%.4g", value);
+        if (s.contains("e") || s.contains("E")) return s;
+        if (s.indexOf('.') > 0) {
+            s = s.replaceAll("0*$", "").replaceAll("\\.$", "");
         }
-        if (abs < 10.0) {
-            return String.format("%.8g", value);
-        }
-        return String.format("%.8g", value);
+        return s;
     }
 
     private static final class SwingUtilitiesCompat {
