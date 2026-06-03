@@ -186,6 +186,7 @@ public class PRPDTool extends JFrame {
     private JLabel paramChange;
     private JButton applyButton;
     private JCheckBox autoscaleCb;
+    private JCheckBox showRawDataCb;
 
     private JTextField dataServer;
     private JButton startBtn;
@@ -631,6 +632,10 @@ public class PRPDTool extends JFrame {
                     bipolarHistogram
             );
             histogram.drawF0(drawF0);
+            ((DynamicPRPDHistogram) histogram).setDisplayThreshold(threshold);
+            if (showRawDataCb != null) {
+                ((DynamicPRPDHistogram) histogram).setShowRawData(showRawDataCb.isSelected());
+            }
             center.setHistogram((DynamicPRPDHistogram) histogram);
             if (autoscaleCb != null && autoscaleCb.isSelected()) { applyAutoscale(); } else { center.setImage(histogram.getImage()); }
             center.revalidate();
@@ -690,8 +695,21 @@ public class PRPDTool extends JFrame {
             paramPanel.add(applyButton);
 
             autoscaleCb = new JCheckBox("Autoscale PRPD", true);
+            autoscaleCb.addActionListener(e -> {
+                if (autoscaleCb.isSelected()) {
+                    applyAutoscale();
+                }
+            });
             paramPanel.add(autoscaleCb);
-            paramPanel.add(new JLabel("")); // fill grid
+            
+            showRawDataCb = new JCheckBox("Show Raw Data", false);
+            showRawDataCb.addActionListener(e -> {
+                if (histogram instanceof DynamicPRPDHistogram) {
+                    ((DynamicPRPDHistogram) histogram).setShowRawData(showRawDataCb.isSelected());
+                    center.setImage(histogram.getImage());
+                }
+            });
+            paramPanel.add(showRawDataCb);
 
             center.setResetAction(() -> {
                 autoscaleCb.setSelected(true);
@@ -1608,6 +1626,10 @@ public class PRPDTool extends JFrame {
                 bipolarHistogram
         );
         histogram.drawF0(drawF0);
+        ((DynamicPRPDHistogram) histogram).setDisplayThreshold(threshold);
+        if (showRawDataCb != null) {
+            ((DynamicPRPDHistogram) histogram).setShowRawData(showRawDataCb.isSelected());
+        }
         center.setHistogram((DynamicPRPDHistogram) histogram);
         if (autoscaleCb != null && autoscaleCb.isSelected()) { applyAutoscale(); } else { center.setImage(histogram.getImage()); }
         center.revalidate();
@@ -1624,7 +1646,7 @@ public class PRPDTool extends JFrame {
         PRPDExtractorCore refreshExtractor = new PRPDExtractorCore(
                 f0,
                 t0,
-                threshold,
+                0.0,
                 deadUs,
                 new HighPassFilter(fs, cutF, filterQ, filterOrder)
         );
@@ -1643,6 +1665,9 @@ public class PRPDTool extends JFrame {
         if (Math.abs((dfs - fs) / fs) > 1e-8) {
             fs = dfs;
             setParamField("Sampling frequency [Hz]", String.format(Locale.US, "%.12g", fs));
+        }
+        if (histogram instanceof pipeline.DynamicPRPDHistogram) {
+            ((pipeline.DynamicPRPDHistogram) histogram).forceRedraw();
         }
         center.repaint();
     }
@@ -1804,10 +1829,13 @@ public class PRPDTool extends JFrame {
         }
         try {
             if (pipeline != null) {
-                pipeline.setThreshold(Double.parseDouble(getParamField("Pulse ampl. threshold")));
+                pipeline.setThreshold(0.0);
             }
         } catch (Exception ex) {
             setParamField("Pulse ampl. threshold", "" + DEFAULT_THRESHOLD);
+        }
+        if (histogram instanceof DynamicPRPDHistogram) {
+            ((DynamicPRPDHistogram) histogram).setDisplayThreshold(threshold);
         }
         rescaleHistogram();
     }
@@ -1920,6 +1948,10 @@ public class PRPDTool extends JFrame {
                 bipolarHistogram
         );
         histogram.drawF0(drawF0);
+        ((DynamicPRPDHistogram) histogram).setDisplayThreshold(threshold);
+        if (showRawDataCb != null) {
+            ((DynamicPRPDHistogram) histogram).setShowRawData(showRawDataCb.isSelected());
+        }
         center.setHistogram((DynamicPRPDHistogram) histogram);
         if (autoscaleCb != null && autoscaleCb.isSelected()) { applyAutoscale(); } else { center.setImage(histogram.getImage()); }
         center.revalidate();
@@ -1938,7 +1970,7 @@ public class PRPDTool extends JFrame {
         extractor = new PRPDExtractorCore(
                 f0,
                 t0,
-                threshold,
+                0.0,
                 deadUs,
                 hfFilter
         );
@@ -1989,6 +2021,8 @@ public class PRPDTool extends JFrame {
 
     private PRPDPipelineListener createPipelineListener(String displayName, String exportName) {
         return new PRPDPipelineListener() {
+            private long lastPaintTime = 0;
+            
             @Override
             public void bufferRead(Buffer buffer) {
                 receivedSignalCache.add(buffer);
@@ -2058,16 +2092,34 @@ public class PRPDTool extends JFrame {
                 }
                 histogram.addPulses(pulses);
                 
-                if (autoscaleCb.isSelected()) {
-                    applyAutoscale();
-                } else {
-                    center.setImage(histogram.getImage());
+                long now = System.currentTimeMillis();
+                if (now - lastPaintTime > 100) {
+                    if (autoscaleCb.isSelected()) {
+                        applyAutoscale();
+                    } else {
+                        if (histogram instanceof pipeline.DynamicPRPDHistogram) {
+                            ((pipeline.DynamicPRPDHistogram) histogram).forceRedraw();
+                        }
+                        center.setImage(histogram.getImage());
+                    }
+                    center.repaint();
+                    lastPaintTime = now;
                 }
-                center.repaint();
             }
 
             @Override
             public void finished() {
+                // Ensure final redraw completes
+                if (autoscaleCb.isSelected()) {
+                    applyAutoscale();
+                } else {
+                    if (histogram instanceof pipeline.DynamicPRPDHistogram) {
+                        ((pipeline.DynamicPRPDHistogram) histogram).forceRedraw();
+                    }
+                    center.setImage(histogram.getImage());
+                }
+                center.repaint();
+
                 if (inBatchMode) {
                     exportPRPD4YOLO(exportName);
                     System.out.println("..." + exportName + " finished.");
@@ -2175,6 +2227,10 @@ public class PRPDTool extends JFrame {
                 bipolarHistogram
         );
         histogram.drawF0(drawF0);
+        ((DynamicPRPDHistogram) histogram).setDisplayThreshold(threshold);
+        if (showRawDataCb != null) {
+            ((DynamicPRPDHistogram) histogram).setShowRawData(showRawDataCb.isSelected());
+        }
         center.setHistogram((DynamicPRPDHistogram) histogram);
         if (autoscaleCb != null && autoscaleCb.isSelected()) { applyAutoscale(); } else { center.setImage(histogram.getImage()); }
         center.revalidate();
@@ -2193,7 +2249,7 @@ public class PRPDTool extends JFrame {
         extractor = new PRPDExtractorCore(
                 f0,
                 t0,
-                threshold,
+                0.0,
                 deadUs,
                 hfFilter
         );
@@ -2207,6 +2263,8 @@ public class PRPDTool extends JFrame {
                 2,
                 extractor,
                 new PRPDPipelineListener() {
+            private long lastPaintTime = 0;
+            
             @Override
             public void bufferRead(Buffer buffer) {
                 receivedSignalCache.add(buffer);
@@ -2278,16 +2336,34 @@ public class PRPDTool extends JFrame {
                 }
                 histogram.addPulses(pulses);
                 
-                if (autoscaleCb.isSelected()) {
-                    applyAutoscale();
-                } else {
-                    center.setImage(histogram.getImage());
+                long now = System.currentTimeMillis();
+                if (now - lastPaintTime > 100) {
+                    if (autoscaleCb.isSelected()) {
+                        applyAutoscale();
+                    } else {
+                        if (histogram instanceof pipeline.DynamicPRPDHistogram) {
+                            ((pipeline.DynamicPRPDHistogram) histogram).forceRedraw();
+                        }
+                        center.setImage(histogram.getImage());
+                    }
+                    center.repaint();
+                    lastPaintTime = now;
                 }
-                center.repaint();
             }
 
             @Override
             public void finished() {
+                // Ensure final redraw completes
+                if (autoscaleCb.isSelected()) {
+                    applyAutoscale();
+                } else {
+                    if (histogram instanceof pipeline.DynamicPRPDHistogram) {
+                        ((pipeline.DynamicPRPDHistogram) histogram).forceRedraw();
+                    }
+                    center.setImage(histogram.getImage());
+                }
+                center.repaint();
+
                 if (inBatchMode) {
                     exportPRPD4YOLO(filename);
                     System.out.println("..." + filename + " finished.");
@@ -2525,45 +2601,7 @@ public class PRPDTool extends JFrame {
     private void applyAutoscale() {
         if (histogram instanceof DynamicPRPDHistogram) {
             DynamicPRPDHistogram dh = (DynamicPRPDHistogram) histogram;
-            int[][] hist = dh.getHistogram();
-            if (hist == null || hist.length == 0 || hist[0].length == 0) return;
-            int max_dyb = 0;
-            int center_yb = bipolarHistogram ? hist[0].length / 2 : 0;
-            java.util.ArrayList<Integer> allYbs = new java.util.ArrayList<>();
-            for (int xb = 0; xb < hist.length; xb++) {
-                for (int yb = 0; yb < hist[xb].length; yb++) {
-                    if (hist[xb][yb] > 0) {
-                        int dyb = Math.abs(yb - center_yb);
-                        if (dyb > max_dyb) max_dyb = dyb;
-                        allYbs.add(yb);
-                    }
-                }
-            }
-            if (max_dyb > 0) {
-                if (bipolarHistogram) {
-                    double newZoom = (double) (hist[0].length - center_yb) / (max_dyb + 1); // +1 margin
-                    dh.setZoomY(newZoom);
-                    int plotH = center.getHeight() - 85;
-                    dh.setOffsetY(0.5 * plotH * (newZoom - 1));
-                } else {
-                    int min_yb = 0;
-                    if (!allYbs.isEmpty()) {
-                        java.util.Collections.sort(allYbs);
-                        min_yb = allYbs.get((int)(allYbs.size() * 0.005));
-                    }
-                    int margin_yb = Math.max(0, min_yb - 1);
-                    double newZoom = (double) hist[0].length / (max_dyb - margin_yb + 1); // +1 margin
-                    dh.setZoomY(newZoom);
-                    int plotH = center.getHeight() - 85;
-                    double newOffsetY = (double) margin_yb * plotH / hist[0].length * newZoom;
-                    dh.setOffsetY(newOffsetY);
-                }
-            } else {
-                dh.setZoomY(1.0);
-                dh.setOffsetY(0);
-            }
-            dh.setZoomX(1.0);
-            dh.setOffsetX(0);
+            dh.autoscale();
             center.setImage(dh.getImage());
         }
     }

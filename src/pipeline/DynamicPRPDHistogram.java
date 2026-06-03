@@ -1,9 +1,5 @@
 package pipeline;
 
-/**
- *
- * @author jstar
- */
 import java.awt.*;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
@@ -31,42 +27,26 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
     private double offsetY = 0.0;
     private double zoomX = 1.0;
     private double offsetX = 0.0;
+    
+    private double displayThreshold = 0.0;
+    private boolean showRawData = false;
+    
+    private int[] screenHist;
 
-    public double getZoomY() {
-        return zoomY;
-    }
+    public double getZoomY() { return zoomY; }
+    public void setZoomY(double zoomY) { this.zoomY = zoomY; redraw(); }
 
-    public void setZoomY(double zoomY) {
-        this.zoomY = zoomY;
-        redraw();
-    }
+    public double getOffsetY() { return offsetY; }
+    public void setOffsetY(double offsetY) { this.offsetY = offsetY; redraw(); }
 
-    public double getOffsetY() {
-        return offsetY;
-    }
+    public double getZoomX() { return zoomX; }
+    public void setZoomX(double zoomX) { this.zoomX = zoomX; redraw(); }
 
-    public void setOffsetY(double offsetY) {
-        this.offsetY = offsetY;
-        redraw();
-    }
-
-    public double getZoomX() {
-        return zoomX;
-    }
-
-    public void setZoomX(double zoomX) {
-        this.zoomX = zoomX;
-        redraw();
-    }
-
-    public double getOffsetX() {
-        return offsetX;
-    }
-
-    public void setOffsetX(double offsetX) {
-        this.offsetX = offsetX;
-        redraw();
-    }
+    public double getOffsetX() { return offsetX; }
+    public void setOffsetX(double offsetX) { this.offsetX = offsetX; redraw(); }
+    
+    public void setDisplayThreshold(double displayThreshold) { this.displayThreshold = displayThreshold; redraw(); }
+    public void setShowRawData(boolean showRawData) { this.showRawData = showRawData; redraw(); }
 
     private boolean addF0;
 
@@ -95,13 +75,77 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         }
 
         this.image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        this.screenHist = new int[plotW * plotH];
 
         drawEmpty();
+    }
+
+    public void autoscale() {
+        double[] amps = data.getAmps();
+        int size = data.getSize();
+        if (size == 0) {
+            zoomY = 1.0;
+            offsetY = 0.0;
+            zoomX = 1.0;
+            offsetX = 0.0;
+            redraw();
+            return;
+        }
+
+        boolean bipolarHistogram = data.getMin() < 0;
+        java.util.ArrayList<Double> validAmps = new java.util.ArrayList<>(Math.min(size, 100000));
+        
+        for (int i = 0; i < size; i++) {
+            if (!showRawData && Math.abs(amps[i]) < displayThreshold) continue;
+            validAmps.add(amps[i]);
+        }
+        
+        if (validAmps.isEmpty()) {
+            zoomY = 1.0;
+            offsetY = 0.0;
+            zoomX = 1.0;
+            offsetX = 0.0;
+            redraw();
+            return;
+        }
+        
+        java.util.Collections.sort(validAmps);
+        
+        double A_low, A_high;
+        if (bipolarHistogram) {
+            double maxAbs = 0;
+            for (Double a : validAmps) {
+                if (Math.abs(a) > maxAbs) maxAbs = Math.abs(a);
+            }
+            A_low = -maxAbs;
+            A_high = maxAbs;
+        } else {
+            A_low = validAmps.get((int)(validAmps.size() * 0.005));
+            A_high = validAmps.get(validAmps.size() - 1);
+            if (A_low < 0) A_low = 0;
+        }
+        
+        if (A_high <= A_low) {
+            A_high = A_low + 1.0;
+        }
+        
+        double baseRange = data.getMax() - data.getMin();
+        zoomY = baseRange / (A_high - A_low);
+        offsetY = (A_low - data.getMin()) / baseRange * plotH * zoomY;
+        
+        zoomX = 1.0;
+        offsetX = 0.0;
+        
+        redraw();
     }
 
     @Override
     public void reset() {
         data.reset();
+        zoomX = 1.0;
+        zoomY = 1.0;
+        offsetX = 0.0;
+        offsetY = 0.0;
         drawEmpty();
     }
 
@@ -136,29 +180,41 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
     public BufferedImage getPRPD(int w, int h) {
         BufferedImage prpd = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = prpd.createGraphics();
-        double maxCount = (double) data.getMaxCount();
-        int binsPhase = data.getPhaseBins();
-        int binsAmp = data.getAmpBins();
-        for (int xb = 0; xb < binsPhase; xb++) {
-            for (int yb = 0; yb < binsAmp; yb++) {
-                int c = data.getBin(xb, yb);
-                if (c == 0) {
-                    continue;
-                }
-
-                // <0,maxCount> -> log -> <0,1>
-                double v = Math.log1p(c) / Math.log1p(maxCount);
-
-                int x0 = (int) Math.floor(xb * w / (double) binsPhase);
-                int x1 = (int) Math.floor((xb + 1) * w / (double) binsPhase);
-
-                int y0 = h - (int) Math.floor((yb + 1) * h / (double) binsAmp);
-                int y1 = h - (int) Math.floor(yb * h / (double) binsAmp);
-
-                g.setColor(heatColor(v));
-                g.fillRect(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
+        
+        int[][] prpdHist = new int[w][h];
+        int maxC = 0;
+        double minA = data.getMin();
+        double maxA = data.getMax();
+        double[] phases = data.getPhases();
+        double[] amps = data.getAmps();
+        
+        for (int i = 0; i < data.getSize(); i++) {
+            if (!showRawData && Math.abs(amps[i]) < displayThreshold) continue;
+            
+            int x = (int) (phases[i] / 360.0 * w);
+            int y = (int) (h - (amps[i] - minA) / (maxA - minA) * h);
+            if (y == h) y = h - 1;
+            if (x == w) x = w - 1;
+            
+            if (x >= 0 && x < w && y >= 0 && y < h) {
+                prpdHist[x][y]++;
+                if (prpdHist[x][y] > maxC) maxC = prpdHist[x][y];
             }
         }
+        
+        if (maxC > 0) {
+            double logMaxC = Math.log1p(maxC);
+            for (int x = 0; x < w; x++) {
+                for (int y = 0; y < h; y++) {
+                    int c = prpdHist[x][y];
+                    if (c > 0) {
+                        double v = Math.log1p(c) / logMaxC;
+                        prpd.setRGB(x, y, heatColorRGB(v));
+                    }
+                }
+            }
+        }
+        
         g.dispose();
         return prpd;
     }
@@ -198,15 +254,16 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
     public void resize(int width, int height) {
         this.width = width;
         this.height = height;
-
+        this.screenHist = new int[plotW * plotH];
         redraw();
     }
 
     @Override
     public void addPulses(Pulses p) {
-
         data.addPulses(p);
-
+    }
+    
+    public void forceRedraw() {
         redraw();
     }
 
@@ -251,33 +308,52 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
             }
         }
 
-        int binsPhase = data.getPhaseBins();
-        int binsAmp = data.getAmpBins();
-
-        for (int xb = 0; xb < binsPhase; xb++) {
-            for (int yb = 0; yb < binsAmp; yb++) {
-                int c = data.getBin(xb, yb);
-                if (c == 0) {
-                    continue;
+        java.util.Arrays.fill(screenHist, 0);
+        int maxC = 0;
+        double minA = data.getMin();
+        double maxA = data.getMax();
+        double[] phases = data.getPhases();
+        double[] amps = data.getAmps();
+        int size = data.getSize();
+        
+        double mulX = (plotW / 360.0) * zoomX;
+        double mulY = (maxA > minA) ? ((plotH / (maxA - minA)) * zoomY) : 0;
+        double offY = plotH + offsetY + minA * mulY;
+        
+        for (int i = 0; i < size; i++) {
+            double amp = amps[i];
+            if (!showRawData && Math.abs(amp) < displayThreshold) continue;
+            
+            int screenX = (int) (phases[i] * mulX + offsetX);
+            if (screenX == plotW) screenX = plotW - 1;
+            if (screenX < 0 || screenX >= plotW) continue;
+            
+            int screenY = (int) (offY - amp * mulY);
+            if (screenY == plotH) screenY = plotH - 1;
+            if (screenY < 0 || screenY >= plotH) continue;
+            
+            int idx = screenY * plotW + screenX;
+            screenHist[idx]++;
+            if (screenHist[idx] > maxC) maxC = screenHist[idx];
+        }
+        
+        if (maxC > 0) {
+            int[] colorMap = new int[maxC + 1];
+            double logMaxC = Math.log1p(maxC);
+            for (int c = 1; c <= maxC; c++) {
+                double v = Math.log1p(c) / logMaxC;
+                colorMap[c] = heatColorRGB(v);
+            }
+            
+            for (int y = 0; y < plotH; y++) {
+                int rowOffset = y * plotW;
+                int imgY = top + y;
+                for (int x = 0; x < plotW; x++) {
+                    int c = screenHist[rowOffset + x];
+                    if (c > 0) {
+                        image.setRGB(left + x, imgY, colorMap[c]);
+                    }
                 }
-
-                // <0,maxCount> -> log -> <0,1>
-                double v = Math.log1p(c) / Math.log1p((double) data.getMaxCount());
-
-                int baseX0 = left + (int) Math.floor(xb * plotW / (double) binsPhase);
-                int baseX1 = left + (int) Math.floor((xb + 1) * plotW / (double) binsPhase);
-                
-                int x0 = (int) ((baseX0 - left) * zoomX + left + offsetX);
-                int x1 = (int) ((baseX1 - left) * zoomX + left + offsetX);
-
-                int baseY0 = top + plotH - (int) Math.floor((yb + 1) * plotH / (double) binsAmp);
-                int baseY1 = top + plotH - (int) Math.floor(yb * plotH / (double) binsAmp);
-                
-                int y0 = (int) ((baseY0 - (top + plotH)) * zoomY + (top + plotH) + offsetY);
-                int y1 = (int) ((baseY1 - (top + plotH)) * zoomY + (top + plotH) + offsetY);
-
-                g.setColor(heatColor(v));
-                g.fillRect(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
             }
         }
 
@@ -356,7 +432,7 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         g.dispose();
     }
 
-    private static Color heatColor(double v) {
+    private static int heatColorRGB(double v) {
         v = Math.max(0.0, Math.min(1.0, v));
 
         int r, g, b;
@@ -383,6 +459,6 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
             b = 0;
         }
 
-        return new Color(r, g, b);
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 }

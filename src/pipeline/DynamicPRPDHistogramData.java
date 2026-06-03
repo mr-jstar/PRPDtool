@@ -1,15 +1,8 @@
 package pipeline;
 
-/**
- *
- * @author jstar
- */
 import java.util.Arrays;
 
-public class DynamicPRPDHistogramData  {
-
-    private final int binsPhase;
-    private final int binsAmp;
+public class DynamicPRPDHistogramData {
 
     private final double ampMin;
     private final double ampMax;
@@ -17,31 +10,28 @@ public class DynamicPRPDHistogramData  {
     private double dataMin = Double.POSITIVE_INFINITY;
     private double dataMax = Double.NEGATIVE_INFINITY;
 
-    private final int[][] hist;
-    private int maxCount = 0;
+    private double[] phases = new double[1024];
+    private double[] amps = new double[1024];
+    private int size = 0;
 
     private final boolean bipolar;
 
     public DynamicPRPDHistogramData(
-            int binsPhase,
+            int binsPhase, // kept for signature compatibility if needed, but unused for binning
             int binsAmp,
             double ampMin,
             double ampMax,
             boolean bipolar
     ) {
-        this.binsPhase = binsPhase;
-        this.binsAmp = binsAmp;
         this.ampMin = ampMin;
         this.ampMax = ampMax;
         this.bipolar = bipolar;
-
-        this.hist = new int[binsPhase][binsAmp];
     }
 
     public void reset() {
-        for (int i = 0; i < binsPhase; i++) {
-            Arrays.fill(hist[i], 0);
-        }
+        size = 0;
+        dataMin = Double.POSITIVE_INFINITY;
+        dataMax = Double.NEGATIVE_INFINITY;
     }
 
     public double getMin() {
@@ -52,51 +42,40 @@ public class DynamicPRPDHistogramData  {
         return ampMax;
     }
 
-    public int[][] getHistogram() {
-        return hist;
-    }
-
     public void addPulses(Pulses p) {
-
+        ensureCapacity(size + p.n);
+        
         for (int i = 0; i < p.n; i++) {
-
             double phase = p.phase[i];
             double amp = bipolar ? p.amp[i] : Math.abs(p.amp[i]);
             
             if( p.amp[i] < dataMin ) dataMin = p.amp[i];
             if( p.amp[i] > dataMax ) dataMax = p.amp[i];
 
-            int xb = (int) (phase / 360.0 * binsPhase);
-            int yb = (int) ((amp - ampMin) / (ampMax - ampMin) * binsAmp);
-
-            if (xb < 0 || xb >= binsPhase) {
-                continue;
-            }
-            if (yb < 0 || yb >= binsAmp) {
-                continue;
-            }
-
-            hist[xb][yb]++;
-            if (hist[xb][yb] > maxCount) {
-                maxCount = hist[xb][yb];
-            }
+            phases[size] = phase;
+            amps[size] = amp;
+            size++;
         }
     }
 
-    public int getMaxCount() {
-        return maxCount;
+    private void ensureCapacity(int minCapacity) {
+        if (minCapacity > phases.length) {
+            int newCapacity = Math.max(phases.length * 2, minCapacity);
+            phases = Arrays.copyOf(phases, newCapacity);
+            amps = Arrays.copyOf(amps, newCapacity);
+        }
     }
 
-    public int getPhaseBins() {
-        return binsPhase;
+    public double[] getPhases() {
+        return phases;
     }
 
-    public int getAmpBins() {
-        return binsAmp;
+    public double[] getAmps() {
+        return amps;
     }
 
-    public int getBin(int ph, int amp) {
-        return hist[ph][amp];
+    public int getSize() {
+        return size;
     }
     
     public double getDataMin() {
@@ -105,5 +84,26 @@ public class DynamicPRPDHistogramData  {
     
     public double getDataMax() {
         return dataMax == Double.NEGATIVE_INFINITY ? 1 : dataMax;
+    }
+    
+    // Legacy methods to satisfy interface if still used elsewhere, otherwise return dummies
+    public int[][] getHistogram() {
+        return new int[0][0]; 
+    }
+
+    public int getMaxCount() {
+        return 1;
+    }
+
+    public int getPhaseBins() {
+        return 360;
+    }
+
+    public int getAmpBins() {
+        return 200;
+    }
+
+    public int getBin(int ph, int amp) {
+        return 0;
     }
 }
