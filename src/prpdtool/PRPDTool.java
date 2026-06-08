@@ -453,6 +453,10 @@ public class PRPDTool extends JFrame {
         scriptsM.add(batchMI);
         mb.add(scriptsM);
 
+        JMenu profilesM = new JMenu("Profiles");
+        buildProfilesMenu(profilesM);
+        mb.add(profilesM);
+
         JMenu optM = new JMenu("Options");
         JMenuItem fontMI = new JMenuItem("Font size");
         optM.add(fontMI);
@@ -545,6 +549,115 @@ public class PRPDTool extends JFrame {
         mb.add(optM);
 
         setJMenuBar(mb);
+    }
+
+    private void buildProfilesMenu(JMenu profilesM) {
+        profilesM.removeAll();
+        
+        JMenuItem saveProfileMI = new JMenuItem("Save current profile...");
+        saveProfileMI.addActionListener(e -> {
+            String name = JOptionPane.showInputDialog(this, "Enter profile name:");
+            if (name != null && !name.trim().isEmpty()) {
+                File dir = new File("profiles");
+                if (!dir.exists()) {
+                    dir.mkdirs();
+                }
+                File f = new File(dir, name.trim() + ".cfg");
+                saveProfile(f);
+                buildProfilesMenu(profilesM);
+            }
+        });
+        profilesM.add(saveProfileMI);
+
+        File dir = new File("profiles");
+        if (dir.exists() && dir.isDirectory()) {
+            File[] files = dir.listFiles((d, name) -> name.endsWith(".cfg"));
+            if (files != null && files.length > 0) {
+                profilesM.addSeparator();
+                for (File f : files) {
+                    JMenu profM = new JMenu(f.getName().replace(".cfg", ""));
+                    JMenuItem loadMI = new JMenuItem("Load");
+                    loadMI.addActionListener(e -> loadProfile(f));
+                    profM.add(loadMI);
+                    
+                    JMenuItem deleteMI = new JMenuItem("Delete");
+                    deleteMI.addActionListener(e -> {
+                        int r = JOptionPane.showConfirmDialog(this, "Delete profile " + f.getName() + "?", "Confirm", JOptionPane.YES_NO_OPTION);
+                        if (r == JOptionPane.YES_OPTION) {
+                            f.delete();
+                            buildProfilesMenu(profilesM);
+                        }
+                    });
+                    profM.add(deleteMI);
+                    
+                    profilesM.add(profM);
+                }
+            }
+        }
+    }
+
+    private void saveProfile(File file) {
+        try {
+            Configuration prof = new Configuration(file.getAbsolutePath());
+            prof.saveValue(RP_HOST, rpHostField.getText());
+            prof.saveValue(RP_PORT, rpPortSpinner.getValue().toString());
+            prof.saveValue(RP_CHANNELS, rpChannelsCombo.getSelectedItem().toString());
+            prof.saveValue(RP_VISUAL_CHANNEL, rpVisualChannelCombo.getSelectedItem().toString());
+            prof.saveValue(RP_GAIN1, rpGain1Combo.getSelectedItem().toString());
+            prof.saveValue(RP_GAIN2, rpGain2Combo.getSelectedItem().toString());
+            prof.saveValue(RP_DECIMATION, rpDecimationSpinner.getValue().toString());
+            prof.saveValue(RP_AVERAGING, Boolean.toString(rpAveragingBox.isSelected()));
+            prof.saveValue(RP_TRIGGER_SOURCE, rpTriggerCombo.getSelectedItem().toString());
+            prof.saveValue(RP_TRIGGER_LEVEL, rpTriggerLevelSpinner.getValue().toString());
+            prof.saveValue(RP_TRIGGER_DELAY, rpTriggerDelaySpinner.getValue().toString());
+            prof.saveValue(RP_TRIGGER_TIMEOUT, rpTriggerTimeoutSpinner.getValue().toString());
+            prof.saveValue(RP_MODE, rpModeCombo.getSelectedItem().toString());
+            prof.saveValue(RP_DURATION, rpDurationSpinner.getValue().toString());
+            prof.saveValue(RP_FRAME_SIZE, rpFrameSizeSpinner.getValue().toString());
+            prof.saveValue(RP_FRAME_COUNT, rpFrameCountSpinner.getValue().toString());
+
+            for (Param<?> p : params) {
+                prof.saveValue("Param." + p.name, p.getText());
+            }
+
+            status.setText("Profile saved to " + file.getName());
+        } catch (IOException ex) {
+            status.setText(ex.getMessage());
+        }
+    }
+
+    private void loadProfile(File file) {
+        Configuration prof = new Configuration(file.getAbsolutePath());
+        
+        try { String v = prof.getValue(RP_HOST); if(v != null) rpHostField.setText(v); } catch(Exception e) {}
+        try { String v = prof.getValue(RP_PORT); if(v != null) rpPortSpinner.setValue(Integer.parseInt(v)); } catch(Exception e) {}
+        try { String v = prof.getValue(RP_CHANNELS); if(v != null) rpChannelsCombo.setSelectedItem(v); } catch(Exception e) {}
+        try { String v = prof.getValue(RP_VISUAL_CHANNEL); if(v != null) rpVisualChannelCombo.setSelectedItem(v); } catch(Exception e) {}
+        try { String v = prof.getValue(RP_GAIN1); if(v != null) rpGain1Combo.setSelectedItem(v); } catch(Exception e) {}
+        try { String v = prof.getValue(RP_GAIN2); if(v != null) rpGain2Combo.setSelectedItem(v); } catch(Exception e) {}
+        try { String v = prof.getValue(RP_DECIMATION); if(v != null) rpDecimationSpinner.setValue(Integer.parseInt(v)); } catch(Exception e) {}
+        try { String v = prof.getValue(RP_AVERAGING); if(v != null) rpAveragingBox.setSelected(Boolean.parseBoolean(v)); } catch(Exception e) {}
+        try { String v = prof.getValue(RP_TRIGGER_SOURCE); if(v != null) rpTriggerCombo.setSelectedItem(v); } catch(Exception e) {}
+        try { String v = prof.getValue(RP_TRIGGER_LEVEL); if(v != null) rpTriggerLevelSpinner.setValue(Double.parseDouble(v)); } catch(Exception e) {}
+        try { String v = prof.getValue(RP_TRIGGER_DELAY); if(v != null) rpTriggerDelaySpinner.setValue(Integer.parseInt(v)); } catch(Exception e) {}
+        try { String v = prof.getValue(RP_TRIGGER_TIMEOUT); if(v != null) rpTriggerTimeoutSpinner.setValue(Double.parseDouble(v)); } catch(Exception e) {}
+        try { String v = prof.getValue(RP_MODE); if(v != null) rpModeCombo.setSelectedItem(v); } catch(Exception e) {}
+        try { String v = prof.getValue(RP_DURATION); if(v != null) rpDurationSpinner.setValue(Double.parseDouble(v)); } catch(Exception e) {}
+        try { String v = prof.getValue(RP_FRAME_SIZE); if(v != null) rpFrameSizeSpinner.setValue(Integer.parseInt(v)); } catch(Exception e) {}
+        try { String v = prof.getValue(RP_FRAME_COUNT); if(v != null) rpFrameCountSpinner.setValue(Integer.parseInt(v)); } catch(Exception e) {}
+
+        for (Param<?> p : params) {
+            String v = prof.getValue("Param." + p.name);
+            if (v != null) {
+                p.setFromText(v);
+                if (p.field != null) {
+                    p.field.setText(p.getText());
+                }
+            }
+        }
+        
+        onParameterChanged();
+        status.setText("Profile loaded from " + file.getName());
     }
 
     private void initGui() {
