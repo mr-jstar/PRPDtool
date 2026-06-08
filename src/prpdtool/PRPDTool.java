@@ -121,6 +121,7 @@ public class PRPDTool extends JFrame {
     private final String RP_DURATION = "PRPDMonitor.rp.duration";
     private final String RP_FRAME_SIZE = "PRPDMonitor.rp.frame.size";
     private final String RP_FRAME_COUNT = "PRPDMonitor.rp.frame.count";
+    private final String RP_FILE_LIMIT = "PRPDMonitor.rp.file.limit";
 
     private JPanel left;
     private ImagePanel center;
@@ -133,6 +134,7 @@ public class PRPDTool extends JFrame {
     private JSplitPane verticalSplit;
 
     private final JLabel status = new JLabel("");
+    private int rpFileLimit = 30;
     private final File receivedSignalsDir = new File("data" + File.separator + "received_bin");
 
     // PRPD config
@@ -331,6 +333,11 @@ public class PRPDTool extends JFrame {
 
     public PRPDTool() {
         super("PRPDtool");
+
+        try {
+            rpFileLimit = Integer.parseInt(configuration.getValue(RP_FILE_LIMIT).trim());
+        } catch (Exception ex) {
+        }
 
         addWindowListener(new WindowAdapter() {
             @Override
@@ -832,6 +839,28 @@ public class PRPDTool extends JFrame {
         panel.setBorder(BorderFactory.createTitledBorder("Received signals"));
         panel.setPreferredSize(new Dimension(330, 1));
         panel.setMinimumSize(new Dimension(260, 1));
+        
+        JPanel limitPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        limitPanel.add(new JLabel("Max files (rp_):"));
+        JSpinner limitSpinner = new JSpinner(new SpinnerNumberModel(rpFileLimit, 0, 9999, 1));
+        limitSpinner.addChangeListener(e -> {
+            rpFileLimit = (Integer) limitSpinner.getValue();
+            try {
+                configuration.saveValue(RP_FILE_LIMIT, "" + rpFileLimit);
+            } catch (IOException ex) {}
+            cleanupOldSignals();
+            refreshReceivedSignals();
+        });
+        limitPanel.add(limitSpinner);
+        
+        JLabel limitHelp = new JLabel(new HelpIcon());
+        limitHelp.setToolTipText(htmlTooltip("Determines the maximum number of automatic capture files (rp_*.rppr.bin) to keep. If this limit is exceeded, the oldest automatic files will be deleted. Renamed files and manual recordings are never deleted. Set to 0 to disable limit."));
+        limitHelp.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+        limitHelp.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
+        limitPanel.add(limitHelp);
+        
+        panel.add(limitPanel, BorderLayout.NORTH);
+        
         receivedSignalsModel = new DefaultListModel<>();
         receivedSignalsList = new JList<>(receivedSignalsModel);
         receivedSignalsList.setVisibleRowCount(6);
@@ -871,6 +900,23 @@ public class PRPDTool extends JFrame {
         panel.add(buttons, BorderLayout.SOUTH);
         refreshReceivedSignals();
         return panel;
+    }
+
+    private void cleanupOldSignals() {
+        if (!receivedSignalsDir.exists() || rpFileLimit <= 0) return;
+
+        File[] files = receivedSignalsDir.listFiles((dir, name) -> {
+            String lower = name.toLowerCase(Locale.US);
+            return lower.startsWith("rp_") && lower.endsWith(".rppr.bin");
+        });
+
+        if (files == null || files.length <= rpFileLimit) return;
+
+        Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+
+        for (int i = rpFileLimit; i < files.length; i++) {
+            files[i].delete();
+        }
     }
 
     private void refreshReceivedSignals() {
@@ -2077,6 +2123,7 @@ public class PRPDTool extends JFrame {
 
     private void onRedPitayaCaptureSaved(Path path) {
         SwingUtilities.invokeLater(() -> {
+            cleanupOldSignals();
             refreshReceivedSignals();
             status.setText("Saved Red Pitaya signal: " + path.getFileName());
         });
