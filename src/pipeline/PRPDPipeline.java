@@ -26,6 +26,11 @@ public class PRPDPipeline implements AutoCloseable {
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicBoolean readerFinished = new AtomicBoolean(false);
     private final AtomicInteger queuedBuffers = new AtomicInteger(0);
+    
+    private final ConcurrentLinkedQueue<Buffer> uiBufferQueue = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<Pulses> uiPulsesQueue = new ConcurrentLinkedQueue<>();
+    private final AtomicBoolean uiUpdateScheduled = new AtomicBoolean(false);
+    
     protected final CountDownLatch doneLatch = new CountDownLatch(1);
 
     private final ExecutorService readerExecutor
@@ -104,6 +109,24 @@ public class PRPDPipeline implements AutoCloseable {
         extractor.setThreshold(threshold);
     }
 
+    private void scheduleUiUpdate() {
+        if (uiUpdateScheduled.compareAndSet(false, true)) {
+            SwingUtilities.invokeLater(() -> {
+                uiUpdateScheduled.set(false);
+                
+                Buffer b;
+                while ((b = uiBufferQueue.poll()) != null) {
+                    listener.bufferRead(b);
+                }
+                
+                Pulses p;
+                while ((p = uiPulsesQueue.poll()) != null) {
+                    listener.pulsesReady(p);
+                }
+            });
+        }
+    }
+
     private void readerLoop() {
         SignalReader reader = null;
         try {
@@ -127,7 +150,8 @@ public class PRPDPipeline implements AutoCloseable {
                     queuedBuffers.incrementAndGet();
 
                     // Obwiednia dostaje surowy bufor natychmiast po odczycie.
-                    SwingUtilities.invokeLater(() -> listener.bufferRead(buffer));
+                    uiBufferQueue.add(buffer);
+                    scheduleUiUpdate();
                 }
 
                 if (buffer.eof) {
@@ -194,7 +218,8 @@ public class PRPDPipeline implements AutoCloseable {
                 Pulses pulses = extractor.extract(buffer);
 
                 if (pulses.size > 0) {
-                    SwingUtilities.invokeLater(() -> listener.pulsesReady(pulses));
+                    uiPulsesQueue.add(pulses);
+                    scheduleUiUpdate();
                 }
             }
 

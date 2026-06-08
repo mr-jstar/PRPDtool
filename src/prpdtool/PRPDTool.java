@@ -2168,7 +2168,7 @@ public class PRPDTool extends JFrame {
                 }
                 if (signalStart.compareAndSet(true, false)) {
                     double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0);
-                    double estt0 = ph0 / Math.PI / f0;
+                    double estt0 = ph0 / (2 * Math.PI * f0);
                     if (estt0 < 0.5 / fs) {
                         estt0 = 0.0;
                     }
