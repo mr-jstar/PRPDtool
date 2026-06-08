@@ -1842,6 +1842,9 @@ public class PRPDTool extends JFrame {
             }
         } else {
             rebuildHistogramFromCachedSignal();
+            if (autoscaleCb != null && autoscaleCb.isSelected()) {
+                applyAutoscale();
+            }
         }
         applyButton.setBackground(UIManager.getColor("Button.background"));
         paramChange.setText(" ");
