@@ -12,6 +12,7 @@ public class DynamicPRPDHistogramData {
 
     private double[] phases = new double[1024];
     private double[] amps = new double[1024];
+    private double[] times = new double[1024];
     private int size = 0;
 
     private final boolean bipolar;
@@ -54,6 +55,7 @@ public class DynamicPRPDHistogramData {
 
             phases[size] = phase;
             amps[size] = amp;
+            times[size] = p.t[i];
             size++;
         }
     }
@@ -63,6 +65,7 @@ public class DynamicPRPDHistogramData {
             int newCapacity = Math.max(phases.length * 2, minCapacity);
             phases = Arrays.copyOf(phases, newCapacity);
             amps = Arrays.copyOf(amps, newCapacity);
+            times = Arrays.copyOf(times, newCapacity);
         }
     }
 
@@ -72,6 +75,10 @@ public class DynamicPRPDHistogramData {
 
     public double[] getAmps() {
         return amps;
+    }
+
+    public double[] getTimes() {
+        return times;
     }
 
     public int getSize() {

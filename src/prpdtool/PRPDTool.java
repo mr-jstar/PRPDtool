@@ -436,6 +436,10 @@ public class PRPDTool extends JFrame {
         imageMI.addActionListener(e -> exportImage());
         fileM.add(imageMI);
 
+        JMenuItem exportCsvMI = new JMenuItem("Export raw pulses to CSV");
+        exportCsvMI.addActionListener(e -> exportRawPulsesCSV());
+        fileM.add(exportCsvMI);
+
         JMenuItem prpdMI = new JMenuItem("Export YOLO image");
         prpdMI.addActionListener(e -> exportPRPD4YOLO(lastDataFile));
         fileM.add(prpdMI);
@@ -2684,6 +2688,43 @@ public class PRPDTool extends JFrame {
             } catch (IOException ex) {
                 status.setText(ex.getMessage());
             }
+        }
+    }
+
+    private void exportRawPulsesCSV() {
+        if (histogram instanceof pipeline.DynamicPRPDHistogram dynHist) {
+            int size = dynHist.getSize();
+            if (size == 0) {
+                status.setText("No pulses to export");
+                return;
+            }
+
+            JFileChooser fileChooser = new JFileChooser(getLastUsedDirectory());
+            setFontRecursively(fileChooser, currentFont, 0);
+            int result = fileChooser.showSaveDialog(this);
+            if (result == JFileChooser.APPROVE_OPTION) {
+                File file = fileChooser.getSelectedFile();
+                String path = file.getAbsolutePath();
+                if (!path.toLowerCase().endsWith(".csv")) {
+                    file = new File(path + ".csv");
+                }
+                
+                try (PrintWriter w = new PrintWriter(new FileWriter(file))) {
+                    double[] times = dynHist.getTimes();
+                    double[] phases = dynHist.getPhases();
+                    double[] amps = dynHist.getAmps();
+                    
+                    w.println("Time [s],Phase [deg],Amplitude [V]");
+                    for (int i = 0; i < size; i++) {
+                        w.println(String.format(Locale.US, "%g,%.2f,%g", times[i], phases[i], amps[i]));
+                    }
+                    status.setText("Raw pulses exported to " + file.getName());
+                } catch (IOException ex) {
+                    status.setText(ex.getMessage());
+                }
+            }
+        } else {
+            status.setText("Exporting raw pulses is not supported for this histogram type");
         }
     }
 

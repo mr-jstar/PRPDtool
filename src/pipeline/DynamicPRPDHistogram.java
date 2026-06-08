@@ -244,6 +244,22 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         return data.getHistogram();
     }
 
+    public double[] getPhases() {
+        return data.getPhases();
+    }
+
+    public double[] getAmps() {
+        return data.getAmps();
+    }
+
+    public double[] getTimes() {
+        return data.getTimes();
+    }
+
+    public int getSize() {
+        return data.getSize();
+    }
+
     @Override
     public void drawF0(boolean doIt) {
         addF0 = doIt;
