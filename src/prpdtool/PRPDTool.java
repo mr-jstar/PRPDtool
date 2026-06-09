@@ -5,6 +5,10 @@ package prpdtool;
  * @author jstar
  */
 import classifiers.*;
+import javax.swing.Timer;
+import javax.swing.UIManager;
+import com.formdev.flatlaf.FlatLightLaf;
+import com.formdev.flatlaf.FlatDarkLaf;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ComponentAdapter;
@@ -502,19 +506,42 @@ public class PRPDTool extends JFrame {
         optM.add(ftHistMB);
         optM.addSeparator();
         
-        JCheckBoxMenuItem fastMB = new JCheckBoxMenuItem("Fast Rendering (Raster)", fastRendering);
-        fastMB.addActionListener(e -> {
+        JMenuItem fastMB = new JCheckBoxMenuItem("Fast rendering (no interpolator)", fastRendering);
+        fastMB.addActionListener(ev -> {
             fastRendering = fastMB.isSelected();
             if (histogram instanceof DynamicPRPDHistogram) {
                 ((DynamicPRPDHistogram) histogram).setFastRendering(fastRendering);
             }
             try {
                 configuration.saveValue(FAST_RENDERING, "" + fastRendering);
-            } catch (IOException ex) {
-            }
+            } catch (Exception ex) {}
             if (autoscaleCb != null && autoscaleCb.isSelected()) { applyAutoscale(); } else { center.setImage(histogram.getImage()); }
         });
         optM.add(fastMB);
+
+        JCheckBoxMenuItem darkModeCheckbox = new JCheckBoxMenuItem("Dark Mode", isDarkMode());
+        darkModeCheckbox.addActionListener(ev -> {
+            boolean isDark = darkModeCheckbox.isSelected();
+            try {
+                configuration.saveValue(PRPDConstants.DARK_MODE, Boolean.toString(isDark));
+                if (isDark) {
+                    UIManager.setLookAndFeel(new FlatDarkLaf());
+                } else {
+                    UIManager.setLookAndFeel(new FlatLightLaf());
+                }
+                SwingUtilities.updateComponentTreeUI(this);
+                if (histogram != null && center != null) {
+                    if (histogram instanceof pipeline.DynamicPRPDHistogram) {
+                        ((pipeline.DynamicPRPDHistogram) histogram).forceRedraw();
+                    }
+                    center.setImage(histogram.getImage());
+                    center.repaint();
+                }
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        });
+        optM.add(darkModeCheckbox);
         
         optM.addSeparator();
 
@@ -555,6 +582,15 @@ public class PRPDTool extends JFrame {
         mb.add(optM);
 
         setJMenuBar(mb);
+    }
+
+    private boolean isDarkMode() {
+        try {
+            String darkStr = configuration.getValue(PRPDConstants.DARK_MODE);
+            return darkStr != null && Boolean.parseBoolean(darkStr);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private void buildProfilesMenu(JMenu profilesM) {
@@ -809,7 +845,7 @@ public class PRPDTool extends JFrame {
                 field.addActionListener(e -> {
                     try {
                         p.setFromText(field.getText());
-                        field.setBackground(Color.WHITE);
+                        field.setBackground(UIManager.getColor("TextField.background"));
                         status.setText("Some parameter changes may not have been applied!");
                         paramChange.setText("Param(s) change!");
                         applyButton.setBackground(Color.red);
@@ -895,7 +931,6 @@ public class PRPDTool extends JFrame {
             classifyPanel.add(modelPanel, BorderLayout.CENTER);
 
             classifyButton = new JButton("CLASIFY");
-            classifyButton.setBackground(Color.white);
             classifyButton.addActionListener(e -> classifyPRPD(cResults));
             classifyButton.setEnabled(false);
             classifyPanel.add(classifyButton, BorderLayout.SOUTH);
@@ -1661,7 +1696,7 @@ public class PRPDTool extends JFrame {
                     } else {
                         spinner.setValue(Double.parseDouble(text));
                     }
-                    editor.getTextField().setBackground(Color.WHITE);
+                    editor.getTextField().setBackground(UIManager.getColor("TextField.background"));
                     return;
                 } catch (NumberFormatException ex) {
                     editor.getTextField().setBackground(new Color(255, 200, 200));
@@ -1864,6 +1899,7 @@ public class PRPDTool extends JFrame {
         );
         histogram.drawF0(drawF0);
         ((DynamicPRPDHistogram) histogram).setDisplayThreshold(threshold);
+        ((DynamicPRPDHistogram) histogram).setFastRendering(fastRendering);
         if (showRawDataCb != null) {
             ((DynamicPRPDHistogram) histogram).setShowRawData(showRawDataCb.isSelected());
         }
@@ -2199,6 +2235,7 @@ public class PRPDTool extends JFrame {
         );
         histogram.drawF0(drawF0);
         ((DynamicPRPDHistogram) histogram).setDisplayThreshold(threshold);
+        ((DynamicPRPDHistogram) histogram).setFastRendering(fastRendering);
         if (showRawDataCb != null) {
             ((DynamicPRPDHistogram) histogram).setShowRawData(showRawDataCb.isSelected());
         }
@@ -2481,6 +2518,7 @@ public class PRPDTool extends JFrame {
         );
         histogram.drawF0(drawF0);
         ((DynamicPRPDHistogram) histogram).setDisplayThreshold(threshold);
+        ((DynamicPRPDHistogram) histogram).setFastRendering(fastRendering);
         if (showRawDataCb != null) {
             ((DynamicPRPDHistogram) histogram).setShowRawData(showRawDataCb.isSelected());
         }
@@ -2807,7 +2845,7 @@ public class PRPDTool extends JFrame {
                     ImageIO.write(prpd4YOLO, "png", new File("prpd4YOLO.png"));
                     Prediction[] result = classifier.classify(prpd4YOLO);
                     System.out.println(classifier.name() + ":");
-                    resultView.setBackground(Color.white);
+                    resultView.setBackground(UIManager.getColor("Label.background"));
                     resultView.setText("");
                     String sep = "";
                     for (Prediction p : result) {
@@ -2899,6 +2937,18 @@ public class PRPDTool extends JFrame {
     }
 
     public static void main(String[] args) {
+        try {
+            Configuration config = new Configuration(CONFIG_FILE);
+            String darkModeStr = config.getValue(PRPDConstants.DARK_MODE);
+            if ("true".equalsIgnoreCase(darkModeStr)) {
+                UIManager.setLookAndFeel(new FlatDarkLaf());
+            } else {
+                UIManager.setLookAndFeel(new FlatLightLaf());
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to initialize FlatLaf");
+        }
+        
         SwingUtilities.invokeLater(() -> {
             new PRPDTool().setVisible(true);
         });

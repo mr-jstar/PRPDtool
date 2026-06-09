@@ -15,8 +15,8 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         return new int[]{left + right, top + bottom};
     }
 
-    private final int plotW;
-    private final int plotH;
+    private int plotW;
+    private int plotH;
     private final DynamicPRPDHistogramData data;
 
     private Font smallFont = new Font("Arial", Font.PLAIN, 12);
@@ -56,7 +56,7 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
 
     private ArrayList<Label> labels = new ArrayList<>();
 
-    private final BufferedImage image;
+    private BufferedImage image;
 
     public DynamicPRPDHistogram(
             int width,
@@ -281,8 +281,15 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
     public void resize(int width, int height) {
         this.width = width;
         this.height = height;
-        this.screenHist = new int[plotW * plotH];
-        redraw();
+        this.plotW = width - left - right;
+        this.plotH = height - top - bottom;
+        if (plotW > 0 && plotH > 0) {
+            if (this.image == null || this.image.getWidth() != width || this.image.getHeight() != height) {
+                this.image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+            }
+            this.screenHist = new int[plotW * plotH];
+            redraw();
+        }
     }
 
     @Override
@@ -296,11 +303,12 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
 
     private void drawEmpty() {
         Graphics2D g = image.createGraphics();
+        boolean isDark = prpdtool.PRPDConstants.isDarkTheme();
 
-        g.setColor(Color.WHITE);
+        g.setColor(isDark ? new Color(40, 44, 52) : Color.WHITE);
         g.fillRect(0, 0, width, height);
 
-        g.setColor(Color.BLACK);
+        g.setColor(isDark ? new Color(30, 30, 30) : Color.BLACK);
         g.fillRect(left, top, plotW, plotH);
 
         g.dispose();
@@ -310,8 +318,9 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
 
     private void drawImg() {
         Graphics2D g = image.createGraphics();
+        boolean isDark = prpdtool.PRPDConstants.isDarkTheme();
 
-        g.setColor(Color.BLACK);
+        g.setColor(isDark ? new Color(30, 30, 30) : Color.BLACK);
         g.fillRect(left, top, plotW, plotH);
         
         g.setClip(left, top, plotW, plotH);
@@ -322,10 +331,9 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
                 double bx = (x - left - offsetX) / zoomX;
                 if (bx >= 0 && bx <= plotW) {
                     double ph = 2 * Math.PI * bx / plotW;
-                    int baseY = top + plotH / 2 - (int) (plotH / 4 * Math.sin(ph));
-                    int y = (int) ((baseY - (top + plotH)) * zoomY + (top + plotH) + offsetY);
+                    int y = top + plotH / 2 - (int) (plotH / 3.0 * Math.sin(ph));
                     if (last_y != null) {
-                        g.setColor(Color.gray);
+                        g.setColor(isDark ? new Color(160, 160, 160) : Color.gray);
                         g.drawLine(x - 1, last_y, x, y);
                     }
                     last_y = y;
@@ -434,8 +442,8 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
             Rectangle2D rect = g.getFontMetrics(font).getStringBounds(l.getLabel(), g);
             g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.5f));
             g.fillRect(left + l.leftx(plotW), top + l.boty(plotH), (int) rect.getWidth() + 1, (int) rect.getHeight() + 3);
-             g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
-            g.setColor(Color.white);
+            g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
+            g.setColor(Color.WHITE);
             g.drawString(l.getLabel(), left + l.leftx(plotW), top + l.boty(plotH) + (int) rect.getHeight());
         }
 
@@ -449,21 +457,23 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
 
     private void drawAxes() {
         Graphics2D g = image.createGraphics();
+        boolean isDark = prpdtool.PRPDConstants.isDarkTheme();
 
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
                 RenderingHints.VALUE_ANTIALIAS_ON);
 
         // czyść marginesy
-        g.setColor(Color.WHITE);
+        g.setColor(isDark ? new Color(40, 44, 52) : Color.WHITE);
         g.fillRect(0, 0, width, top);
         g.fillRect(0, top + plotH, width, height - top - plotH);
         g.fillRect(0, top, left, plotH);
         g.fillRect(left + plotW + 1, top, right, plotH);
 
-        g.setColor(Color.BLACK);
+        g.setColor(isDark ? Color.GRAY : Color.BLACK);
         g.drawRect(left, top, plotW, plotH);
 
         g.setFont(font);
+        g.setColor(isDark ? Color.LIGHT_GRAY : Color.BLACK);
 
         // Osie X
         for (int i = 0; i <= 6; i++) {

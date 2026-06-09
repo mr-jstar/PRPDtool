@@ -369,22 +369,26 @@ public class InteractiveSignalPanel extends JPanel {
     @Override
     protected void paintComponent(Graphics graphics) {
         super.paintComponent(graphics);
+        setBackground(PRPDConstants.isDarkTheme() ? new Color(40, 44, 52) : Color.WHITE);
         Graphics2D g = (Graphics2D) graphics.create();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        drawPlot(g, 0, upperTitle, upper, new Color(30, 90, 210));
-        drawPlot(g, 1, lowerTitle, lower, new Color(0, 150, 70));
+        boolean isDark = PRPDConstants.isDarkTheme();
+        drawPlot(g, 0, upperTitle, upper, isDark ? Color.CYAN : new Color(30, 90, 210));
+        drawPlot(g, 1, lowerTitle, lower, isDark ? Color.GREEN : new Color(0, 150, 70));
         drawInteractionHint(g);
         g.dispose();
     }
 
     private void drawPlot(Graphics2D g, int plotIndex, String title, double[] values, Color color) {
+        boolean isDark = PRPDConstants.isDarkTheme();
         Rectangle plot = plotBounds(plotIndex);
-        g.setColor(Color.WHITE);
+        g.setColor(isDark ? new Color(30, 30, 30) : Color.WHITE);
         g.fillRect(plot.x, plot.y, plot.width, plot.height);
         drawGrid(g, plot, plotIndex);
-        g.setColor(Color.BLACK);
+        g.setColor(isDark ? Color.GRAY : Color.BLACK);
         g.drawRect(plot.x, plot.y, plot.width, plot.height);
         g.setFont(new Font("Arial", Font.BOLD, 14));
+        g.setColor(isDark ? Color.LIGHT_GRAY : Color.BLACK);
         g.drawString(title, plot.x, plot.y - 8);
 
         if (size > 1) {
@@ -422,15 +426,16 @@ public class InteractiveSignalPanel extends JPanel {
     }
 
     private void drawGrid(Graphics2D g, Rectangle plot, int plotIndex) {
+        boolean isDark = PRPDConstants.isDarkTheme();
         FontMetrics fm = g.getFontMetrics();
         g.setFont(new Font("Arial", Font.PLAIN, 12));
         for (int i = 0; i <= 5; i++) {
             double r = i / 5.0;
             int x = plot.x + (int) Math.round(r * plot.width);
             double value = viewTMin + r * (viewTMax - viewTMin);
-            g.setColor(new Color(230, 230, 230));
+            g.setColor(isDark ? new Color(60, 60, 60) : new Color(230, 230, 230));
             g.drawLine(x, plot.y, x, plot.y + plot.height);
-            g.setColor(Color.BLACK);
+            g.setColor(isDark ? Color.LIGHT_GRAY : Color.BLACK);
             String text = formatTick(value);
             g.drawString(text, x - fm.stringWidth(text) / 2, plot.y + plot.height + 17);
         }
@@ -438,7 +443,7 @@ public class InteractiveSignalPanel extends JPanel {
             double r = i / 4.0;
             int y = plot.y + plot.height - (int) Math.round(r * plot.height);
             double value = viewYMin[plotIndex] + r * (viewYMax[plotIndex] - viewYMin[plotIndex]);
-            g.setColor(new Color(230, 230, 230));
+            g.setColor(isDark ? new Color(60, 60, 60) : new Color(230, 230, 230));
             g.drawLine(plot.x, y, plot.x + plot.width, y);
             
             boolean skipLabel = false;
@@ -449,7 +454,7 @@ public class InteractiveSignalPanel extends JPanel {
                 }
             }
             if (!skipLabel) {
-                g.setColor(Color.BLACK);
+                g.setColor(isDark ? Color.LIGHT_GRAY : Color.BLACK);
                 String text = formatTick(value);
                 g.drawString(text, plot.x - fm.stringWidth(text) - 8, y + 4);
             }
@@ -459,17 +464,18 @@ public class InteractiveSignalPanel extends JPanel {
             int y0 = plot.y + plot.height - (int) Math.round((0.0 - viewYMin[plotIndex]) / (viewYMax[plotIndex] - viewYMin[plotIndex]) * plot.height);
             g.setColor(new Color(255, 140, 0));
             g.drawLine(plot.x, y0, plot.x + plot.width, y0);
-            g.setColor(Color.BLACK);
+            g.setColor(isDark ? Color.LIGHT_GRAY : Color.BLACK);
             String text = "0";
             g.drawString(text, plot.x - fm.stringWidth(text) - 8, y0 + 4);
         }
     }
 
     private void drawAxisLabels(Graphics2D g, Rectangle plot, int plotIndex) {
+        boolean isDark = PRPDConstants.isDarkTheme();
         g.setFont(new Font("Arial", Font.PLAIN, 12));
         FontMetrics fm = g.getFontMetrics();
         String xLabel = "Time [s]";
-        g.setColor(Color.BLACK);
+        g.setColor(isDark ? Color.LIGHT_GRAY : Color.BLACK);
         g.drawString(xLabel, plot.x + plot.width / 2 - fm.stringWidth(xLabel) / 2, plot.y + plot.height + 34);
         String yLabel = "Amplitude [ADC]";
         Graphics2D copy = (Graphics2D) g.create();
