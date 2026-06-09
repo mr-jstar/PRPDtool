@@ -15,8 +15,19 @@ import java.awt.Shape;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
+import java.awt.geom.Rectangle2D;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
+import javax.imageio.ImageIO;
+import javax.swing.JFileChooser;
+import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+import javax.swing.SwingUtilities;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import pipeline.Buffer;
 
 public class InteractiveSignalPanel extends JPanel {
@@ -55,6 +66,27 @@ public class InteractiveSignalPanel extends JPanel {
     private int dragPlot = -1;
     private boolean dragY;
 
+    // Cursors
+    private boolean showCursors = false;
+    private double cursorT1 = 0.0;
+    private double cursorT2 = 0.0;
+    private final double[] cursorY1 = new double[]{0.0, 0.0};
+    private final double[] cursorY2 = new double[]{0.0, 0.0};
+    private int draggingCursor = 0; // 0=none, 1=T1, 2=T2, 3=Y1_0, 4=Y2_0, 5=Y1_1, 6=Y2_1
+
+    public void setShowCursors(boolean show) {
+        this.showCursors = show;
+        if (show) {
+            cursorT1 = viewTMin + 0.25 * (viewTMax - viewTMin);
+            cursorT2 = viewTMin + 0.75 * (viewTMax - viewTMin);
+            for (int i = 0; i < 2; i++) {
+                cursorY1[i] = viewYMin[i] + 0.25 * (viewYMax[i] - viewYMin[i]);
+                cursorY2[i] = viewYMin[i] + 0.75 * (viewYMax[i] - viewYMin[i]);
+            }
+        }
+        repaint();
+    }
+
     public InteractiveSignalPanel() {
         setBackground(Color.WHITE);
         setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
@@ -65,19 +97,69 @@ public class InteractiveSignalPanel extends JPanel {
                     resetView();
                     return;
                 }
-                dragStart = e.getPoint();
-                dragPlot = plotAt(e.getPoint());
-                dragY = e.isShiftDown() || SwingUtilitiesCompat.isRightButton(e);
-                dragTMin = viewTMin;
-                dragTMax = viewTMax;
-                dragYMin[0] = viewYMin[0];
-                dragYMin[1] = viewYMin[1];
-                dragYMax[0] = viewYMax[0];
-                dragYMax[1] = viewYMax[1];
+                
+                draggingCursor = 0;
+                if (showCursors) {
+                    Rectangle plot0 = plotBounds(0);
+                    Rectangle plot1 = plotBounds(1);
+                    int x = e.getX();
+                    int y = e.getY();
+                    int t1x = timeToX(cursorT1, plot0);
+                    int t2x = timeToX(cursorT2, plot0);
+                    int distT1 = Math.abs(x - t1x);
+                    int distT2 = Math.abs(x - t2x);
+                    
+                    int plotIdx = plotAt(e.getPoint());
+                    if (plotIdx >= 0) {
+                        Rectangle plot = plotIdx == 0 ? plot0 : plot1;
+                        int y1yRaw = valueToY(cursorY1[plotIdx], plot, plotIdx);
+                        int y2yRaw = valueToY(cursorY2[plotIdx], plot, plotIdx);
+                        int y1y = Math.max(plot.y, Math.min(plot.y + plot.height, y1yRaw));
+                        int y2y = Math.max(plot.y, Math.min(plot.y + plot.height, y2yRaw));
+                        int distY1 = Math.abs(y - y1y);
+                        int distY2 = Math.abs(y - y2y);
+                        
+                        if (distT1 < 8 && distT1 <= distT2 && distT1 <= distY1 && distT1 <= distY2) draggingCursor = 1;
+                        else if (distT2 < 8 && distT2 <= distY1 && distT2 <= distY2) draggingCursor = 2;
+                        else if (distY1 < 8 && distY1 <= distY2) draggingCursor = 3 + plotIdx * 2;
+                        else if (distY2 < 8) draggingCursor = 4 + plotIdx * 2;
+                    } else {
+                        if (distT1 < 8 && distT1 <= distT2) draggingCursor = 1;
+                        else if (distT2 < 8) draggingCursor = 2;
+                    }
+                }
+                
+                if (draggingCursor == 0) {
+                    dragStart = e.getPoint();
+                    dragPlot = plotAt(e.getPoint());
+                    dragY = e.isShiftDown() || SwingUtilities.isRightMouseButton(e);
+                    dragTMin = viewTMin;
+                    dragTMax = viewTMax;
+                    dragYMin[0] = viewYMin[0];
+                    dragYMin[1] = viewYMin[1];
+                    dragYMax[0] = viewYMax[0];
+                    dragYMax[1] = viewYMax[1];
+                }
             }
 
             @Override
             public void mouseDragged(MouseEvent e) {
+                if (draggingCursor > 0) {
+                    Rectangle plot0 = plotBounds(0);
+                    if (draggingCursor == 1) cursorT1 = xToTime(e.getX(), plot0);
+                    else if (draggingCursor == 2) cursorT2 = xToTime(e.getX(), plot0);
+                    else {
+                        int pIdx = (draggingCursor - 3) / 2;
+                        boolean isY1 = (draggingCursor - 3) % 2 == 0;
+                        Rectangle plot = plotBounds(pIdx);
+                        double val = yToValue(e.getY(), plot, pIdx);
+                        if (isY1) cursorY1[pIdx] = val;
+                        else cursorY2[pIdx] = val;
+                    }
+                    repaint();
+                    return;
+                }
+
                 if (dragStart == null || size == 0) {
                     return;
                 }
@@ -125,6 +207,38 @@ public class InteractiveSignalPanel extends JPanel {
         addMouseListener(mouse);
         addMouseMotionListener(mouse);
         addMouseWheelListener(mouse);
+
+        JPopupMenu popupMenu = new JPopupMenu();
+        JMenuItem saveItem = new JMenuItem("Save Signal as PNG...");
+        saveItem.addActionListener(e -> saveAsPng());
+        popupMenu.add(saveItem);
+        setComponentPopupMenu(popupMenu);
+    }
+
+    private void saveAsPng() {
+        if (getWidth() <= 0 || getHeight() <= 0) {
+            JOptionPane.showMessageDialog(this, "Panel is not visible.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        JFileChooser fc = new JFileChooser();
+        fc.setDialogTitle("Save Signal as PNG");
+        fc.setFileFilter(new FileNameExtensionFilter("PNG Images", "png"));
+        if (fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File file = fc.getSelectedFile();
+            if (!file.getName().toLowerCase().endsWith(".png")) {
+                file = new File(file.getAbsolutePath() + ".png");
+            }
+            try {
+                BufferedImage img = new BufferedImage(getWidth(), getHeight(), BufferedImage.TYPE_INT_RGB);
+                Graphics2D g2d = img.createGraphics();
+                paint(g2d);
+                g2d.dispose();
+                ImageIO.write(img, "PNG", file);
+                JOptionPane.showMessageDialog(this, "Signal image saved successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+            } catch (IOException ex) {
+                JOptionPane.showMessageDialog(this, "Failed to save image: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
     }
 
     public void reset(String upperTitle, Filter upperFilter, String lowerTitle, Filter lowerFilter, boolean liveMode) {
@@ -376,7 +490,78 @@ public class InteractiveSignalPanel extends JPanel {
         drawPlot(g, 0, upperTitle, upper, isDark ? Color.CYAN : new Color(30, 90, 210));
         drawPlot(g, 1, lowerTitle, lower, isDark ? Color.GREEN : new Color(0, 150, 70));
         drawInteractionHint(g);
+        if (showCursors) {
+            drawCursors(g);
+        }
         g.dispose();
+    }
+
+    private void drawCursors(Graphics2D g) {
+        boolean isDark = PRPDConstants.isDarkTheme();
+        Rectangle plot0 = plotBounds(0);
+        Rectangle plot1 = plotBounds(1);
+        int topY = plot0.y;
+        int bottomY = plot1.y + plot1.height;
+        
+        int x1 = timeToX(cursorT1, plot0);
+        int x2 = timeToX(cursorT2, plot0);
+        
+        g.setStroke(new BasicStroke(1.0f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10.0f, new float[]{5.0f}, 0.0f));
+        
+        // Draw T1, T2
+        g.setColor(new Color(255, 165, 0)); // Orange
+        if (x1 >= LEFT && x1 <= getWidth() - RIGHT) g.drawLine(x1, topY, x1, bottomY);
+        g.setColor(new Color(255, 215, 0)); // Gold
+        if (x2 >= LEFT && x2 <= getWidth() - RIGHT) g.drawLine(x2, topY, x2, bottomY);
+        
+        // Draw Y1, Y2
+        for (int p = 0; p < 2; p++) {
+            Rectangle plot = p == 0 ? plot0 : plot1;
+            int y1Raw = valueToY(cursorY1[p], plot, p);
+            int y2Raw = valueToY(cursorY2[p], plot, p);
+            
+            int y1 = Math.max(plot.y, Math.min(plot.y + plot.height, y1Raw));
+            int y2 = Math.max(plot.y, Math.min(plot.y + plot.height, y2Raw));
+            
+            g.setColor(new Color(255, 100, 100)); // Red-ish
+            g.drawLine(LEFT, y1, getWidth() - RIGHT, y1);
+            g.setColor(new Color(255, 150, 150)); // Light red
+            g.drawLine(LEFT, y2, getWidth() - RIGHT, y2);
+        }
+        
+        // Draw info box
+        g.setStroke(new BasicStroke(1.0f));
+        int boxW = 160;
+        int boxH = 205;
+        int boxX = getWidth() - RIGHT - boxW - 10;
+        int boxY = TOP + 10;
+        
+        g.setColor(isDark ? new Color(30, 30, 30, 200) : new Color(255, 255, 255, 200));
+        g.fillRect(boxX, boxY, boxW, boxH);
+        g.setColor(isDark ? Color.LIGHT_GRAY : Color.BLACK);
+        g.drawRect(boxX, boxY, boxW, boxH);
+        
+        g.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        double dt = Math.abs(cursorT2 - cursorT1);
+        double freq = dt > 0 ? 1.0 / dt : 0;
+        
+        int ty = boxY + 15;
+        g.drawString(String.format("T1: %.6f s", cursorT1), boxX + 10, ty); ty += 15;
+        g.drawString(String.format("T2: %.6f s", cursorT2), boxX + 10, ty); ty += 15;
+        g.drawString(String.format("ΔT: %.6f s", dt), boxX + 10, ty); ty += 15;
+        g.drawString(String.format("f : %.1f Hz", freq), boxX + 10, ty); ty += 25;
+        
+        double dy0 = Math.abs(cursorY2[0] - cursorY1[0]);
+        double dy1 = Math.abs(cursorY2[1] - cursorY1[1]);
+        g.drawString("Upper Plot:", boxX + 10, ty); ty += 15;
+        g.drawString(" Y1: " + formatTick(cursorY1[0]), boxX + 10, ty); ty += 15;
+        g.drawString(" Y2: " + formatTick(cursorY2[0]), boxX + 10, ty); ty += 15;
+        g.drawString(" ΔY: " + formatTick(dy0), boxX + 10, ty); ty += 20;
+        
+        g.drawString("Lower Plot:", boxX + 10, ty); ty += 15;
+        g.drawString(" Y1: " + formatTick(cursorY1[1]), boxX + 10, ty); ty += 15;
+        g.drawString(" Y2: " + formatTick(cursorY2[1]), boxX + 10, ty); ty += 15;
+        g.drawString(" ΔY: " + formatTick(dy1), boxX + 10, ty);
     }
 
     private void drawPlot(Graphics2D g, int plotIndex, String title, double[] values, Color color) {

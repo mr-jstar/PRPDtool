@@ -504,7 +504,12 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         g.drawString("Phase [deg]", left + plotW / 2 - 40, height - 13);
 
         g.rotate(-Math.PI / 2);
-        g.drawString("|Amplitude|", -top - plotH / 2 - 40, 18);
+        boolean isBipolar = data.getMin() < 0;
+        if (isBipolar) {
+            g.drawString("Amplitude [ADC]", -top - plotH / 2 - 45, 18);
+        } else {
+            g.drawString("|Amplitude| [ADC]", -top - plotH / 2 - 55, 18);
+        }
         g.rotate(Math.PI / 2);
 
         g.dispose();
@@ -538,5 +543,39 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         }
 
         return 0xFF000000 | (r << 16) | (g << 8) | b;
+    }
+
+    @Override
+    public double getPhaseAt(int x, int panelWidth) {
+        if (panelWidth <= 0 || width <= 0) return 0;
+        int imgX = (int) ((double) x / panelWidth * width);
+        double bx = (imgX - left - offsetX) / zoomX;
+        return bx / plotW * 360.0;
+    }
+
+    @Override
+    public double getAmpAt(int y, int panelHeight) {
+        if (panelHeight <= 0 || height <= 0) return 0;
+        int imgY = (int) ((double) y / panelHeight * height);
+        double y_old = (top + plotH) + (imgY - (top + plotH) - offsetY) / zoomY;
+        return data.getMin() + ((top + plotH) - y_old) / (double)plotH * (data.getMax() - data.getMin());
+    }
+
+    @Override
+    public int getXForPhase(double phase, int panelWidth) {
+        if (panelWidth <= 0 || width <= 0) return 0;
+        double bx = phase / 360.0 * plotW;
+        int imgX = (int) Math.round(bx * zoomX + left + offsetX);
+        return (int) Math.round((double) imgX / width * panelWidth);
+    }
+
+    @Override
+    public int getYForAmp(double amp, int panelHeight) {
+        if (panelHeight <= 0 || height <= 0) return 0;
+        double delta = data.getMax() - data.getMin();
+        if (delta == 0) return 0;
+        double y_old = (top + plotH) - (amp - data.getMin()) / delta * plotH;
+        int imgY = (int) Math.round((y_old - (top + plotH)) * zoomY + offsetY + (top + plotH));
+        return (int) Math.round((double) imgY / height * panelHeight);
     }
 }

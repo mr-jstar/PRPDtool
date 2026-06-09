@@ -518,6 +518,22 @@ public class PRPDTool extends JFrame {
             if (autoscaleCb != null && autoscaleCb.isSelected()) { applyAutoscale(); } else { center.setImage(histogram.getImage()); }
         });
         optM.add(fastMB);
+        
+        JMenuItem cursorsMB = new JCheckBoxMenuItem("Show signal cursors", false);
+        cursorsMB.addActionListener(ev -> {
+            if (interactiveSignalPanel != null) {
+                interactiveSignalPanel.setShowCursors(cursorsMB.isSelected());
+            }
+        });
+        optM.add(cursorsMB);
+
+        JMenuItem prpdCursorsMB = new JCheckBoxMenuItem("Show PRPD cursors", false);
+        prpdCursorsMB.addActionListener(ev -> {
+            if (center != null) {
+                center.setShowCursors(prpdCursorsMB.isSelected());
+            }
+        });
+        optM.add(prpdCursorsMB);
 
         JCheckBoxMenuItem darkModeCheckbox = new JCheckBoxMenuItem("Dark Mode", isDarkMode());
         darkModeCheckbox.addActionListener(ev -> {
