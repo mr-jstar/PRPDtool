@@ -97,14 +97,21 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         }
 
         boolean bipolarHistogram = data.getMin() < 0;
-        java.util.ArrayList<Double> validAmps = new java.util.ArrayList<>(Math.min(size, 100000));
         
-        for (int i = 0; i < size; i++) {
-            if (!showRawData && Math.abs(amps[i]) < displayThreshold) continue;
-            validAmps.add(amps[i]);
+        int step = 1;
+        if (size > 100000) {
+            step = (int) Math.ceil((double) size / 100000.0);
         }
         
-        if (validAmps.isEmpty()) {
+        double[] validAmps = new double[size / step + 1];
+        int vCount = 0;
+        
+        for (int i = 0; i < size; i += step) {
+            if (!showRawData && Math.abs(amps[i]) < displayThreshold) continue;
+            validAmps[vCount++] = amps[i];
+        }
+        
+        if (vCount == 0) {
             zoomY = 1.0;
             offsetY = 0.0;
             zoomX = 1.0;
@@ -113,19 +120,19 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
             return;
         }
         
-        java.util.Collections.sort(validAmps);
+        java.util.Arrays.sort(validAmps, 0, vCount);
         
         double A_low, A_high;
         if (bipolarHistogram) {
             double maxAbs = 0;
-            for (Double a : validAmps) {
-                if (Math.abs(a) > maxAbs) maxAbs = Math.abs(a);
+            for (int i = 0; i < vCount; i++) {
+                if (Math.abs(validAmps[i]) > maxAbs) maxAbs = Math.abs(validAmps[i]);
             }
             A_low = -maxAbs;
             A_high = maxAbs;
         } else {
-            A_low = validAmps.get((int)(validAmps.size() * 0.005));
-            A_high = validAmps.get(validAmps.size() - 1);
+            A_low = validAmps[(int)(vCount * 0.005)];
+            A_high = validAmps[vCount - 1];
             if (A_low < 0) A_low = 0;
         }
         
@@ -390,13 +397,29 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
                 colorMap[c] = heatColorRGB(v);
             }
             
-            for (int y = 0; y < plotH; y++) {
-                int rowOffset = y * plotW;
-                int imgY = top + y;
-                for (int x = 0; x < plotW; x++) {
-                    int c = screenHist[rowOffset + x];
-                    if (c > 0) {
-                        image.setRGB(left + x, imgY, colorMap[c]);
+            java.awt.image.DataBuffer db = image.getRaster().getDataBuffer();
+            if (db instanceof java.awt.image.DataBufferInt) {
+                int[] pixels = ((java.awt.image.DataBufferInt) db).getData();
+                for (int y = 0; y < plotH; y++) {
+                    int rowOffset = y * plotW;
+                    int imgY = top + y;
+                    int imgRowOffset = imgY * width;
+                    for (int x = 0; x < plotW; x++) {
+                        int c = screenHist[rowOffset + x];
+                        if (c > 0) {
+                            pixels[imgRowOffset + left + x] = colorMap[c];
+                        }
+                    }
+                }
+            } else {
+                for (int y = 0; y < plotH; y++) {
+                    int rowOffset = y * plotW;
+                    int imgY = top + y;
+                    for (int x = 0; x < plotW; x++) {
+                        int c = screenHist[rowOffset + x];
+                        if (c > 0) {
+                            image.setRGB(left + x, imgY, colorMap[c]);
+                        }
                     }
                 }
             }
