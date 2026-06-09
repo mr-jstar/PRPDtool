@@ -45,6 +45,10 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
     public double getOffsetX() { return offsetX; }
     public void setOffsetX(double offsetX) { this.offsetX = offsetX; redraw(); }
     
+    private boolean fastRendering = true;
+    public boolean isFastRendering() { return fastRendering; }
+    public void setFastRendering(boolean fastRendering) { this.fastRendering = fastRendering; redraw(); }
+    
     public void setDisplayThreshold(double displayThreshold) { this.displayThreshold = displayThreshold; redraw(); }
     public void setShowRawData(boolean showRawData) { this.showRawData = showRawData; redraw(); }
 
@@ -336,21 +340,46 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         double mulY = (maxA > minA) ? ((plotH / (maxA - minA)) * zoomY) : 0;
         double offY = plotH + offsetY + minA * mulY;
         
-        for (int i = 0; i < size; i++) {
-            double amp = amps[i];
-            if (!showRawData && Math.abs(amp) < displayThreshold) continue;
+        if (fastRendering) {
+            int step = 1;
+            int maxPoints = 250000;
+            if (size > maxPoints) {
+                step = (int) Math.ceil((double) size / maxPoints);
+            }
             
-            int screenX = (int) (phases[i] * mulX + offsetX);
-            if (screenX == plotW) screenX = plotW - 1;
-            if (screenX < 0 || screenX >= plotW) continue;
-            
-            int screenY = (int) (offY - amp * mulY);
-            if (screenY == plotH) screenY = plotH - 1;
-            if (screenY < 0 || screenY >= plotH) continue;
-            
-            int idx = screenY * plotW + screenX;
-            screenHist[idx]++;
-            if (screenHist[idx] > maxC) maxC = screenHist[idx];
+            for (int i = 0; i < size; i += step) {
+                double amp = amps[i];
+                if (!showRawData && Math.abs(amp) < displayThreshold) continue;
+                
+                int screenX = (int) (phases[i] * mulX + offsetX);
+                if (screenX == plotW) screenX = plotW - 1;
+                if (screenX < 0 || screenX >= plotW) continue;
+                
+                int screenY = (int) (offY - amp * mulY);
+                if (screenY == plotH) screenY = plotH - 1;
+                if (screenY < 0 || screenY >= plotH) continue;
+                
+                int idx = screenY * plotW + screenX;
+                screenHist[idx]++;
+                if (screenHist[idx] > maxC) maxC = screenHist[idx];
+            }
+        } else {
+            for (int i = 0; i < size; i++) {
+                double amp = amps[i];
+                if (!showRawData && Math.abs(amp) < displayThreshold) continue;
+                
+                int screenX = (int) (phases[i] * mulX + offsetX);
+                if (screenX == plotW) screenX = plotW - 1;
+                if (screenX < 0 || screenX >= plotW) continue;
+                
+                int screenY = (int) (offY - amp * mulY);
+                if (screenY == plotH) screenY = plotH - 1;
+                if (screenY < 0 || screenY >= plotH) continue;
+                
+                int idx = screenY * plotW + screenX;
+                screenHist[idx]++;
+                if (screenHist[idx] > maxC) maxC = screenHist[idx];
+            }
         }
         
         if (maxC > 0) {

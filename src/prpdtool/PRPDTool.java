@@ -122,6 +122,7 @@ public class PRPDTool extends JFrame {
     private final String RP_FRAME_SIZE = "PRPDMonitor.rp.frame.size";
     private final String RP_FRAME_COUNT = "PRPDMonitor.rp.frame.count";
     private final String RP_FILE_LIMIT = "PRPDMonitor.rp.file.limit";
+    private final String FAST_RENDERING = "PRPDMonitor.fast.rendering";
 
     private JPanel left;
     private ImagePanel center;
@@ -169,6 +170,7 @@ public class PRPDTool extends JFrame {
     // Misc options
     private boolean drawF0 = true;
     private boolean bipolarHistogram;
+    private boolean fastRendering = true;
 
     private boolean drawBaseline;
 
@@ -336,6 +338,11 @@ public class PRPDTool extends JFrame {
 
         try {
             rpFileLimit = Integer.parseInt(configuration.getValue(RP_FILE_LIMIT).trim());
+        } catch (Exception ex) {
+        }
+        try {
+            String fr = configuration.getValue(FAST_RENDERING);
+            if (fr != null) fastRendering = Boolean.parseBoolean(fr.trim());
         } catch (Exception ex) {
         }
 
@@ -514,6 +521,22 @@ public class PRPDTool extends JFrame {
             }
         });
         optM.add(ftHistMB);
+        optM.addSeparator();
+        
+        JCheckBoxMenuItem fastMB = new JCheckBoxMenuItem("Fast Rendering (Raster)", fastRendering);
+        fastMB.addActionListener(e -> {
+            fastRendering = fastMB.isSelected();
+            if (histogram instanceof DynamicPRPDHistogram) {
+                ((DynamicPRPDHistogram) histogram).setFastRendering(fastRendering);
+            }
+            try {
+                configuration.saveValue(FAST_RENDERING, "" + fastRendering);
+            } catch (IOException ex) {
+            }
+            if (autoscaleCb != null && autoscaleCb.isSelected()) { applyAutoscale(); } else { center.setImage(histogram.getImage()); }
+        });
+        optM.add(fastMB);
+        
         optM.addSeparator();
 
         optM.add(new JMenuItem("Base signal"));
@@ -757,6 +780,7 @@ public class PRPDTool extends JFrame {
             );
             histogram.drawF0(drawF0);
             ((DynamicPRPDHistogram) histogram).setDisplayThreshold(threshold);
+            ((DynamicPRPDHistogram) histogram).setFastRendering(fastRendering);
             if (showRawDataCb != null) {
                 ((DynamicPRPDHistogram) histogram).setShowRawData(showRawDataCb.isSelected());
             }
