@@ -21,8 +21,8 @@ import pipeline.Buffer;
 
 public class InteractiveSignalPanel extends JPanel {
 
-    private static final int MAX_POINTS = 700_000;
-    private static final int TARGET_POINTS_PER_BUFFER = 25_000;
+    private static final int MAX_POINTS = PRPDConstants.SIGNAL_MAX_POINTS;
+    private static final int TARGET_POINTS_PER_BUFFER = PRPDConstants.SIGNAL_TARGET_POINTS_PER_BUFFER;
     private static final int LEFT = 110;
     private static final int RIGHT = 18;
     private static final int TOP = 28;
@@ -156,13 +156,34 @@ public class InteractiveSignalPanel extends JPanel {
             double[] upperValues = upperFilter == null ? copy(buffer.u, buffer.used) : upperFilter.filter(buffer.u, buffer.used);
             double[] lowerValues = lowerFilter == null ? copy(buffer.u, buffer.used) : lowerFilter.filter(buffer.u, buffer.used);
             int stride = Math.max(1, buffer.used / TARGET_POINTS_PER_BUFFER);
-            int add = (buffer.used + stride - 1) / stride;
+            int add = (stride == 1) ? buffer.used : ((buffer.used + stride - 1) / stride) * 2;
             ensureCapacity(size + add);
             for (int i = 0; i < buffer.used; i += stride) {
-                t[size] = buffer.t[i];
-                upper[size] = upperValues[i];
-                lower[size] = lowerValues[i];
-                size++;
+                int end = Math.min(i + stride, buffer.used);
+                if (stride == 1) {
+                    t[size] = buffer.t[i];
+                    upper[size] = upperValues[i];
+                    lower[size] = lowerValues[i];
+                    size++;
+                } else {
+                    double uMin = upperValues[i], uMax = upperValues[i];
+                    double lMin = lowerValues[i], lMax = lowerValues[i];
+                    for (int j = i + 1; j < end; j++) {
+                        if (upperValues[j] < uMin) uMin = upperValues[j];
+                        if (upperValues[j] > uMax) uMax = upperValues[j];
+                        if (lowerValues[j] < lMin) lMin = lowerValues[j];
+                        if (lowerValues[j] > lMax) lMax = lowerValues[j];
+                    }
+                    t[size] = buffer.t[i];
+                    upper[size] = uMin;
+                    lower[size] = lMin;
+                    size++;
+                    
+                    t[size] = buffer.t[end - 1];
+                    upper[size] = uMax;
+                    lower[size] = lMax;
+                    size++;
+                }
             }
             trimIfNeeded();
             updateAutoRanges();

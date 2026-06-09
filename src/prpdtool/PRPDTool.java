@@ -57,31 +57,9 @@ import redpitaya.RpprFileSignalReader;
 
 public class PRPDTool extends JFrame {
 
-    private static final double DEFAULT_THRESHOLD = 0.012;
-    private static final double DEFAULT_FS = 1e6;
-    private static final double DEFAULT_CUTOFF = 1e5;
-
     private volatile boolean inBatchMode;
     private volatile boolean realTimeData;
     private String serverPort = "127.0.0.1:7777";
-
-    private String[] classes = {
-        "floating",
-        "corona -",
-        "noise",
-        "corona +",
-        "surface",
-        "void"
-    };
-
-    Map<String, Color> CLASS_COLORS = Map.of(
-            "floating", new Color(255, 200, 0),
-            "corona -", new Color(0, 180, 255),
-            "noise", new Color(140, 140, 140),
-            "corona +", new Color(255, 60, 60),
-            "surface", new Color(0, 220, 120),
-            "void", new Color(180, 0, 255)
-    );
 
     private final ArrayList<Classifier> classifiers = new ArrayList<>();
 
@@ -90,12 +68,7 @@ public class PRPDTool extends JFrame {
     private BufferedImage prpd4YOLO;
 
     // GUI config
-    private final static Font[] fonts = {
-        new Font("Courier", Font.PLAIN, 12),
-        new Font("Courier", Font.PLAIN, 18),
-        new Font("Courier", Font.PLAIN, 24)
-    };
-    private Font currentFont = fonts[1];
+    private Font currentFont = PRPDConstants.FONTS[1];
 
     private static final String CONFIG_FILE = ".prpd_config";
     private final Configuration configuration = new Configuration(CONFIG_FILE);
@@ -141,10 +114,10 @@ public class PRPDTool extends JFrame {
     // PRPD config
     private double f0 = 50;
     private volatile double t0 = 0;
-    private volatile double fs = DEFAULT_FS;  // próbkowanie 
+    private volatile double fs = PRPDConstants.DEFAULT_FS;  // próbkowanie 
     private volatile double dfs = fs;  // próbkowanie z danych
-    private double threshold = DEFAULT_THRESHOLD; //próg detekcji impulsu po odjęciu tła
-    private double cutF = DEFAULT_CUTOFF; // f odcięcia
+    private double threshold = PRPDConstants.DEFAULT_THRESHOLD; //próg detekcji impulsu po odjęciu tła
+    private double cutF = PRPDConstants.DEFAULT_CUTOFF; // f odcięcia
 
     private double ampMin = 0.0; // minimum histogramu
     private double ampMax = 0.12; // maximum histogramu
@@ -365,7 +338,7 @@ public class PRPDTool extends JFrame {
 
         try {
             int size = Integer.parseInt(configuration.getValue(FONTSIZE));
-            for (Font f : fonts) {
+            for (Font f : PRPDConstants.FONTS) {
                 if (Math.abs(f.getSize() - size) < Math.abs(currentFont.getSize() - size)) {
                     currentFont = f;
                 }
@@ -382,37 +355,43 @@ public class PRPDTool extends JFrame {
                     }).map(Path::toString).toArray(String[]::new);
             Arrays.sort(onnx);
 
-            for (String s : onnx) {
-                System.err.println("Found model in " + s);
-                try {
-                    if (s.toLowerCase().contains("mobileyolo")) {
-                        Classifier c = new ONNXClassifier(
-                                s, new PreprocessorYOLO(),
-                                new MobileYOLOParser(7, 9, classes, 0.5f, 0.55f));
-                        if (c.ok()) {
-                            classifiers.add(c);
-                        }
-                    } else if (s.toLowerCase().contains("squeezeyolo")) {
-                        Classifier c = new ONNXClassifier(
-                                s, new PreprocessorYOLO(),
-                                new SqueezeYOLOParser(7, 9, classes, 0.25f)
-                        );
-                        if (c.ok()) {
-                            classifiers.add(c);
-                        }
-                    } else if (s.toLowerCase().contains("rtdetr")) {
-                        Classifier c = new ONNXClassifier(
-                                s, new PreprocessorRTDETR(),
-                                new RTDETRParser(300, classes, 0.25f)
-                        );
-                        if (c.ok()) {
-                            classifiers.add(c);
+            new SwingWorker<Void, Void>() {
+                @Override
+                protected Void doInBackground() throws Exception {
+                    for (String s : onnx) {
+                        System.err.println("Found model in " + s);
+                        try {
+                            if (s.toLowerCase().contains("mobileyolo")) {
+                                Classifier c = new ONNXClassifier(
+                                        s, new PreprocessorYOLO(),
+                                        new MobileYOLOParser(7, 9, PRPDConstants.CLASSES, 0.5f, 0.55f));
+                                if (c.ok()) {
+                                    classifiers.add(c);
+                                }
+                            } else if (s.toLowerCase().contains("squeezeyolo")) {
+                                Classifier c = new ONNXClassifier(
+                                        s, new PreprocessorYOLO(),
+                                        new SqueezeYOLOParser(7, 9, PRPDConstants.CLASSES, 0.25f)
+                                );
+                                if (c.ok()) {
+                                    classifiers.add(c);
+                                }
+                            } else if (s.toLowerCase().contains("rtdetr")) {
+                                Classifier c = new ONNXClassifier(
+                                        s, new PreprocessorRTDETR(),
+                                        new RTDETRParser(300, PRPDConstants.CLASSES, 0.25f)
+                                );
+                                if (c.ok()) {
+                                    classifiers.add(c);
+                                }
+                            }
+                        } catch (Exception ex) {
+                            System.err.println(ex.getMessage());
                         }
                     }
-                } catch (Exception ex) {
-                    System.err.println(ex.getMessage());
+                    return null;
                 }
-            }
+            }.execute();
         } catch (Exception ex) {
             System.err.println(ex.getMessage());
         }
@@ -472,7 +451,7 @@ public class PRPDTool extends JFrame {
         JMenuItem fontMI = new JMenuItem("Font size");
         optM.add(fontMI);
         ButtonGroup fgroup = new ButtonGroup();
-        for (Font f : fonts) {
+        for (Font f : PRPDConstants.FONTS) {
             JRadioButtonMenuItem fontOpt = new JRadioButtonMenuItem("\t\t" + String.valueOf(f.getSize()));
             final Font cf = f;
             fontOpt.addActionListener(e -> {
@@ -2067,17 +2046,30 @@ public class PRPDTool extends JFrame {
             inBatchMode = false;
             realTimeData = false;
             File file = fileChooser.getSelectedFile();
-            try {
-                String filename = file.getAbsolutePath();
-                getData(filename);
-                saveLastUsedDirectory(file.getParentFile().getAbsolutePath());
-                dataSource.setText("file (" + file.getName() + ")");
-                lastDataFile = filename;
-            } catch (Exception ex) {
-                System.err.println("Bad file: " + file.getName() + " : " + ex.getMessage());
-                lastDataFile = null;
-                //ex.printStackTrace();
-            }
+            status.setText("Loading " + file.getName() + "...");
+            
+            new SwingWorker<Void, Void>() {
+                @Override
+                protected Void doInBackground() throws Exception {
+                    getData(file.getAbsolutePath());
+                    return null;
+                }
+                
+                @Override
+                protected void done() {
+                    try {
+                        get();
+                        saveLastUsedDirectory(file.getParentFile().getAbsolutePath());
+                        dataSource.setText("file (" + file.getName() + ")");
+                        lastDataFile = file.getAbsolutePath();
+                        status.setText("Loaded " + file.getName());
+                    } catch (Exception ex) {
+                        System.err.println("Bad file: " + file.getName() + " : " + ex.getMessage());
+                        lastDataFile = null;
+                        status.setText("Error loading file.");
+                    }
+                }
+            }.execute();
         }
     }
 
@@ -2090,7 +2082,7 @@ public class PRPDTool extends JFrame {
                 pipeline.setThreshold(0.0);
             }
         } catch (Exception ex) {
-            setParamField("Pulse ampl. threshold", "" + DEFAULT_THRESHOLD);
+            setParamField("Pulse ampl. threshold", "" + PRPDConstants.DEFAULT_THRESHOLD);
         }
         if (histogram instanceof DynamicPRPDHistogram) {
             ((DynamicPRPDHistogram) histogram).setDisplayThreshold(threshold);
@@ -2425,10 +2417,12 @@ public class PRPDTool extends JFrame {
         } catch (InterruptedException ex) {
 
         }
-        classifyButton.setEnabled(false);
-        for (Classifier c : cResults.keySet()) {
-            cResults.get(c).setText("");
-        }
+        SwingUtilities.invokeLater(() -> {
+            classifyButton.setEnabled(false);
+            for (Classifier c : cResults.keySet()) {
+                cResults.get(c).setText("");
+            }
+        });
 
         double tEnd;
         if (realTimeData) {
@@ -2447,7 +2441,7 @@ public class PRPDTool extends JFrame {
 
         if (RpprFileSignalReader.isRpprFile(filename)) {
             fs = RpprFileSignalReader.sampleRate(filename, fs);
-            setParamField("Sampling frequency [Hz]", String.format(Locale.US, "%.12g", fs));
+            SwingUtilities.invokeLater(() -> setParamField("Sampling frequency [Hz]", String.format(Locale.US, "%.12g", fs)));
         }
         dfs = fs;
         Filter hfFilter = new HighPassFilter(fs, cutF, filterQ, filterOrder); //???
@@ -2490,20 +2484,22 @@ public class PRPDTool extends JFrame {
         if (showRawDataCb != null) {
             ((DynamicPRPDHistogram) histogram).setShowRawData(showRawDataCb.isSelected());
         }
-        center.setHistogram((DynamicPRPDHistogram) histogram);
-        if (autoscaleCb != null && autoscaleCb.isSelected()) { applyAutoscale(); } else { center.setImage(histogram.getImage()); }
-        center.revalidate();
+        SwingUtilities.invokeLater(() -> {
+            center.setHistogram((DynamicPRPDHistogram) histogram);
+            if (autoscaleCb != null && autoscaleCb.isSelected()) { applyAutoscale(); } else { center.setImage(histogram.getImage()); }
+            center.revalidate();
 
-        interactiveSignalPanel.reset(
-                drawBaseline ? "Baseline signal" : "Signal envelope",
-                drawBaseline ? lfFilter : abs,
-                "Filtered signal",
-                signalPlotFilter,
-                realTimeData
-        );
+            interactiveSignalPanel.reset(
+                    drawBaseline ? "Baseline signal" : "Signal envelope",
+                    drawBaseline ? lfFilter : abs,
+                    "Filtered signal",
+                    signalPlotFilter,
+                    realTimeData
+            );
 
-        center.repaint();
-        interactiveSignalPanel.repaint();
+            center.repaint();
+            interactiveSignalPanel.repaint();
+        });
 
         extractor = new PRPDExtractorCore(
                 f0,
@@ -2819,7 +2815,7 @@ public class PRPDTool extends JFrame {
                         sep = ",";
                         if (p.box != null) {
                             float[] b = p.box;
-                            histogram.addLabel(b[0], b[1], b[2], b[3], p.toString(), CLASS_COLORS.get(p.className()));
+                            histogram.addLabel(b[0], b[1], b[2], b[3], p.toString(), PRPDConstants.CLASS_COLORS.get(p.className()));
                         }
                     }
                     if (autoscaleCb != null && autoscaleCb.isSelected()) { applyAutoscale(); } else { center.setImage(histogram.getImage()); }
