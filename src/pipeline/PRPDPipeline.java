@@ -11,14 +11,26 @@ import javax.swing.SwingUtilities;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 import java.util.function.Consumer;
+import redpitaya.RpprFileSignalReader;
 
 public class PRPDPipeline implements AutoCloseable {
+
+    @FunctionalInterface
+    public interface ReaderFactory {
+
+        SignalReader open() throws IOException;
+    }
 
     private final ConcurrentLinkedQueue<Buffer> queue = new ConcurrentLinkedQueue<>();
 
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicBoolean readerFinished = new AtomicBoolean(false);
     private final AtomicInteger queuedBuffers = new AtomicInteger(0);
+    
+    private final ConcurrentLinkedQueue<Buffer> uiBufferQueue = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<Pulses> uiPulsesQueue = new ConcurrentLinkedQueue<>();
+    private final AtomicBoolean uiUpdateScheduled = new AtomicBoolean(false);
+    
     protected final CountDownLatch doneLatch = new CountDownLatch(1);
 
     private final ExecutorService readerExecutor
@@ -34,6 +46,8 @@ public class PRPDPipeline implements AutoCloseable {
 
     private final PRPDExtractorCore extractor;
     private final PRPDPipelineListener listener;
+    private final ReaderFactory readerFactory;
+    private volatile SignalReader activeReader;
 
     private final AtomicInteger readLoops = new AtomicInteger();
     private Consumer<Integer> onReaderProgress = n -> {
@@ -53,6 +67,25 @@ public class PRPDPipeline implements AutoCloseable {
         this.maxQueuedBuffers = maxQueuedBuffers;
         this.extractor = extractor;
         this.listener = listener;
+        this.readerFactory = () -> openReader(dataSource, consumerCount, bufferSize);
+    }
+
+    public PRPDPipeline(
+            String datasource,
+            ReaderFactory readerFactory,
+            int consumerCount,
+            int bufferSize,
+            int maxQueuedBuffers,
+            PRPDExtractorCore extractor,
+            PRPDPipelineListener listener
+    ) {
+        this.dataSource = datasource;
+        this.consumerCount = consumerCount;
+        this.bufferSize = bufferSize;
+        this.maxQueuedBuffers = maxQueuedBuffers;
+        this.extractor = extractor;
+        this.listener = listener;
+        this.readerFactory = readerFactory;
     }
 
     public void setOnReaderProgress(Consumer<Integer> callback) {
@@ -76,26 +109,29 @@ public class PRPDPipeline implements AutoCloseable {
         extractor.setThreshold(threshold);
     }
 
+    private void scheduleUiUpdate() {
+        if (uiUpdateScheduled.compareAndSet(false, true)) {
+            SwingUtilities.invokeLater(() -> {
+                uiUpdateScheduled.set(false);
+                
+                Buffer b;
+                while ((b = uiBufferQueue.poll()) != null) {
+                    listener.bufferRead(b);
+                }
+                
+                Pulses p;
+                while ((p = uiPulsesQueue.poll()) != null) {
+                    listener.pulsesReady(p);
+                }
+            });
+        }
+    }
+
     private void readerLoop() {
         SignalReader reader = null;
         try {
-            if (!(new File(dataSource)).exists()) {
-                String[] hp = dataSource.split(":");
-                if (hp.length == 2) {
-                    reader = new BinarySocketReader(
-                            hp[0], // host name or IP
-                            Integer.parseInt(hp[1]), // port
-                            consumerCount,
-                            bufferSize
-                    );
-                }
-            } else {
-                if (dataSource.endsWith(".csv")) {
-                    reader = new TextReader(dataSource, consumerCount, bufferSize);
-                } else {
-                    reader = new BinaryReader(dataSource, consumerCount, bufferSize);;
-                }
-            }
+            reader = readerFactory.open();
+            activeReader = reader;
             if( reader == null )
                 throw new IOException("Unable to init reader " + dataSource );
 
@@ -114,7 +150,8 @@ public class PRPDPipeline implements AutoCloseable {
                     queuedBuffers.incrementAndGet();
 
                     // Obwiednia dostaje surowy bufor natychmiast po odczycie.
-                    SwingUtilities.invokeLater(() -> listener.bufferRead(buffer));
+                    uiBufferQueue.add(buffer);
+                    scheduleUiUpdate();
                 }
 
                 if (buffer.eof) {
@@ -135,7 +172,31 @@ public class PRPDPipeline implements AutoCloseable {
             } catch (IOException ex) {
 
             }
+            activeReader = null;
         }
+    }
+
+    private static SignalReader openReader(String dataSource, int consumerCount, int bufferSize) throws IOException {
+        if (!(new File(dataSource)).exists()) {
+            String[] hp = dataSource.split(":");
+            if (hp.length == 2) {
+                return new BinarySocketReader(
+                        hp[0],
+                        Integer.parseInt(hp[1]),
+                        consumerCount,
+                        bufferSize
+                );
+            }
+        } else {
+            if (dataSource.endsWith(".csv")) {
+                return new TextReader(dataSource, consumerCount, bufferSize);
+            } else if (RpprFileSignalReader.isRpprFile(dataSource)) {
+                return new RpprFileSignalReader(dataSource, consumerCount, 1);
+            } else {
+                return new BinaryReader(dataSource, consumerCount, bufferSize);
+            }
+        }
+        throw new IOException("Unable to init reader " + dataSource);
     }
 
     private void extractorLoop() {
@@ -157,7 +218,8 @@ public class PRPDPipeline implements AutoCloseable {
                 Pulses pulses = extractor.extract(buffer);
 
                 if (pulses.size > 0) {
-                    SwingUtilities.invokeLater(() -> listener.pulsesReady(pulses));
+                    uiPulsesQueue.add(pulses);
+                    scheduleUiUpdate();
                 }
             }
 
@@ -181,6 +243,14 @@ public class PRPDPipeline implements AutoCloseable {
 
     public void stop() {
         running.set(false);
+        SignalReader reader = activeReader;
+        if (reader instanceof Closeable closeable) {
+            try {
+                closeable.close();
+            } catch (IOException ex) {
+
+            }
+        }
     }
 
     @Override

@@ -1,6 +1,11 @@
-/nbproject/private/*
+/nbproject/private/
 /build/
 /dist/
 data/*.bin
+data/received_bin/*.bin
+receiver/*.bin
+receiver/.venv/
+__pycache__/
+**/__pycache__/
 prpd4YOLO.png
 .prpd_config

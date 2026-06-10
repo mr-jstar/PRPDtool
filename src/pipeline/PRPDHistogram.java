@@ -37,4 +37,8 @@ public interface PRPDHistogram {
     
     BufferedImage getImage();
 
+    double getPhaseAt(int x, int panelWidth);
+    double getAmpAt(int y, int panelHeight);
+    int getXForPhase(double phase, int panelWidth);
+    int getYForAmp(double amp, int panelHeight);
 }

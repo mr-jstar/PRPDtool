@@ -39,24 +39,30 @@ public class PRPDExtractorCore {
         this.threshold = threshold;
     }
 
+    private double[] tmpT = new double[0];
+    private double[] tmpPhase = new double[0];
+    private double[] tmpAmp = new double[0];
+
     public Pulses extract(Buffer b) {
         int n = b.used;
-        
-        if( pulses == null || pulses.n < n ) {
-            pulses = new Pulses(new double[n], new double[n], new double[n], n);
-        }
 
         if (n < 3) {
             b.release();
-            pulses.n = 0;
-            return pulses;
+            Pulses p = new Pulses(new double[0], new double[0], new double[0], 0);
+            p.n = 0;
+            return p;
         }
 
         double fs = estimateFs(b.t, n);
         filter.setFs(fs);
-        pulses.fs = fs;
 
         int deadN = Math.max(1, (int) Math.round(deadUs * 1e-6 * fs));
+
+        if (tmpT.length < n) {
+            tmpT = new double[n];
+            tmpPhase = new double[n];
+            tmpAmp = new double[n];
+        }
 
         double [] filtered = filter.filter(b.u, b.used);
 
@@ -94,9 +100,9 @@ public class PRPDExtractorCore {
                 //double amp = b.u[best] - filtered[best];
                 double amp = filtered[best];
 
-                pulses.t[count] = tp;
-                pulses.phase[count] = phase(tp);
-                pulses.amp[count] = amp;
+                tmpT[count] = tp;
+                tmpPhase[count] = phase(tp);
+                tmpAmp[count] = amp;
                 count++;
 
                 lastT = tp;
@@ -106,10 +112,21 @@ public class PRPDExtractorCore {
                 i++;
             }
         }
-        pulses.n = count;
+        
+        double[] finalT = new double[count];
+        double[] finalPhase = new double[count];
+        double[] finalAmp = new double[count];
+        System.arraycopy(tmpT, 0, finalT, 0, count);
+        System.arraycopy(tmpPhase, 0, finalPhase, 0, count);
+        System.arraycopy(tmpAmp, 0, finalAmp, 0, count);
+        
+        Pulses p = new Pulses(finalT, finalPhase, finalAmp, count);
+        p.n = count;
+        p.fs = fs;
+        
         b.release();
 
-        return pulses;
+        return p;
     }
 
     private double phase(double t) {
