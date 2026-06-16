@@ -374,9 +374,17 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
                 if (screenY == plotH) screenY = plotH - 1;
                 if (screenY < 0 || screenY >= plotH) continue;
                 
-                int idx = screenY * plotW + screenX;
-                screenHist[idx]++;
-                if (screenHist[idx] > maxC) maxC = screenHist[idx];
+                for (int dy = -1; dy <= 1; dy++) {
+                    for (int dx = -1; dx <= 1; dx++) {
+                        int sx = screenX + dx;
+                        int sy = screenY + dy;
+                        if (sx >= 0 && sx < plotW && sy >= 0 && sy < plotH) {
+                            int idx = sy * plotW + sx;
+                            screenHist[idx]++;
+                            if (screenHist[idx] > maxC) maxC = screenHist[idx];
+                        }
+                    }
+                }
             }
         } else {
             for (int i = 0; i < size; i++) {
@@ -391,9 +399,17 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
                 if (screenY == plotH) screenY = plotH - 1;
                 if (screenY < 0 || screenY >= plotH) continue;
                 
-                int idx = screenY * plotW + screenX;
-                screenHist[idx]++;
-                if (screenHist[idx] > maxC) maxC = screenHist[idx];
+                for (int dy = -1; dy <= 1; dy++) {
+                    for (int dx = -1; dx <= 1; dx++) {
+                        int sx = screenX + dx;
+                        int sy = screenY + dy;
+                        if (sx >= 0 && sx < plotW && sy >= 0 && sy < plotH) {
+                            int idx = sy * plotW + sx;
+                            screenHist[idx]++;
+                            if (screenHist[idx] > maxC) maxC = screenHist[idx];
+                        }
+                    }
+                }
             }
         }
         

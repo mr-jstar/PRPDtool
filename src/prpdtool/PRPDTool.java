@@ -2407,7 +2407,7 @@ public class PRPDTool extends JFrame {
                         center.setImage(histogram.getImage());
                     }
                     center.repaint();
-                    lastPaintTime = now;
+                    lastPaintTime = System.currentTimeMillis();
                 }
             }
 
@@ -2656,7 +2656,7 @@ public class PRPDTool extends JFrame {
                         center.setImage(histogram.getImage());
                     }
                     center.repaint();
-                    lastPaintTime = now;
+                    lastPaintTime = System.currentTimeMillis();
                 }
             }
 
