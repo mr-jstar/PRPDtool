@@ -2021,23 +2021,55 @@ public class PRPDTool extends JFrame {
         return s * i / Math.pow(10, p);
     }
 
+    private javax.swing.SwingWorker<Void, Void> rescaleWorker = null;
+
     private void rescaleHistogram() {
-        recreateHistogram();
-        if (!realTimeData && lastDataFile != null) {
-            try {
-                getData(lastDataFile);
-            } catch (Exception ex) {
-                status.setText(ex.getMessage());
-            }
-        } else {
-            rebuildHistogramFromCachedSignal();
-            if (autoscaleCb != null && autoscaleCb.isSelected()) {
-                applyAutoscale();
-            }
+        if (rescaleWorker != null && !rescaleWorker.isDone()) {
+            rescaleWorker.cancel(true);
         }
-        applyButton.setBackground(UIManager.getColor("Button.background"));
-        paramChange.setText(" ");
-        center.repaint();
+
+        recreateHistogram();
+        
+        if (applyButton != null) {
+            applyButton.setText("Working...");
+            applyButton.setEnabled(false);
+        }
+
+        rescaleWorker = new javax.swing.SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                if (!realTimeData && lastDataFile != null) {
+                    try {
+                        getData(lastDataFile);
+                    } catch (Exception ex) {
+                        javax.swing.SwingUtilities.invokeLater(() -> status.setText(ex.getMessage()));
+                    }
+                } else {
+                    rebuildHistogramFromCachedSignal();
+                }
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                if (isCancelled()) return;
+                
+                if (realTimeData || lastDataFile == null) {
+                    if (autoscaleCb != null && autoscaleCb.isSelected()) {
+                        applyAutoscale();
+                    }
+                }
+                
+                if (applyButton != null) {
+                    applyButton.setBackground(UIManager.getColor("Button.background"));
+                    applyButton.setText("APPLY");
+                    applyButton.setEnabled(true);
+                }
+                if (paramChange != null) paramChange.setText(" ");
+                if (center != null) center.repaint();
+            }
+        };
+        rescaleWorker.execute();
     }
 
     private void recreateHistogram() {
@@ -2062,8 +2094,10 @@ public class PRPDTool extends JFrame {
     private void rebuildHistogramFromCachedSignal() {
         List<CachedBuffer> snapshot = receivedSignalCache.snapshot();
         if (snapshot.isEmpty()) {
-            center.repaint();
-            status.setText("No cached signal to refresh PRPD.");
+            javax.swing.SwingUtilities.invokeLater(() -> {
+                center.repaint();
+                status.setText("No cached signal to refresh PRPD.");
+            });
             return;
         }
 
@@ -2088,12 +2122,12 @@ public class PRPDTool extends JFrame {
         }
         if (Math.abs((dfs - fs) / fs) > 1e-8) {
             fs = dfs;
-            setParamField("Sampling frequency [Hz]", String.format(Locale.US, "%.12g", fs));
+            javax.swing.SwingUtilities.invokeLater(() -> setParamField("Sampling frequency [Hz]", String.format(Locale.US, "%.12g", fs)));
         }
         if (histogram instanceof pipeline.DynamicPRPDHistogram) {
             ((pipeline.DynamicPRPDHistogram) histogram).forceRedraw();
         }
-        center.repaint();
+        javax.swing.SwingUtilities.invokeLater(() -> center.repaint());
     }
 
     private String getParamField(String key) {
