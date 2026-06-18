@@ -99,6 +99,7 @@ public class PRPDTool extends JFrame {
     private final String RP_FRAME_SIZE = "PRPDMonitor.rp.frame.size";
     private final String RP_FRAME_COUNT = "PRPDMonitor.rp.frame.count";
     private final String RP_FILE_LIMIT = "PRPDMonitor.rp.file.limit";
+    private final String RP_FILE_PREFIX = "PRPDMonitor.rp.file.prefix";
     private final String FAST_RENDERING = "PRPDMonitor.fast.rendering";
 
     private JPanel left;
@@ -124,7 +125,10 @@ public class PRPDTool extends JFrame {
             return d;
         }
     };
+    private boolean filterValid = false;
     private int rpFileLimit = 30;
+    private String rpFilePrefix = "rp_";
+    private final java.util.Queue<File> currentSessionFiles = new java.util.LinkedList<>();
     private final File receivedSignalsDir = new File("data" + File.separator + "received_bin");
 
     // PRPD config
@@ -207,6 +211,7 @@ public class PRPDTool extends JFrame {
     private JButton rpStartOnceButton;
     private JButton rpStartLiveButton;
     private JButton rpStopButton;
+    private JTextField rpFilePrefixField;
     private JButton rpTriggerIn1Button;
     private JButton rpTriggerIn2Button;
     private JButton startRecordButton;
@@ -326,9 +331,17 @@ public class PRPDTool extends JFrame {
 
     public PRPDTool() {
         super("PRPDtool");
+        javax.swing.ToolTipManager.sharedInstance().setDismissDelay(60000); // 60 seconds
 
         try {
             rpFileLimit = Integer.parseInt(configuration.getValue(RP_FILE_LIMIT).trim());
+        } catch (Exception ex) {
+        }
+        try {
+            String p = configuration.getValue(RP_FILE_PREFIX);
+            if (p != null && !p.trim().isEmpty()) {
+                rpFilePrefix = p.trim();
+            }
         } catch (Exception ex) {
         }
         try {
@@ -1062,27 +1075,6 @@ public class PRPDTool extends JFrame {
         panel.setPreferredSize(new Dimension(330, 1));
         panel.setMinimumSize(new Dimension(260, 1));
         
-        JPanel limitPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
-        limitPanel.add(new JLabel("Max files (rp_):"));
-        JSpinner limitSpinner = new JSpinner(new SpinnerNumberModel(rpFileLimit, 0, 9999, 1));
-        limitSpinner.addChangeListener(e -> {
-            rpFileLimit = (Integer) limitSpinner.getValue();
-            try {
-                configuration.saveValue(RP_FILE_LIMIT, "" + rpFileLimit);
-            } catch (IOException ex) {}
-            cleanupOldSignals();
-            refreshReceivedSignals();
-        });
-        limitPanel.add(limitSpinner);
-        
-        JLabel limitHelp = new JLabel(new HelpIcon());
-        limitHelp.setToolTipText(htmlTooltip("Determines the maximum number of automatic capture files (rp_*.rppr.bin) to keep. If this limit is exceeded, the oldest automatic files will be deleted. Renamed files and manual recordings are never deleted. Set to 0 to disable limit."));
-        limitHelp.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-        limitHelp.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
-        limitPanel.add(limitHelp);
-        
-        panel.add(limitPanel, BorderLayout.NORTH);
-        
         receivedSignalsModel = new DefaultListModel<>();
         receivedSignalsList = new JList<>(receivedSignalsModel);
         receivedSignalsList.setVisibleRowCount(6);
@@ -1270,7 +1262,21 @@ public class PRPDTool extends JFrame {
         rpGain1Combo.setSelectedItem(configValue(RP_GAIN1, "LV"));
         rpGain2Combo = new JComboBox<>(new String[]{"LV", "HV"});
         rpGain2Combo.setSelectedItem(configValue(RP_GAIN2, "LV"));
-        rpDecimationSpinner = new JSpinner(new SpinnerNumberModel(configInt(RP_DECIMATION, 1), 1, 65536, 1));
+        rpDecimationSpinner = new JSpinner(new SpinnerNumberModel(configInt(RP_DECIMATION, 1), 1, 65536, 1) {
+            @Override
+            public Object getNextValue() {
+                int val = (Integer) super.getValue();
+                if (val >= 65536) return null;
+                return val * 2;
+            }
+
+            @Override
+            public Object getPreviousValue() {
+                int val = (Integer) super.getValue();
+                if (val <= 1) return null;
+                return val / 2;
+            }
+        });
         rpAveragingBox = new JCheckBox("enabled", configBoolean(RP_AVERAGING, false));
         rpTriggerCombo = new JComboBox<>(new String[]{"NOW", "CH1_PE", "CH1_NE", "CH2_PE", "CH2_NE", "EXT_PE", "EXT_NE"});
         rpTriggerCombo.setSelectedItem(configValue(RP_TRIGGER_SOURCE, "NOW"));
@@ -1339,20 +1345,63 @@ public class PRPDTool extends JFrame {
 
         gbc.gridx = 0;
         gbc.gridy = 0;
+        gbc.gridwidth = 1;
         actions.add(rpTriggerIn1Button, gbc);
         gbc.gridx = 1;
         actions.add(rpTriggerIn2Button, gbc);
 
         gbc.gridx = 0;
         gbc.gridy = 1;
-        actions.add(rpStartLiveButton, gbc);
-        gbc.gridx = 1;
+        gbc.gridwidth = 2;
         actions.add(rpStartOnceButton, gbc);
 
         gbc.gridx = 0;
         gbc.gridy = 2;
-        gbc.gridwidth = 2;
+        gbc.gridwidth = 1;
+        actions.add(rpStartLiveButton, gbc);
+        gbc.gridx = 1;
         actions.add(rpStopButton, gbc);
+
+        JPanel fileConfigPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        
+        fileConfigPanel.add(new JLabel("Prefix"));
+        JLabel prefixHelp = new JLabel(new HelpIcon());
+        prefixHelp.setToolTipText(htmlTooltip("Enter a custom prefix for the files. It will be used to generate file names in the format: [PREFIX]_[DATE_TIME].rppr.bin"));
+        prefixHelp.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+        prefixHelp.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
+        fileConfigPanel.add(prefixHelp);
+
+        rpFilePrefixField = new JTextField(rpFilePrefix, 10);
+        rpFilePrefixField.addActionListener(e -> {
+            rpFilePrefix = rpFilePrefixField.getText().trim();
+            if (rpFilePrefix.isEmpty()) rpFilePrefix = "rp_";
+            rpFilePrefixField.setText(rpFilePrefix);
+            try { configuration.saveValue(RP_FILE_PREFIX, rpFilePrefix); } catch (IOException ex) {}
+        });
+        rpFilePrefixField.addFocusListener(new java.awt.event.FocusAdapter() {
+            @Override
+            public void focusLost(java.awt.event.FocusEvent e) {
+                rpFilePrefix = rpFilePrefixField.getText().trim();
+                if (rpFilePrefix.isEmpty()) rpFilePrefix = "rp_";
+                rpFilePrefixField.setText(rpFilePrefix);
+                try { configuration.saveValue(RP_FILE_PREFIX, rpFilePrefix); } catch (IOException ex) {}
+            }
+        });
+        fileConfigPanel.add(rpFilePrefixField);
+        
+        fileConfigPanel.add(new JLabel("Max files"));
+        JLabel limitHelp = new JLabel(new HelpIcon());
+        limitHelp.setToolTipText(htmlTooltip("File limit for the active session. Files are created after clicking 'Start live'. Once the limit is reached, the oldest files from the current session are overwritten. The pool resets when you click 'Stop RP' and then 'Start live' again. Set to 0 to disable."));
+        limitHelp.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+        limitHelp.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
+        fileConfigPanel.add(limitHelp);
+
+        JSpinner limitSpinner = new JSpinner(new SpinnerNumberModel(rpFileLimit, 0, 9999, 1));
+        limitSpinner.addChangeListener(e -> {
+            rpFileLimit = (Integer) limitSpinner.getValue();
+            try { configuration.saveValue(RP_FILE_LIMIT, "" + rpFileLimit); } catch (IOException ex) {}
+        });
+        fileConfigPanel.add(limitSpinner);
 
         rpSettingsDialog = new JDialog(this, "Red Pitaya Settings", false);
         rpSettingsDialog.setDefaultCloseOperation(JDialog.HIDE_ON_CLOSE);
@@ -1368,12 +1417,24 @@ public class PRPDTool extends JFrame {
         rpSettingsDialog.setLocationRelativeTo(this);
 
         rpEstimatedSizeLabel.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
-        rpPanel.add(actions, BorderLayout.CENTER);
+        JPanel actionsAndFiles = new JPanel(new BorderLayout());
+        actionsAndFiles.add(actions, BorderLayout.CENTER);
+        actionsAndFiles.add(fileConfigPanel, BorderLayout.SOUTH);
+        rpPanel.add(actionsAndFiles, BorderLayout.CENTER);
         rpPanel.add(rpEstimatedSizeLabel, BorderLayout.SOUTH);
 
         rpChannelsCombo.addActionListener(e -> updateRedPitayaChannelControls());
         rpModeCombo.addActionListener(e -> updateRedPitayaModeControls());
-        rpDecimationSpinner.addChangeListener(e -> updateRedPitayaDerivedControls());
+        rpDecimationSpinner.addChangeListener(e -> {
+            int val = (Integer) rpDecimationSpinner.getValue();
+            if (val < 1) val = 1;
+            int powerOfTwo = Integer.highestOneBit(val);
+            if (val != powerOfTwo) {
+                javax.swing.SwingUtilities.invokeLater(() -> rpDecimationSpinner.setValue(powerOfTwo));
+            } else {
+                updateRedPitayaDerivedControls();
+            }
+        });
         rpDurationSpinner.addChangeListener(e -> updateRedPitayaDerivedControls());
         rpFrameSizeSpinner.addChangeListener(e -> updateRedPitayaDerivedControls());
         rpFrameCountSpinner.addChangeListener(e -> updateRedPitayaDerivedControls());
@@ -1449,13 +1510,16 @@ public class PRPDTool extends JFrame {
                 + "Board: STEMlab 125-14 Pro Z7020 Gen 2.";
             case "decimation" ->
                 "Decimation reduces the effective ADC sampling frequency.\n"
+                + "Only powers of 2 are allowed.\n"
                 + "\n"
                 + "Formula:\n"
                 + "fs = 125 MS/s / decimation\n"
                 + "\n"
                 + "Examples:\n"
                 + "- 1 -> 125 MS/s\n"
-                + "- 125 -> 1 MS/s\n"
+                + "- 2 -> 62.5 MS/s\n"
+                + "- 4 -> 31.25 MS/s\n"
+                + "- 8 -> 15.625 MS/s\n"
                 + "- 1024 -> about 122.07 kS/s\n"
                 + "\n"
                 + "Higher decimation gives a longer possible acquisition time and a smaller file, but worsens pulse time resolution.";
@@ -2218,6 +2282,7 @@ public class PRPDTool extends JFrame {
     }
 
     private void startRedPitaya(boolean live) {
+        currentSessionFiles.clear();
         inBatchMode = false;
         realTimeData = true;
         try {
@@ -2364,7 +2429,8 @@ public class PRPDTool extends JFrame {
                         bufferSize,
                         receivedSignalsDir.toPath(),
                         this::onRedPitayaCaptureSaved,
-                        RP_LIVE_RESTART_DELAY_MS
+                        RP_LIVE_RESTART_DELAY_MS,
+                        rpFilePrefix
                 ),
                 3,
                 bufferSize,
@@ -2387,7 +2453,16 @@ public class PRPDTool extends JFrame {
 
     private void onRedPitayaCaptureSaved(Path path) {
         SwingUtilities.invokeLater(() -> {
-            cleanupOldSignals();
+            File savedFile = path.toFile();
+            currentSessionFiles.add(savedFile);
+            if (rpFileLimit > 0) {
+                while (currentSessionFiles.size() > rpFileLimit) {
+                    File toDelete = currentSessionFiles.poll();
+                    if (toDelete != null && toDelete.exists()) {
+                        toDelete.delete();
+                    }
+                }
+            }
             refreshReceivedSignals();
             status.setText("Saved Red Pitaya signal: " + path.getFileName());
         });
