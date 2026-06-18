@@ -36,9 +36,8 @@ public class RedPitayaFileWriter implements Closeable {
 
     public static Path buildOutputPath(File directory, Map<String, Object> metadata) {
         String stamp = LocalDateTime.now().format(STAMP_FORMAT);
-        int decimation = intValue(metadata.get("decimation"), 0);
-        String suffix = channelSuffix(metadata.get("channels"));
-        return directory.toPath().resolve("rp_" + stamp + "_dec" + decimation + "_raw_" + suffix + ".rppr.bin");
+        String prefix = (String) metadata.getOrDefault("file_prefix", "rp_");
+        return directory.toPath().resolve(prefix + "_" + stamp + ".rppr.bin");
     }
 
     public Path path() {

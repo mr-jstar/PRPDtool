@@ -33,9 +33,10 @@ public class RedPitayaSignalReader implements SignalReader, Closeable {
     private boolean windowActive;
     private boolean onceWindowDone;
     private volatile boolean closed;
+    private final String filePrefix;
 
     public RedPitayaSignalReader(RedPitayaConfig config, boolean live, int consumerCount, int maxSamples) {
-        this(config, live, consumerCount, maxSamples, null, null, 250L);
+        this(config, live, consumerCount, maxSamples, null, null, 250L, "rp_");
     }
 
     public RedPitayaSignalReader(
@@ -45,7 +46,8 @@ public class RedPitayaSignalReader implements SignalReader, Closeable {
             int maxSamples,
             Path saveDirectory,
             Consumer<Path> savedCaptureConsumer,
-            long liveRestartDelayMillis
+            long liveRestartDelayMillis,
+            String filePrefix
     ) {
         this.config = config.copy();
         this.live = live;
@@ -56,6 +58,7 @@ public class RedPitayaSignalReader implements SignalReader, Closeable {
         this.liveRestartDelayMillis = Math.max(0L, liveRestartDelayMillis);
         this.requestedSamplesPerWindow = this.config.totalSamples();
         this.maxSamplesPerAcquisition = maxSamplesPerAcquisition(this.config);
+        this.filePrefix = filePrefix;
     }
 
     @Override
@@ -171,6 +174,9 @@ public class RedPitayaSignalReader implements SignalReader, Closeable {
         fileMetadata.put("java_chunked_acquisition", requestedSamplesPerWindow > maxSamplesPerAcquisition);
         fileMetadata.put("java_max_samples_per_acquisition", maxSamplesPerAcquisition);
         fileMetadata.put("java_axi_dma_bytes", configuredAxiUsableBytes());
+        if (filePrefix != null) {
+            fileMetadata.put("file_prefix", filePrefix);
+        }
         Path path = RedPitayaFileWriter.buildOutputPath(saveDirectory.toFile(), fileMetadata);
         writer = new RedPitayaFileWriter(path, fileMetadata);
     }

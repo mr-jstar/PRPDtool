@@ -520,12 +520,7 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         g.drawString("Phase [deg]", left + plotW / 2 - 40, height - 13);
 
         g.rotate(-Math.PI / 2);
-        boolean isBipolar = data.getMin() < 0;
-        if (isBipolar) {
-            g.drawString("Amplitude [ADC]", -top - plotH / 2 - 45, 18);
-        } else {
-            g.drawString("|Amplitude| [ADC]", -top - plotH / 2 - 55, 18);
-        }
+        g.drawString("|Amplitude| [ADC]", -top - plotH / 2 - 55, 18);
         g.rotate(Math.PI / 2);
 
         g.dispose();
