@@ -189,6 +189,8 @@ public class PRPDTool extends JFrame {
     private JSpinner rpFrameSizeSpinner;
     private JSpinner rpFrameCountSpinner;
     private JLabel rpEstimatedSizeLabel;
+    private JLabel rpSettingsEstimatedSizeLabel;
+    private JDialog rpSettingsDialog;
     private boolean updatingRedPitayaDerivedFields;
     private JButton rpStartOnceButton;
     private JButton rpStartLiveButton;
@@ -596,6 +598,16 @@ public class PRPDTool extends JFrame {
         optM.add(bOpt);
 
         mb.add(optM);
+
+        JMenu rpMenu = new JMenu("Red Pitaya");
+        JMenuItem rpSettingsMI = new JMenuItem("Settings");
+        rpSettingsMI.addActionListener(e -> {
+            if (rpSettingsDialog != null) {
+                rpSettingsDialog.setVisible(true);
+            }
+        });
+        rpMenu.add(rpSettingsMI);
+        mb.add(rpMenu);
 
         setJMenuBar(mb);
     }
@@ -1233,6 +1245,8 @@ public class PRPDTool extends JFrame {
         rpFrameCountSpinner = new JSpinner(new SpinnerNumberModel(configInt(RP_FRAME_COUNT, 1), 1, Integer.MAX_VALUE, 1));
         rpEstimatedSizeLabel = new JLabel(" ");
         rpEstimatedSizeLabel.setForeground(Color.DARK_GRAY);
+        rpSettingsEstimatedSizeLabel = new JLabel(" ");
+        rpSettingsEstimatedSizeLabel.setForeground(Color.DARK_GRAY);
 
         setIntegerSpinnerEditor(rpPortSpinner);
         setIntegerSpinnerEditor(rpDecimationSpinner);
@@ -1301,13 +1315,22 @@ public class PRPDTool extends JFrame {
         gbc.gridwidth = 2;
         actions.add(rpStopButton, gbc);
 
-        JPanel formWithEstimate = new JPanel(new BorderLayout(0, 2));
-        formWithEstimate.add(formPanel, BorderLayout.CENTER);
-        rpEstimatedSizeLabel.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
-        formWithEstimate.add(rpEstimatedSizeLabel, BorderLayout.SOUTH);
+        rpSettingsDialog = new JDialog(this, "Red Pitaya Settings", false);
+        rpSettingsDialog.setDefaultCloseOperation(JDialog.HIDE_ON_CLOSE);
+        JPanel dialogPanel = new JPanel(new BorderLayout(4, 4));
+        dialogPanel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        dialogPanel.add(formPanel, BorderLayout.CENTER);
+        
+        rpSettingsEstimatedSizeLabel.setBorder(BorderFactory.createEmptyBorder(8, 0, 0, 0));
+        dialogPanel.add(rpSettingsEstimatedSizeLabel, BorderLayout.SOUTH);
+        
+        rpSettingsDialog.add(dialogPanel);
+        rpSettingsDialog.pack();
+        rpSettingsDialog.setLocationRelativeTo(this);
 
-        rpPanel.add(formWithEstimate, BorderLayout.CENTER);
-        rpPanel.add(actions, BorderLayout.SOUTH);
+        rpEstimatedSizeLabel.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
+        rpPanel.add(actions, BorderLayout.CENTER);
+        rpPanel.add(rpEstimatedSizeLabel, BorderLayout.SOUTH);
         left.add(rpPanel);
 
         rpChannelsCombo.addActionListener(e -> updateRedPitayaChannelControls());
@@ -1645,9 +1668,15 @@ public class PRPDTool extends JFrame {
                     channelCount,
                     sampleRate
             ));
+            if (rpSettingsEstimatedSizeLabel != null) {
+                rpSettingsEstimatedSizeLabel.setText(rpEstimatedSizeLabel.getText());
+            }
             updateRedPitayaEstimateFont();
         } catch (Exception ex) {
             rpEstimatedSizeLabel.setText("Approx. file/data size: unavailable");
+            if (rpSettingsEstimatedSizeLabel != null) {
+                rpSettingsEstimatedSizeLabel.setText(rpEstimatedSizeLabel.getText());
+            }
         } finally {
             updatingRedPitayaDerivedFields = false;
         }
@@ -1820,6 +1849,9 @@ public class PRPDTool extends JFrame {
         if (rpEstimatedSizeLabel != null) {
             float size = Math.max(9.0f, currentFont.getSize2D() - 3.0f);
             rpEstimatedSizeLabel.setFont(currentFont.deriveFont(size));
+            if (rpSettingsEstimatedSizeLabel != null) {
+                rpSettingsEstimatedSizeLabel.setFont(currentFont.deriveFont(size));
+            }
         }
     }
 
@@ -1984,10 +2016,14 @@ public class PRPDTool extends JFrame {
     // Helper -sets font
     private void setCurrentFont() {
         setFontRecursively(this, currentFont, 0);
+        if (rpSettingsDialog != null) {
+            Font largerFont = currentFont.deriveFont(currentFont.getSize2D() + 2.0f);
+            setFontRecursively(rpSettingsDialog, largerFont, 0);
+            rpSettingsDialog.pack();
+        }
         updateRedPitayaEstimateFont();
         UIManager.put("OptionPane.messageFont", currentFont);
         UIManager.put("OptionPane.buttonFont", currentFont);
-        UIManager.put("OptionPane.messageFont", currentFont);
     }
 
     private void setFontRecursively(Component comp, Font font, int d) {
