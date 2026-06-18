@@ -106,12 +106,24 @@ public class PRPDTool extends JFrame {
     private JPanel right;
     private JPanel bottom;
     private JPanel paramPanel;
+    private JPanel modelPanel;
 
-    private JSplitPane splitCenterRight;
     private JSplitPane splitLeft;
     private JSplitPane verticalSplit;
 
-    private final JLabel status = new JLabel("");
+    private final JLabel status = new JLabel("") {
+        @Override
+        public void setText(String text) {
+            super.setText(text);
+            setToolTipText(text);
+        }
+        @Override
+        public Dimension getPreferredSize() {
+            Dimension d = super.getPreferredSize();
+            d.width = Math.min(d.width, 200);
+            return d;
+        }
+    };
     private int rpFileLimit = 30;
     private final File receivedSignalsDir = new File("data" + File.separator + "received_bin");
 
@@ -396,6 +408,10 @@ public class PRPDTool extends JFrame {
                         }
                     }
                     return null;
+                }
+                @Override
+                protected void done() {
+                    updateModelPanel();
                 }
             }.execute();
         } catch (Exception ex) {
@@ -738,18 +754,15 @@ public class PRPDTool extends JFrame {
         bottom = new JPanel();
         center = new ImagePanel(new BufferedImage(640, 480, BufferedImage.TYPE_BYTE_GRAY));
 
-        splitCenterRight = new JSplitPane(
-                JSplitPane.HORIZONTAL_SPLIT,
-                center,
-                right
-        );
-        splitCenterRight.setResizeWeight(0.85);
-
         // --- lewy + reszta ---
+        JScrollPane leftScroll = new JScrollPane(left);
+        leftScroll.setBorder(BorderFactory.createEmptyBorder());
+        leftScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        
         splitLeft = new JSplitPane(
                 JSplitPane.HORIZONTAL_SPLIT,
-                left,
-                splitCenterRight
+                leftScroll,
+                center
         );
         splitLeft.setResizeWeight(0.22);
 
@@ -761,10 +774,9 @@ public class PRPDTool extends JFrame {
         );
         verticalSplit.setResizeWeight(0.80);
 
-        // Cieńsze dzielniki
-        splitLeft.setDividerSize(1);
-        splitCenterRight.setDividerSize(1);
-        verticalSplit.setDividerSize(1);
+        // Brak widocznych dzielników
+        splitLeft.setDividerSize(0);
+        verticalSplit.setDividerSize(0);
 
         setContentPane(verticalSplit);
 
@@ -772,18 +784,24 @@ public class PRPDTool extends JFrame {
         SwingUtilities.invokeLater(() -> {
             verticalSplit.setDividerLocation(0.75);
             splitLeft.setDividerLocation(0.22);
-            splitCenterRight.setDividerLocation(0.8);
 
-            initRedPitayaControls();
-            initLegacySocketControls();
+            JPanel rpPanel = initRedPitayaControls();
+            JPanel legacyPanel = initLegacySocketControls();
 
             JPanel recordPanel = new JPanel();
             recordPanel.setLayout(new GridLayout(0, 1, 5, 5));
-            recordPanel.setBorder(BorderFactory.createEmptyBorder(5, 15, 5, 5));
+            recordPanel.setBorder(BorderFactory.createTitledBorder("Signal recording"));
+            recordPanel.add(new JLabel("Limit [MB]"));
+            JTextField limitTF = new JTextField("" + recordLimit);
+            limitTF.addActionListener(e -> {
+                recordLimit = Integer.parseInt(limitTF.getText());
+            });
+            recordPanel.add(limitTF);
+            
+            recordSizeLabel = new JLabel("0 MB used");
+            recordPanel.add(recordSizeLabel);
 
-            //recordPanel.add(new JSeparator(JSeparator.HORIZONTAL));
-
-            recordPanel.add(new JLabel("Signal recording:"));
+            JPanel recBtns = new JPanel(new GridLayout(1, 2, 3, 3));
             startRecordButton = new JButton("Start recording");
             startRecordButton.addActionListener(e -> {
                 try {
@@ -798,22 +816,14 @@ public class PRPDTool extends JFrame {
                 }
             });
             startRecordButton.setEnabled(false);
-            recordPanel.add(startRecordButton);
-
-            recordPanel.add(new JLabel("Limit [MB]"));
-            JTextField limitTF = new JTextField("" + recordLimit);
-            limitTF.addActionListener(e -> {
-                recordLimit = Integer.parseInt(limitTF.getText());
-            });
-            recordPanel.add(limitTF);
-            recordSizeLabel = new JLabel("0 MB used");
-            recordPanel.add(recordSizeLabel);
+            recBtns.add(startRecordButton);
 
             stopRecordButton = new JButton("Stop recording");
             stopRecordButton.setEnabled(false);
             stopRecordButton.addActionListener(e -> stopRecorder());
-            recordPanel.add(stopRecordButton);
-            left.add(recordPanel);
+            recBtns.add(stopRecordButton);
+            
+            recordPanel.add(recBtns);
 
             histogram = new DynamicPRPDHistogram(
                     center.getWidth(), center.getHeight(),
@@ -844,9 +854,21 @@ public class PRPDTool extends JFrame {
             bottom.add(interactiveSignalPanel, BorderLayout.CENTER);
 
             paramPanel = new JPanel();
-            paramPanel.setLayout(new GridLayout(20, 2));
+            paramPanel.setLayout(new GridLayout(0, 2, 3, 3));
             paramPanel.add(new JLabel("Data source: "));
-            dataSource = new JLabel("none");
+            dataSource = new JLabel("none") {
+                @Override
+                public void setText(String text) {
+                    super.setText(text);
+                    setToolTipText(text);
+                }
+                @Override
+                public Dimension getPreferredSize() {
+                    Dimension d = super.getPreferredSize();
+                    d.width = Math.min(d.width, 200);
+                    return d;
+                }
+            };
             paramPanel.add(dataSource);
 
             paramPanel.add(new JLabel("Status:"));
@@ -874,7 +896,6 @@ public class PRPDTool extends JFrame {
                     try {
                         p.setFromText(field.getText());
                         field.setBackground(UIManager.getColor("TextField.background"));
-                        status.setText("Some parameter changes may not have been applied!");
                         paramChange.setText("Param(s) change!");
                         applyButton.setBackground(Color.red);
                     } catch (NumberFormatException ex) {
@@ -885,9 +906,10 @@ public class PRPDTool extends JFrame {
                 field.addFocusListener(new java.awt.event.FocusAdapter() {
                     @Override
                     public void focusLost(java.awt.event.FocusEvent e) {
-                        status.setText("Some parameter changes may not have been applied!");
-                        paramChange.setText("Param(s) change!");
-                        applyButton.setBackground(Color.red);
+                        if (!field.getText().equals(p.getText())) {
+                            paramChange.setText("Param(s) change!");
+                            applyButton.setBackground(Color.red);
+                        }
                     }
                 });
                 paramPanel.add(labelPanel);
@@ -929,33 +951,16 @@ public class PRPDTool extends JFrame {
                 }
             });
 
+            paramPanel.setBorder(BorderFactory.createTitledBorder("Filters & Parameters"));
             setFontRecursively(paramPanel, currentFont, 0);
 
-            right.setLayout(new BorderLayout());
-            right.add(paramPanel, BorderLayout.CENTER);
-
             JPanel classifyPanel = new JPanel(new BorderLayout());
+            classifyPanel.setBorder(BorderFactory.createTitledBorder("Classification"));
 
-            JPanel modelPanel = new JPanel(new GridLayout(classifiers.size() + 1, 2, 3, 3));
-            //modelPanel.setBackground(Color.black);
+            modelPanel = new JPanel();
             cResults = new HashMap<>();
-            JLabel c1 = new JLabel("Classifier");
-            c1.setBorder(BorderFactory.createLineBorder(Color.black));
-            JLabel c2 = new JLabel("Result (confidence)");
-            c2.setBorder(BorderFactory.createLineBorder(Color.black));
-            modelPanel.add(c1);
-            modelPanel.add(c2);
-            for (Classifier c : classifiers) {
-                if (c != null && c.ok()) {
-                    JLabel name = new JLabel(c.name());
-                    name.setBackground(Color.gray);
-                    JLabel result = new JLabel("           ");
-                    result.setBackground(Color.gray);
-                    modelPanel.add(name);
-                    modelPanel.add(result);
-                    cResults.put(c, result);
-                }
-            }
+            updateModelPanel();
+
             classifyPanel.add(modelPanel, BorderLayout.CENTER);
 
             classifyButton = new JButton("CLASIFY");
@@ -965,7 +970,13 @@ public class PRPDTool extends JFrame {
 
             setFontRecursively(classifyPanel, currentFont, 0);
 
-            right.add(classifyPanel, BorderLayout.SOUTH);
+            left.add(paramPanel);
+            left.add(rpPanel);
+            left.add(legacyPanel);
+            left.add(recordPanel);
+            left.add(classifyPanel);
+            left.add(Box.createVerticalGlue());
+            
             setCurrentFont();
         });
 
@@ -974,7 +985,6 @@ public class PRPDTool extends JFrame {
             public void componentResized(ComponentEvent e) {
                 verticalSplit.setDividerLocation(0.75);
                 splitLeft.setDividerLocation(0.22);
-                splitCenterRight.setDividerLocation(0.8);
                 histogram.resize(center.getWidth(), center.getHeight());
                 if (autoscaleCb != null && autoscaleCb.isSelected()) { applyAutoscale(); } else { center.setImage(histogram.getImage()); }
                 try {
@@ -985,7 +995,34 @@ public class PRPDTool extends JFrame {
         });
     }
 
-    private void initLegacySocketControls() {
+    private void updateModelPanel() {
+        if (modelPanel == null) return;
+        modelPanel.removeAll();
+        modelPanel.setLayout(new GridLayout(classifiers.size() + 1, 2, 3, 3));
+        cResults.clear();
+        JLabel c1 = new JLabel("Classifier");
+        c1.setBorder(BorderFactory.createLineBorder(Color.black));
+        JLabel c2 = new JLabel("Result (confidence)");
+        c2.setBorder(BorderFactory.createLineBorder(Color.black));
+        modelPanel.add(c1);
+        modelPanel.add(c2);
+        for (Classifier c : classifiers) {
+            if (c != null && c.ok()) {
+                JLabel name = new JLabel(c.name());
+                name.setBackground(Color.gray);
+                JLabel result = new JLabel("           ");
+                result.setBackground(Color.gray);
+                modelPanel.add(name);
+                modelPanel.add(result);
+                cResults.put(c, result);
+            }
+        }
+        setFontRecursively(modelPanel, currentFont, 0);
+        modelPanel.revalidate();
+        modelPanel.repaint();
+    }
+
+    private JPanel initLegacySocketControls() {
         try {
             String sp = configuration.getValue(DAQ).trim();
             if (sp != null) {
@@ -1006,15 +1043,17 @@ public class PRPDTool extends JFrame {
             }
         });
         legacyPanel.add(dataServer);
+        JPanel btns = new JPanel(new GridLayout(1, 2, 3, 3));
         startBtn = new JButton("Start DAQ aquisition");
         startBtn.addActionListener(e -> openSocket());
-        legacyPanel.add(startBtn);
+        btns.add(startBtn);
 
         stopBtn = new JButton("Stop DAQ aquisition");
         stopBtn.addActionListener(e -> closeSocket());
         stopBtn.setEnabled(false);
-        legacyPanel.add(stopBtn);
-        left.add(legacyPanel);
+        btns.add(stopBtn);
+        legacyPanel.add(btns);
+        return legacyPanel;
     }
 
     private JPanel createReceivedSignalsPanel() {
@@ -1216,7 +1255,7 @@ public class PRPDTool extends JFrame {
         }
     }
 
-    private void initRedPitayaControls() {
+    private JPanel initRedPitayaControls() {
         JPanel rpPanel = new JPanel(new BorderLayout(4, 4));
         rpPanel.setBorder(BorderFactory.createTitledBorder("Red Pitaya"));
         JPanel formPanel = new JPanel(new GridLayout(0, 2, 3, 3));
@@ -1331,7 +1370,6 @@ public class PRPDTool extends JFrame {
         rpEstimatedSizeLabel.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
         rpPanel.add(actions, BorderLayout.CENTER);
         rpPanel.add(rpEstimatedSizeLabel, BorderLayout.SOUTH);
-        left.add(rpPanel);
 
         rpChannelsCombo.addActionListener(e -> updateRedPitayaChannelControls());
         rpModeCombo.addActionListener(e -> updateRedPitayaModeControls());
@@ -1341,6 +1379,7 @@ public class PRPDTool extends JFrame {
         rpFrameCountSpinner.addChangeListener(e -> updateRedPitayaDerivedControls());
         updateRedPitayaChannelControls();
         updateRedPitayaModeControls();
+        return rpPanel;
     }
 
     private void addFormRow(JPanel panel, String label, JComponent component, String tooltip) {
