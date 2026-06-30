@@ -215,6 +215,8 @@ public class PRPDPipeline implements AutoCloseable {
 
                 queuedBuffers.decrementAndGet();
 
+                listener.preExtract(buffer);
+
                 Pulses pulses = extractor.extract(buffer);
 
                 if (pulses.size > 0) {

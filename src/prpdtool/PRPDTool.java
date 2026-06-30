@@ -2535,6 +2535,25 @@ public class PRPDTool extends JFrame {
             private long lastPaintTime = 0;
             
             @Override
+            public void preExtract(Buffer buffer) {
+                if (signalStart.compareAndSet(true, false)) {
+                    double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0);
+                    double estt0 = ph0 / (2 * Math.PI * f0);
+                    if (estt0 < 0.5 / fs) {
+                        estt0 = 0.0;
+                    }
+                    if (realTimeData) {
+                        t0 = estt0;
+                        extractor.setT0(t0);
+                        SwingUtilities.invokeLater(() -> {
+                            setParamField("Zero-crossing instant", "" + t0);
+                            classifyButton.setEnabled(true);
+                        });
+                    }
+                }
+            }
+            
+            @Override
             public void bufferRead(Buffer buffer) {
                 receivedSignalCache.add(buffer);
                 if (realTimeData && recordedData != null && recordedData.isOpen()) {
@@ -2561,27 +2580,6 @@ public class PRPDTool extends JFrame {
                         stopRecorder();
                         recordSizeLabel.setText(recordedMB + " MB used");
                     }
-                }
-                if (signalStart.compareAndSet(true, false)) {
-                    double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0);
-                    double estt0 = ph0 / (2 * Math.PI * f0);
-                    if (estt0 < 0.5 / fs) {
-                        estt0 = 0.0;
-                    }
-                    if (Math.abs((((360.0 * (t0 - estt0) * f0 + 180.0) % 360.0 + 360.0) % 360.0) - 180.0) > 0.1) {
-                        JOptionPane.showConfirmDialog(
-                                PRPDTool.this,
-                                "The zero-crossing instant estimated from data is " + String.format(Locale.US, "%.12g", estt0) + " s",
-                                "Warning",
-                                JOptionPane.WARNING_MESSAGE
-                        );
-                        if (realTimeData) {
-                            t0 = estt0;
-                            extractor.setT0(t0);
-                            setParamField("Zero-crossing instant", "" + t0);
-                        }
-                    }
-                    classifyButton.setEnabled(true);
                 }
                 interactiveSignalPanel.addBuffer(buffer);
             }
@@ -2823,24 +2821,14 @@ public class PRPDTool extends JFrame {
                 }
                 if (signalStart.compareAndSet(true, false)) {
                     double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0);
-                    double estt0 = ph0 / Math.PI / f0;
-                    //System.out.println("est ph=" + (360.0*(estt0 - 0) * f0) % 360.0 + " deg");
-                    //System.out.println( "Delta " + Math.abs((((360.0 * (t0 - estt0) * f0 + 180.0) % 360.0 + 360.0) % 360.0) - 180.0));
+                    double estt0 = ph0 / (2 * Math.PI * f0);
                     if (estt0 < 0.5 / fs) {
                         estt0 = 0.0;
                     }
-                    if (Math.abs((((360.0 * (t0 - estt0) * f0 + 180.0) % 360.0 + 360.0) % 360.0) - 180.0) > 0.1) {
-                        JOptionPane.showConfirmDialog(
-                                PRPDTool.this,
-                                "The zero-crossing instant estimated from data is " + String.format(Locale.US, "%.12g", estt0) + " s",
-                                "Warning",
-                                JOptionPane.WARNING_MESSAGE
-                        );
-                        if (realTimeData) {
-                            t0 = estt0;
-                            extractor.setT0(t0);
-                            setParamField("Zero-crossing instant", "" + t0);
-                        }
+                    if (realTimeData) {
+                        t0 = estt0;
+                        extractor.setT0(t0);
+                        setParamField("Zero-crossing instant", "" + t0);
                     }
                     classifyButton.setEnabled(true);
                 }
