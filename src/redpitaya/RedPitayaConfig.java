@@ -11,13 +11,13 @@ public class RedPitayaConfig {
     private static final double TRIGGER_CALIBRATION_DURATION_S = 0.02;
     private static final long TRIGGER_CALIBRATION_MAX_SAMPLES = 5_000_000L;
 
-    public String host = "rp-f0f84e.local";
+    public String host = "rp-f0f771.local";
     public int port = 9999;
     public int[] channels = {1};
     public int visualChannel = 1;
     public String gainCh1 = "LV";
     public String gainCh2 = "LV";
-    public int decimation = 1;
+    public int decimation = 64;
     public boolean averaging;
     public String triggerSource = "NOW";
     public double triggerLevel = 0.0;
@@ -25,7 +25,7 @@ public class RedPitayaConfig {
     public double triggerTimeoutS = 10.0;
     public boolean durationMode = true;
     public double durationS = 0.01;
-    public int frameSize = 65_536;
+    public int frameSize = 1048576;
     public int frameCount = 1;
 
     public RedPitayaConfig copy() {
@@ -79,8 +79,7 @@ public class RedPitayaConfig {
     }
 
     public int normalizedFrameSize() {
-        int n = Math.max(1, frameSize);
-        return n % 2 == 0 ? n : n + 1;
+        return 1048576;
     }
 
     public long totalSamples() {
@@ -89,15 +88,18 @@ public class RedPitayaConfig {
         long total;
         if (durationMode) {
             if (durationS <= 0.0) {
-                throw new IllegalArgumentException("Czas akwizycji musi byc dodatni");
+                return 0L;
             }
             total = Math.max(1L, Math.round(durationS * fs));
         } else {
             total = (long) normalizedFrameSize * Math.max(1, frameCount);
         }
-        if ((total & 1L) != 0L) {
-            total++;
+        
+        long remainder = total % 4096;
+        if (remainder != 0) {
+            total += 4096 - remainder;
         }
+        
         return total;
     }
 
@@ -114,8 +116,9 @@ public class RedPitayaConfig {
     public RedPitayaConfig forTotalSamples(long requestedSamples) {
         RedPitayaConfig c = copy();
         long total = Math.max(2L, requestedSamples);
-        if ((total & 1L) != 0L) {
-            total++;
+        long remainder = total % 4096;
+        if (remainder != 0) {
+            total += 4096 - remainder;
         }
         int normalizedFrameSize = c.normalizedFrameSize();
         long count = (total + normalizedFrameSize - 1L) / normalizedFrameSize;

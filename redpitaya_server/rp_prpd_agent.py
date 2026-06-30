@@ -106,10 +106,10 @@ def validate_config(config: dict) -> dict:
     frame_count = int(config["frame_count"])
     if total_samples < 2 or frame_size < 1 or frame_count < 1:
         raise AgentError("sample counts must be positive")
-    if total_samples % 2:
-        total_samples += 1
-    if frame_size % 2:
-        frame_size += 1
+    if total_samples % 4096:
+        total_samples += 4096 - (total_samples % 4096)
+    if frame_size % 4096:
+        frame_size += 4096 - (frame_size % 4096)
     frame_count = (total_samples + frame_size - 1) // frame_size
 
     trigger = str(config.get("trigger_source", "NOW")).upper()
@@ -173,7 +173,9 @@ def configure_dma(rp, config: dict) -> tuple[dict, dict[int, int]]:
     bytes_per_sample = 2
     margin = 4096
     usable_bytes = max(0, axi_size - margin)
+    usable_bytes -= usable_bytes % 4096
     per_channel_bytes = usable_bytes // len(channels)
+    per_channel_bytes -= per_channel_bytes % 4096
     max_samples_per_channel = per_channel_bytes // bytes_per_sample
     total_samples = int(config["total_samples"])
     required_bytes = total_samples * len(channels) * bytes_per_sample

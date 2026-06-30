@@ -165,11 +165,11 @@ public class PRPDTool extends JFrame {
     private boolean bipolarHistogram;
     private boolean fastRendering = true;
 
-    private boolean drawBaseline;
+    private int topPlotMode = 2; // 0 = Envelope, 1 = Baseline, 2 = Base signal (Raw)
 
     // Data
     private InteractiveSignalPanel interactiveSignalPanel;
-    private static final int MAX_CACHED_SIGNAL_SAMPLES = 2_000_000;
+    private static final int MAX_CACHED_SIGNAL_SAMPLES = 3_000_000;
     private static final long RP_LIVE_RESTART_DELAY_MS = 500L;
     private final ReceivedSignalCache receivedSignalCache = new ReceivedSignalCache(MAX_CACHED_SIGNAL_SAMPLES);
 
@@ -592,33 +592,44 @@ public class PRPDTool extends JFrame {
         
         optM.addSeparator();
 
-        optM.add(new JMenuItem("Base signal"));
         ButtonGroup egroup = new ButtonGroup();
-        JRadioButtonMenuItem eOpt = new JRadioButtonMenuItem("\t\tEnvelope");
-        eOpt.setSelected(true);
-        eOpt.addActionListener(e -> {
-            drawBaseline = false;
+        
+        JRadioButtonMenuItem rawOpt = new JRadioButtonMenuItem("\t\tBase signal");
+        rawOpt.setSelected(true);
+        rawOpt.addActionListener(e -> {
+            topPlotMode = 2;
             if (lastDataFile != null) {
                 try {
                     getData(lastDataFile);
-                } catch (Exception ex) {
+                } catch (Exception ex) {}
+            } else {
+                interactiveSignalPanel.reset("Base signal", null, "Filtered signal", null, false);
+            }
+        });
+        egroup.add(rawOpt);
+        optM.add(rawOpt);
 
-                }
+        JRadioButtonMenuItem eOpt = new JRadioButtonMenuItem("\t\tEnvelope");
+        eOpt.addActionListener(e -> {
+            topPlotMode = 0;
+            if (lastDataFile != null) {
+                try {
+                    getData(lastDataFile);
+                } catch (Exception ex) {}
             } else {
                 interactiveSignalPanel.reset("Signal envelope", null, "Filtered signal", null, false);
             }
         });
         egroup.add(eOpt);
         optM.add(eOpt);
+
         JRadioButtonMenuItem bOpt = new JRadioButtonMenuItem("\t\tBaseline");
         bOpt.addActionListener(e -> {
-            drawBaseline = true;
+            topPlotMode = 1;
             if (lastDataFile != null) {
                 try {
                     getData(lastDataFile);
-                } catch (Exception ex) {
-
-                }
+                } catch (Exception ex) {}
             } else {
                 interactiveSignalPanel.reset("Baseline signal", null, "Filtered signal", null, false);
             }
@@ -856,7 +867,7 @@ public class PRPDTool extends JFrame {
 
             interactiveSignalPanel = new InteractiveSignalPanel();
             interactiveSignalPanel.reset(
-                    drawBaseline ? "Baseline signal" : "Signal envelope",
+                    topPlotMode == 2 ? "Base signal" : (topPlotMode == 1 ? "Baseline signal" : "Signal envelope"),
                     null,
                     "Filtered signal",
                     null,
@@ -1262,7 +1273,7 @@ public class PRPDTool extends JFrame {
         rpGain1Combo.setSelectedItem(configValue(RP_GAIN1, "LV"));
         rpGain2Combo = new JComboBox<>(new String[]{"LV", "HV"});
         rpGain2Combo.setSelectedItem(configValue(RP_GAIN2, "LV"));
-        rpDecimationSpinner = new JSpinner(new SpinnerNumberModel(configInt(RP_DECIMATION, 1), 1, 65536, 1) {
+        rpDecimationSpinner = new JSpinner(new SpinnerNumberModel(configInt(RP_DECIMATION, 64), 1, 65536, 1) {
             @Override
             public Object getNextValue() {
                 int val = (Integer) super.getValue();
@@ -2392,6 +2403,18 @@ public class PRPDTool extends JFrame {
         Filter hfFilter = new HighPassFilter(fs, cutF, filterQ, filterOrder);
         Filter signalPlotFilter = new HighPassFilter(fs, cutF, filterQ, filterOrder);
         Filter lfFilter = new LowPassFilter(fs, 10 * f0, filterQ, filterOrder);
+        Filter passThrough = new Filter() {
+            @Override
+            public double[] filter(double[] signal) { return signal.clone(); }
+            @Override
+            public double[] filter(double[] signal, int n) {
+                double[] o = new double[n];
+                System.arraycopy(signal, 0, o, 0, n);
+                return o;
+            }
+            @Override
+            public void setFs(double fs) {}
+        };
         Filter abs = new Filter() {
             @Override
             public double[] filter(double[] signal) {
@@ -2434,8 +2457,8 @@ public class PRPDTool extends JFrame {
         center.revalidate();
 
         interactiveSignalPanel.reset(
-                drawBaseline ? "Baseline signal" : "Signal envelope",
-                drawBaseline ? lfFilter : abs,
+                topPlotMode == 2 ? "Base signal" : (topPlotMode == 1 ? "Baseline signal" : "Signal envelope"),
+                topPlotMode == 2 ? passThrough : (topPlotMode == 1 ? lfFilter : abs),
                 "Filtered signal",
                 signalPlotFilter,
                 realTimeData
@@ -2684,6 +2707,18 @@ public class PRPDTool extends JFrame {
         Filter hfFilter = new HighPassFilter(fs, cutF, filterQ, filterOrder); //???
         Filter signalPlotFilter = new HighPassFilter(fs, cutF, filterQ, filterOrder);
         Filter lfFilter = new LowPassFilter(fs, 10 * f0, filterQ, filterOrder);
+        Filter passThrough = new Filter() {
+            @Override
+            public double[] filter(double[] signal) { return signal.clone(); }
+            @Override
+            public double[] filter(double[] signal, int n) {
+                double[] o = new double[n];
+                System.arraycopy(signal, 0, o, 0, n);
+                return o;
+            }
+            @Override
+            public void setFs(double fs) {}
+        };
         Filter abs = new Filter() {
             @Override
             public double[] filter(double[] signal) {
@@ -2728,8 +2763,8 @@ public class PRPDTool extends JFrame {
             center.revalidate();
 
             interactiveSignalPanel.reset(
-                    drawBaseline ? "Baseline signal" : "Signal envelope",
-                    drawBaseline ? lfFilter : abs,
+                    topPlotMode == 2 ? "Base signal" : (topPlotMode == 1 ? "Baseline signal" : "Signal envelope"),
+                    topPlotMode == 2 ? passThrough : (topPlotMode == 1 ? lfFilter : abs),
                     "Filtered signal",
                     signalPlotFilter,
                     realTimeData

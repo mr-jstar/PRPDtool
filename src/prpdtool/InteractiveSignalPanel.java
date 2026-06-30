@@ -282,21 +282,35 @@ public class InteractiveSignalPanel extends JPanel {
                 } else {
                     double uMin = upperValues[i], uMax = upperValues[i];
                     double lMin = lowerValues[i], lMax = lowerValues[i];
+                    int uMinIdx = i, uMaxIdx = i;
                     for (int j = i + 1; j < end; j++) {
-                        if (upperValues[j] < uMin) uMin = upperValues[j];
-                        if (upperValues[j] > uMax) uMax = upperValues[j];
+                        if (upperValues[j] < uMin) { uMin = upperValues[j]; uMinIdx = j; }
+                        if (upperValues[j] > uMax) { uMax = upperValues[j]; uMaxIdx = j; }
                         if (lowerValues[j] < lMin) lMin = lowerValues[j];
                         if (lowerValues[j] > lMax) lMax = lowerValues[j];
                     }
-                    t[size] = buffer.t[i];
-                    upper[size] = uMin;
-                    lower[size] = lMin;
-                    size++;
                     
-                    t[size] = buffer.t[end - 1];
-                    upper[size] = uMax;
-                    lower[size] = lMax;
-                    size++;
+                    if (uMinIdx <= uMaxIdx) {
+                        t[size] = buffer.t[uMinIdx];
+                        upper[size] = uMin;
+                        lower[size] = lMin;
+                        size++;
+                        
+                        t[size] = buffer.t[uMaxIdx];
+                        upper[size] = uMax;
+                        lower[size] = lMax;
+                        size++;
+                    } else {
+                        t[size] = buffer.t[uMaxIdx];
+                        upper[size] = uMax;
+                        lower[size] = lMax;
+                        size++;
+                        
+                        t[size] = buffer.t[uMinIdx];
+                        upper[size] = uMin;
+                        lower[size] = lMin;
+                        size++;
+                    }
                 }
             }
             trimIfNeeded();
@@ -584,6 +598,7 @@ public class InteractiveSignalPanel extends JPanel {
             int lastX = Integer.MIN_VALUE;
             int minY = Integer.MAX_VALUE;
             int maxY = Integer.MIN_VALUE;
+            int lastYInPixel = Integer.MIN_VALUE;
             for (int i = 0; i < size; i++) {
                 if (t[i] < viewTMin || t[i] > viewTMax) {
                     continue;
@@ -593,13 +608,16 @@ public class InteractiveSignalPanel extends JPanel {
                 if (x == lastX) {
                     minY = Math.min(minY, y);
                     maxY = Math.max(maxY, y);
+                    lastYInPixel = y;
                 } else {
                     if (lastX != Integer.MIN_VALUE) {
                         g.drawLine(lastX, minY, lastX, maxY);
+                        g.drawLine(lastX, lastYInPixel, x, y);
                     }
                     lastX = x;
                     minY = y;
                     maxY = y;
+                    lastYInPixel = y;
                 }
             }
             if (lastX != Integer.MIN_VALUE) {

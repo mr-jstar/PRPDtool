@@ -33,7 +33,7 @@ public class PRPDConstants {
     public static final int DEFAULT_HISTOGRAM_HEIGHT = 224;
 
     // Signal rendering
-    public static final int SIGNAL_MAX_POINTS = 700_000;
+    public static final int SIGNAL_MAX_POINTS = 3_000_000;
     public static final int SIGNAL_TARGET_POINTS_PER_BUFFER = 25_000;
 
     // GUI Configurations
