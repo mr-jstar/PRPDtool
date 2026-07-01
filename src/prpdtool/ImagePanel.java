@@ -27,6 +27,7 @@ public class ImagePanel extends JPanel {
 
     private BufferedImage image;
     private DynamicPRPDHistogram histogram;
+    private String defaultExportName = null;
     private int lastMouseX;
     private int lastMouseY;
     private Runnable resetAction;
@@ -218,6 +219,9 @@ public class ImagePanel extends JPanel {
             return;
         }
         JFileChooser fc = new JFileChooser();
+        if (defaultExportName != null) {
+            fc.setSelectedFile(new File(defaultExportName + ".png"));
+        }
         fc.setDialogTitle("Save PRPD as PNG");
         fc.setFileFilter(new FileNameExtensionFilter("PNG Images", "png"));
         if (fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
@@ -236,6 +240,14 @@ public class ImagePanel extends JPanel {
 
     public void setHistogram(DynamicPRPDHistogram histogram) {
         this.histogram = histogram;
+    }
+
+    public void setDefaultExportName(String name) {
+        this.defaultExportName = name;
+    }
+
+    public String getDefaultExportName() {
+        return this.defaultExportName;
     }
 
     public void setImage(BufferedImage image) {

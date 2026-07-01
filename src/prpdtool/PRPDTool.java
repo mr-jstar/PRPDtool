@@ -1190,11 +1190,11 @@ public class PRPDTool extends JFrame {
             getData(filename);
             saveLastUsedDirectory(file.getParentFile().getAbsolutePath());
             dataSource.setText("received (" + file.getName() + ")");
-            lastDataFile = filename;
+            setLastDataFile(filename);
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, ex.getMessage(), "Load received signal", JOptionPane.ERROR_MESSAGE);
             status.setText(ex.getMessage());
-            lastDataFile = null;
+            setLastDataFile(null);
         }
     }
 
@@ -2298,11 +2298,11 @@ public class PRPDTool extends JFrame {
                         get();
                         saveLastUsedDirectory(file.getParentFile().getAbsolutePath());
                         dataSource.setText("file (" + file.getName() + ")");
-                        lastDataFile = file.getAbsolutePath();
+                        setLastDataFile(file.getAbsolutePath());
                         status.setText("Loaded " + file.getName());
                     } catch (Exception ex) {
                         System.err.println("Bad file: " + file.getName() + " : " + ex.getMessage());
-                        lastDataFile = null;
+                        setLastDataFile(null);
                         status.setText("Error loading file.");
                     }
                 }
@@ -2344,7 +2344,7 @@ public class PRPDTool extends JFrame {
             realTimeData = false;
             JOptionPane.showMessageDialog(this, ex.getMessage(), "Red Pitaya", JOptionPane.ERROR_MESSAGE);
             status.setText(ex.getMessage());
-            lastDataFile = null;
+            setLastDataFile(null);
         }
     }
 
@@ -2360,7 +2360,7 @@ public class PRPDTool extends JFrame {
             stopRecordButton.setEnabled(true);
         } catch (Exception ex) {
             System.err.println("Bad socket: " + daqSocketAddr + " : " + ex.getMessage());
-            lastDataFile = null;
+            setLastDataFile(null);
             //ex.printStackTrace();
         }
     }
@@ -3168,6 +3168,9 @@ public class PRPDTool extends JFrame {
             return;
         }
         javax.swing.JFileChooser fc = new javax.swing.JFileChooser();
+        String defName = center.getDefaultExportName();
+        if (defName == null || defName.isEmpty()) defName = "PRPD";
+        fc.setSelectedFile(new java.io.File(defName + ".png"));
         fc.setDialogTitle("Save All Graphs as PNG");
         fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("PNG Images", "png"));
         if (fc.showSaveDialog(this) == javax.swing.JFileChooser.APPROVE_OPTION) {
@@ -3184,10 +3187,10 @@ public class PRPDTool extends JFrame {
                     img1 = img1.getSubimage(0, 0, img1.getWidth(), img1.getHeight() - cropBottom);
                 }
                 
-                int targetWidth = Math.max(img1.getWidth(), img2.getWidth());
+                int targetWidth = Math.max(img1.getWidth(), img2 != null ? img2.getWidth() : 0);
                 
                 int h1 = img1.getHeight() * targetWidth / Math.max(1, img1.getWidth());
-                int h2 = img2.getHeight() * targetWidth / Math.max(1, img2.getWidth());
+                int h2 = (img2 != null) ? img2.getHeight() * targetWidth / Math.max(1, img2.getWidth()) : 0;
                 
                 java.awt.image.BufferedImage combined = new java.awt.image.BufferedImage(targetWidth, h1 + h2, java.awt.image.BufferedImage.TYPE_INT_RGB);
                 java.awt.Graphics2D g2 = combined.createGraphics();
@@ -3195,7 +3198,7 @@ public class PRPDTool extends JFrame {
                 g2.setColor(PRPDConstants.isDarkTheme() ? new java.awt.Color(40, 44, 52) : java.awt.Color.WHITE);
                 g2.fillRect(0, 0, targetWidth, h1 + h2);
                 g2.drawImage(img1, 0, 0, targetWidth, h1, null);
-                g2.drawImage(img2, 0, h1, targetWidth, h2, null);
+                if (img2 != null) g2.drawImage(img2, 0, h1, targetWidth, h2, null);
                 g2.dispose();
                 
                 javax.imageio.ImageIO.write(combined, "PNG", file);
@@ -3205,6 +3208,26 @@ public class PRPDTool extends JFrame {
                 javax.swing.JOptionPane.showMessageDialog(this, "Failed to save image: " + ex, "Error", javax.swing.JOptionPane.ERROR_MESSAGE);
             }
         }
+    }
+
+    private void setLastDataFile(String filename) {
+        this.lastDataFile = filename;
+        updateExportNames(filename);
+    }
+
+    private void updateExportNames(String filename) {
+        String name = "PRPD";
+        if (filename != null) {
+            name = new java.io.File(filename).getName();
+            int dot = name.lastIndexOf('.');
+            if (dot > 0) name = name.substring(0, dot);
+            if (name.endsWith(".rppr") || name.endsWith(".prpdtool")) {
+                int dot2 = name.lastIndexOf('.');
+                if (dot2 > 0) name = name.substring(0, dot2);
+            }
+        }
+        if (center != null) center.setDefaultExportName(name);
+        if (interactiveSignalPanel != null) interactiveSignalPanel.setDefaultExportName(name);
     }
 
     public static void main(String[] args) {

@@ -46,6 +46,7 @@ public class InteractiveSignalPanel extends JPanel {
     private Filter lowerFilter;
     private boolean liveMode;
     private boolean isRendering = false;
+    private String defaultExportName = null;
 
     private double[] t = new double[16_384];
     private double[] upper = new double[16_384];
@@ -222,6 +223,9 @@ public class InteractiveSignalPanel extends JPanel {
             return;
         }
         JFileChooser fc = new JFileChooser();
+        if (defaultExportName != null) {
+            fc.setSelectedFile(new File(defaultExportName + ".png"));
+        }
         fc.setDialogTitle("Save Signal as PNG");
         fc.setFileFilter(new FileNameExtensionFilter("PNG Images", "png"));
         if (fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
@@ -250,6 +254,10 @@ public class InteractiveSignalPanel extends JPanel {
         } finally {
             isRendering = false;
         }
+    }
+
+    public void setDefaultExportName(String name) {
+        this.defaultExportName = name;
     }
 
     public void reset(String upperTitle, Filter upperFilter, String lowerTitle, Filter lowerFilter, boolean liveMode) {
