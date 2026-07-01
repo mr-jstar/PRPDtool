@@ -2543,14 +2543,12 @@ public class PRPDTool extends JFrame {
                     if (estt0 < 0.5 / fs) {
                         estt0 = 0.0;
                     }
-                    if (realTimeData) {
-                        t0 = estt0;
-                        extractor.setT0(t0);
-                        SwingUtilities.invokeLater(() -> {
-                            setParamField("Zero-crossing instant", "" + t0);
-                            classifyButton.setEnabled(true);
-                        });
-                    }
+                    t0 = estt0;
+                    extractor.setT0(t0);
+                    SwingUtilities.invokeLater(() -> {
+                        setParamField("Zero-crossing instant", "" + t0);
+                        classifyButton.setEnabled(true);
+                    });
                 }
             }
             
@@ -2793,6 +2791,23 @@ public class PRPDTool extends JFrame {
             private long lastPaintTime = 0;
             
             @Override
+            public void preExtract(Buffer buffer) {
+                if (signalStart.compareAndSet(true, false)) {
+                    double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0);
+                    double estt0 = ph0 / (2 * Math.PI * f0);
+                    if (estt0 < 0.5 / fs) {
+                        estt0 = 0.0;
+                    }
+                    t0 = estt0;
+                    extractor.setT0(t0);
+                    SwingUtilities.invokeLater(() -> {
+                        setParamField("Zero-crossing instant", "" + t0);
+                        classifyButton.setEnabled(true);
+                    });
+                }
+            }
+
+            @Override
             public void bufferRead(Buffer buffer) {
                 receivedSignalCache.add(buffer);
                 if (realTimeData && recordedData != null && recordedData.isOpen()) {
@@ -2819,19 +2834,6 @@ public class PRPDTool extends JFrame {
                         stopRecorder();
                         recordSizeLabel.setText(recordedMB + " MB used");
                     }
-                }
-                if (signalStart.compareAndSet(true, false)) {
-                    double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0);
-                    double estt0 = ph0 / (2 * Math.PI * f0);
-                    if (estt0 < 0.5 / fs) {
-                        estt0 = 0.0;
-                    }
-                    if (realTimeData) {
-                        t0 = estt0;
-                        extractor.setT0(t0);
-                        setParamField("Zero-crossing instant", "" + t0);
-                    }
-                    classifyButton.setEnabled(true);
                 }
                 interactiveSignalPanel.addBuffer(buffer);
             }
