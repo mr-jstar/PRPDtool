@@ -866,6 +866,7 @@ public class PRPDTool extends JFrame {
             center.revalidate();
 
             interactiveSignalPanel = new InteractiveSignalPanel();
+            center.setSaveAllAction(() -> saveAllGraphsToPng());
             interactiveSignalPanel.reset(
                     topPlotMode == 2 ? "Base signal" : (topPlotMode == 1 ? "Baseline signal" : "Signal envelope"),
                     null,
@@ -3156,6 +3157,51 @@ public class PRPDTool extends JFrame {
             DynamicPRPDHistogram dh = (DynamicPRPDHistogram) histogram;
             dh.autoscale();
             center.setImage(dh.getImage());
+        }
+    }
+
+    private void saveAllGraphsToPng() {
+        if (center == null || interactiveSignalPanel == null) {
+            javax.swing.JOptionPane.showMessageDialog(this, "Panels are not initialized.", "Error", javax.swing.JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        javax.swing.JFileChooser fc = new javax.swing.JFileChooser();
+        fc.setDialogTitle("Save All Graphs as PNG");
+        fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("PNG Images", "png"));
+        if (fc.showSaveDialog(this) == javax.swing.JFileChooser.APPROVE_OPTION) {
+            java.io.File file = fc.getSelectedFile();
+            if (!file.getName().toLowerCase().endsWith(".png")) {
+                file = new java.io.File(file.getAbsolutePath() + ".png");
+            }
+            try {
+                java.awt.image.BufferedImage img1 = center.getRenderedImage();
+                java.awt.image.BufferedImage img2 = interactiveSignalPanel.getRenderedImage();
+                
+                int cropBottom = 5;
+                if (img1.getHeight() > cropBottom + 10) {
+                    img1 = img1.getSubimage(0, 0, img1.getWidth(), img1.getHeight() - cropBottom);
+                }
+                
+                int targetWidth = Math.max(img1.getWidth(), img2.getWidth());
+                
+                int h1 = img1.getHeight() * targetWidth / Math.max(1, img1.getWidth());
+                int h2 = img2.getHeight() * targetWidth / Math.max(1, img2.getWidth());
+                
+                java.awt.image.BufferedImage combined = new java.awt.image.BufferedImage(targetWidth, h1 + h2, java.awt.image.BufferedImage.TYPE_INT_RGB);
+                java.awt.Graphics2D g2 = combined.createGraphics();
+                g2.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                g2.setColor(PRPDConstants.isDarkTheme() ? new java.awt.Color(40, 44, 52) : java.awt.Color.WHITE);
+                g2.fillRect(0, 0, targetWidth, h1 + h2);
+                g2.drawImage(img1, 0, 0, targetWidth, h1, null);
+                g2.drawImage(img2, 0, h1, targetWidth, h2, null);
+                g2.dispose();
+                
+                javax.imageio.ImageIO.write(combined, "PNG", file);
+                javax.swing.JOptionPane.showMessageDialog(this, "All graphs saved successfully.", "Success", javax.swing.JOptionPane.INFORMATION_MESSAGE);
+            } catch (Throwable ex) {
+                ex.printStackTrace();
+                javax.swing.JOptionPane.showMessageDialog(this, "Failed to save image: " + ex, "Error", javax.swing.JOptionPane.ERROR_MESSAGE);
+            }
         }
     }
 

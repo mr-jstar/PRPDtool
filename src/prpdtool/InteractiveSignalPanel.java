@@ -34,8 +34,8 @@ public class InteractiveSignalPanel extends JPanel {
 
     private static final int MAX_POINTS = PRPDConstants.SIGNAL_MAX_POINTS;
     private static final int TARGET_POINTS_PER_BUFFER = PRPDConstants.SIGNAL_TARGET_POINTS_PER_BUFFER;
-    private static final int LEFT = 110;
-    private static final int RIGHT = 18;
+    private static final int LEFT = 85;
+    private static final int RIGHT = 45;
     private static final int TOP = 28;
     private static final int BOTTOM = 45;
     private static final int GAP = 45;
@@ -45,6 +45,7 @@ public class InteractiveSignalPanel extends JPanel {
     private Filter upperFilter;
     private Filter lowerFilter;
     private boolean liveMode;
+    private boolean isRendering = false;
 
     private double[] t = new double[16_384];
     private double[] upper = new double[16_384];
@@ -209,7 +210,7 @@ public class InteractiveSignalPanel extends JPanel {
         addMouseWheelListener(mouse);
 
         JPopupMenu popupMenu = new JPopupMenu();
-        JMenuItem saveItem = new JMenuItem("Save Signal as PNG...");
+        JMenuItem saveItem = new JMenuItem("Save Signals as PNG");
         saveItem.addActionListener(e -> saveAsPng());
         popupMenu.add(saveItem);
         setComponentPopupMenu(popupMenu);
@@ -229,15 +230,25 @@ public class InteractiveSignalPanel extends JPanel {
                 file = new File(file.getAbsolutePath() + ".png");
             }
             try {
-                BufferedImage img = new BufferedImage(getWidth(), getHeight(), BufferedImage.TYPE_INT_RGB);
-                Graphics2D g2d = img.createGraphics();
-                paint(g2d);
-                g2d.dispose();
+                BufferedImage img = getRenderedImage();
                 ImageIO.write(img, "PNG", file);
-                JOptionPane.showMessageDialog(this, "Signal image saved successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Signals image saved successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
             } catch (IOException ex) {
                 JOptionPane.showMessageDialog(this, "Failed to save image: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             }
+        }
+    }
+
+    public BufferedImage getRenderedImage() {
+        isRendering = true;
+        try {
+            BufferedImage img = new BufferedImage(Math.max(1, getWidth()), Math.max(1, getHeight()), BufferedImage.TYPE_INT_RGB);
+            Graphics2D g2d = img.createGraphics();
+            paint(g2d);
+            g2d.dispose();
+            return img;
+        } finally {
+            isRendering = false;
         }
     }
 
@@ -503,7 +514,9 @@ public class InteractiveSignalPanel extends JPanel {
         boolean isDark = PRPDConstants.isDarkTheme();
         drawPlot(g, 0, upperTitle, upper, isDark ? Color.CYAN : new Color(30, 90, 210));
         drawPlot(g, 1, lowerTitle, lower, isDark ? Color.GREEN : new Color(0, 150, 70));
-        drawInteractionHint(g);
+        if (!isRendering) {
+            drawInteractionHint(g);
+        }
         if (showCursors) {
             drawCursors(g);
         }
@@ -630,8 +643,8 @@ public class InteractiveSignalPanel extends JPanel {
 
     private void drawGrid(Graphics2D g, Rectangle plot, int plotIndex) {
         boolean isDark = PRPDConstants.isDarkTheme();
-        FontMetrics fm = g.getFontMetrics();
         g.setFont(new Font("Arial", Font.PLAIN, 12));
+        FontMetrics fm = g.getFontMetrics();
         for (int i = 0; i <= 5; i++) {
             double r = i / 5.0;
             int x = plot.x + (int) Math.round(r * plot.width);

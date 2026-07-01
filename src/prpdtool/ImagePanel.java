@@ -36,6 +36,11 @@ public class ImagePanel extends JPanel {
     private double cursorAmp1 = 0.0;
     private double cursorAmp2 = 0.0;
     private int draggingCursor = 0; // 0=none, 1=P1, 2=P2, 3=A1, 4=A2
+    private Runnable saveAllAction;
+
+    public void setSaveAllAction(Runnable action) {
+        this.saveAllAction = action;
+    }
 
     public void setShowCursors(boolean show) {
         this.showCursors = show;
@@ -190,9 +195,20 @@ public class ImagePanel extends JPanel {
         addMouseWheelListener(ma);
 
         JPopupMenu popupMenu = new JPopupMenu();
-        JMenuItem saveItem = new JMenuItem("Save PRPD as PNG...");
+        JMenuItem saveItem = new JMenuItem("Save PRPD as PNG");
         saveItem.addActionListener(e -> saveAsPng());
         popupMenu.add(saveItem);
+        
+        JMenuItem saveAllItem = new JMenuItem("Save All graphs as PNG");
+        saveAllItem.addActionListener(e -> {
+            if (saveAllAction != null) {
+                saveAllAction.run();
+            } else {
+                saveAsPng();
+            }
+        });
+        popupMenu.add(saveAllItem);
+        
         setComponentPopupMenu(popupMenu);
     }
 
@@ -225,6 +241,15 @@ public class ImagePanel extends JPanel {
     public void setImage(BufferedImage image) {
         this.image = image;
         repaint();
+    }
+
+    public BufferedImage getRenderedImage() {
+        BufferedImage img = new BufferedImage(Math.max(1, getWidth()), Math.max(1, getHeight()), BufferedImage.TYPE_INT_RGB);
+        java.awt.Graphics2D g2d = img.createGraphics();
+        paintComponent(g2d);
+        paintBorder(g2d);
+        g2d.dispose();
+        return img;
     }
 
     @Override
