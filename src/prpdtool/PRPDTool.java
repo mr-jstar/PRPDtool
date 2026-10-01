@@ -101,6 +101,12 @@ public class PRPDTool extends JFrame {
     private final String RP_FILE_LIMIT = "PRPDMonitor.rp.file.limit";
     private final String RP_FILE_PREFIX = "PRPDMonitor.rp.file.prefix";
     private final String FAST_RENDERING = "PRPDMonitor.fast.rendering";
+    // --- Metadane eksperymentu ---
+    private final String RP_DEFECT_TYPE   = "PRPDMonitor.rp.defect.type";
+    private final String RP_VOLTAGE_KV    = "PRPDMonitor.rp.voltage.kv";
+    private final String RP_SENSOR        = "PRPDMonitor.rp.sensor";
+    private final String RP_VARIANT       = "PRPDMonitor.rp.variant";
+    private final String RP_SESSION_LABEL = "PRPDMonitor.rp.session.label";
 
     private JPanel left;
     private ImagePanel center;
@@ -221,6 +227,18 @@ public class PRPDTool extends JFrame {
     private int recordLimit = 1024; // Maximal size of the registerd signal (in MB == 1 GB)
     private int recordedMB;
     private JLabel recordSizeLabel;
+    // --- Komponenty metadanych eksperymentu (zadania 1-4) ---
+    private JComboBox<String> rpDefectTypeCombo;
+    private JTextField rpVoltageKvField;
+    private JComboBox<String> rpSensorCombo;
+    private JComboBox<String> rpVariantCombo;
+    private JTextField rpSessionLabelField;
+    private JLabel outputDirLabel;
+    private JLabel outputFileLabel;
+    private JLabel dialogPreviewDirLabel;
+    private JLabel dialogPreviewFileLabel;
+    private JTextField rpOutputDirField;
+    private JButton rpOutputDirBtn;
 
     private JButton classifyButton;
     private DefaultListModel<File> receivedSignalsModel;
@@ -1129,17 +1147,23 @@ public class PRPDTool extends JFrame {
     }
 
     private void cleanupOldSignals() {
-        if (!receivedSignalsDir.exists() || rpFileLimit <= 0) return;
+        if (rpFileLimit <= 0) return;
+        // Czyść bieżący podfolder defektu (lub katalog główny jeśli Custom)
+        String currentDefect = rpDefectTypeCombo != null
+            ? (String) rpDefectTypeCombo.getSelectedItem() : "unknown";
+        if (currentDefect == null || currentDefect.isBlank()) currentDefect = "unknown";
+        
+        File sessionDir;
+        if ("<None / Custom>".equals(currentDefect)) {
+            sessionDir = receivedSignalsDir;
+        } else {
+            sessionDir = new File(receivedSignalsDir, "sessions" + File.separator + redpitaya.RedPitayaFileWriter.sanitizeForFilename(currentDefect));
+        }
+        if (!sessionDir.exists()) return;
 
-        File[] files = receivedSignalsDir.listFiles((dir, name) -> {
-            String lower = name.toLowerCase(Locale.US);
-            return lower.startsWith("rp_") && lower.endsWith(".rppr.bin");
-        });
-
+        File[] files = sessionDir.listFiles((dir, name) -> name.toLowerCase(Locale.US).endsWith(".rppr.bin"));
         if (files == null || files.length <= rpFileLimit) return;
-
         Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
-
         for (int i = rpFileLimit; i < files.length; i++) {
             files[i].delete();
         }
@@ -1150,23 +1174,41 @@ public class PRPDTool extends JFrame {
             return;
         }
         receivedSignalsModel.clear();
-        if (!receivedSignalsDir.exists()) {
-            receivedSignalsDir.mkdirs();
+
+        List<File> found = new ArrayList<>();
+
+        // Nowa struktura: data/received_bin/sessions/{defect}/...
+        File sessionsRoot = new File(receivedSignalsDir, "sessions");
+        if (sessionsRoot.exists() && sessionsRoot.isDirectory()) {
+            File[] defectDirs = sessionsRoot.listFiles(File::isDirectory);
+            if (defectDirs != null) {
+                for (File defectDir : defectDirs) {
+                    File[] rpprFiles = defectDir.listFiles((dir, name) -> {
+                        String lower = name.toLowerCase(Locale.US);
+                        return lower.endsWith(".rppr.bin");
+                    });
+                    if (rpprFiles != null) {
+                        for (File f : rpprFiles) if (f.isFile()) found.add(f);
+                    }
+                }
+            }
         }
-        File[] files = receivedSignalsDir.listFiles((dir, name) -> {
+
+        // Stara struktura (kompatybilność wsteczna): data/received_bin/*.bin
+        if (!receivedSignalsDir.exists()) receivedSignalsDir.mkdirs();
+        File[] legacy = receivedSignalsDir.listFiles((dir, name) -> {
             String lower = name.toLowerCase(Locale.US);
             return lower.endsWith(".rppr.bin")
                     || lower.endsWith(".prpdtool.bin")
                     || (lower.endsWith(".bin") && !lower.startsWith("."));
         });
-        if (files == null) {
-            return;
+        if (legacy != null) {
+            for (File f : legacy) if (f.isFile()) found.add(f);
         }
-        Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
-        for (File file : files) {
-            if (file.isFile()) {
-                receivedSignalsModel.addElement(file);
-            }
+
+        found.sort((a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+        for (File file : found) {
+            receivedSignalsModel.addElement(file);
         }
     }
 
@@ -1332,6 +1374,8 @@ public class PRPDTool extends JFrame {
         addFormRow(formPanel, "Frame count", rpFrameCountSpinner, helpText("frameCount"));
         updateRedPitayaEstimateFont();
 
+        // (usunięte zduplikowane pola metadanych z okna ustawień technicznych)
+
         rpTriggerIn1Button = new JButton("Auto trigger IN1");
         rpTriggerIn1Button.setToolTipText(htmlTooltip(helpText("autoTriggerIn1")));
         rpTriggerIn1Button.addActionListener(e -> openTriggerDialog(1));
@@ -1374,47 +1418,179 @@ public class PRPDTool extends JFrame {
         gbc.gridx = 1;
         actions.add(rpStopButton, gbc);
 
-        JPanel fileConfigPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
-        
-        fileConfigPanel.add(new JLabel("Prefix"));
-        JLabel prefixHelp = new JLabel(new HelpIcon());
-        prefixHelp.setToolTipText(htmlTooltip("Enter a custom prefix for the files. It will be used to generate file names in the format: [PREFIX]_[DATE_TIME].rppr.bin"));
-        prefixHelp.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-        prefixHelp.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
-        fileConfigPanel.add(prefixHelp);
+        JPanel fileConfigPanel = new JPanel(new GridBagLayout());
+        // === TWORZENIE OKNA "CONFIGURE OUTPUT" ===
+        JDialog outputConfigDialog = new JDialog(this, "Configure Output", true);
+        JPanel outDiagPanel = new JPanel(new GridBagLayout());
+        outDiagPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        GridBagConstraints dGbc = new GridBagConstraints();
+        dGbc.fill = GridBagConstraints.HORIZONTAL;
+        dGbc.insets = new Insets(4, 4, 4, 4);
 
-        rpFilePrefixField = new JTextField(rpFilePrefix, 10);
-        rpFilePrefixField.addActionListener(e -> {
-            rpFilePrefix = rpFilePrefixField.getText().trim();
-            if (rpFilePrefix.isEmpty()) rpFilePrefix = "rp_";
-            rpFilePrefixField.setText(rpFilePrefix);
-            try { configuration.saveValue(RP_FILE_PREFIX, rpFilePrefix); } catch (IOException ex) {}
+        // Defect Type
+        dGbc.gridx = 0; dGbc.gridy = 0; dGbc.weightx = 0.0;
+        outDiagPanel.add(new JLabel("Defect type:"), dGbc);
+        rpDefectTypeCombo = new JComboBox<>(new String[]{
+            "<None / Custom>", "Corona_HV", "Corona_LV", "Floating_Potential",
+            "Void_Discharge", "Surface_Discharge", "Surface_Tracking",
+            "Loose_Contact", "Series_Arc", "Parallel_Arc"
         });
-        rpFilePrefixField.addFocusListener(new java.awt.event.FocusAdapter() {
-            @Override
-            public void focusLost(java.awt.event.FocusEvent e) {
-                rpFilePrefix = rpFilePrefixField.getText().trim();
-                if (rpFilePrefix.isEmpty()) rpFilePrefix = "rp_";
-                rpFilePrefixField.setText(rpFilePrefix);
-                try { configuration.saveValue(RP_FILE_PREFIX, rpFilePrefix); } catch (IOException ex) {}
+        rpDefectTypeCombo.setEditable(true);
+        rpDefectTypeCombo.setSelectedItem("Corona_HV");
+        rpDefectTypeCombo.addActionListener(e -> {
+            updateOutputPreview();
+        });
+        dGbc.gridx = 1; dGbc.weightx = 1.0;
+        outDiagPanel.add(rpDefectTypeCombo, dGbc);
+
+        // Session Label (teraz gridy = 4)
+        dGbc.gridx = 0; dGbc.gridy = 4; dGbc.weightx = 0.0;
+        outDiagPanel.add(new JLabel("Label/Prefix:"), dGbc);
+        rpSessionLabelField = new JTextField("unknown", 15);
+        rpSessionLabelField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { updateOutputPreview(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { updateOutputPreview(); }
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { updateOutputPreview(); }
+        });
+        dGbc.gridx = 1; dGbc.weightx = 1.0;
+        outDiagPanel.add(rpSessionLabelField, dGbc);
+
+        // Voltage (teraz gridy = 1)
+        dGbc.gridx = 0; dGbc.gridy = 1; dGbc.weightx = 0.0;
+        outDiagPanel.add(new JLabel("Voltage [kV]:"), dGbc);
+        rpVoltageKvField = new JTextField("12.0", 15);
+        rpVoltageKvField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { handleVoltageChange(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { handleVoltageChange(); }
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { handleVoltageChange(); }
+        });
+        rpVoltageKvField.addFocusListener(new java.awt.event.FocusAdapter() {
+            @Override public void focusLost(java.awt.event.FocusEvent e) {
+                handleVoltageChange();
             }
         });
-        fileConfigPanel.add(rpFilePrefixField);
-        
-        fileConfigPanel.add(new JLabel("Max files"));
-        JLabel limitHelp = new JLabel(new HelpIcon());
-        limitHelp.setToolTipText(htmlTooltip("File limit for the active session. Files are created after clicking 'Start live'. Once the limit is reached, the oldest files from the current session are overwritten. The pool resets when you click 'Stop RP' and then 'Start live' again. Set to 0 to disable."));
-        limitHelp.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-        limitHelp.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
-        fileConfigPanel.add(limitHelp);
+        dGbc.gridx = 1; dGbc.weightx = 1.0;
+        outDiagPanel.add(rpVoltageKvField, dGbc);
 
+        // Sensor (teraz gridy = 2)
+        dGbc.gridx = 0; dGbc.gridy = 2; dGbc.weightx = 0.0;
+        outDiagPanel.add(new JLabel("Sensor:"), dGbc);
+        rpSensorCombo = new JComboBox<>(new String[]{"<None>", "HFCT", "TEV", "Rogowski", "VHF", "Other"});
+        rpSensorCombo.setSelectedItem("<None>");
+        rpSensorCombo.addActionListener(e -> {
+            updateOutputPreview();
+        });
+        dGbc.gridx = 1; dGbc.weightx = 1.0;
+        outDiagPanel.add(rpSensorCombo, dGbc);
+
+        // Variant (teraz gridy = 3)
+        dGbc.gridx = 0; dGbc.gridy = 3; dGbc.weightx = 0.0;
+        outDiagPanel.add(new JLabel("Variant:"), dGbc);
+        rpVariantCombo = new JComboBox<>(new String[]{"<None>", "A_Lab", "B_Industrial"});
+        rpVariantCombo.setSelectedItem("<None>");
+        rpVariantCombo.addActionListener(e -> {
+            updateOutputPreview();
+        });
+        dGbc.gridx = 1; dGbc.weightx = 1.0;
+        outDiagPanel.add(rpVariantCombo, dGbc);
+
+        // Max Files
+        dGbc.gridx = 0; dGbc.gridy = 5; dGbc.weightx = 0.0;
+        outDiagPanel.add(new JLabel("Max files:"), dGbc);
         JSpinner limitSpinner = new JSpinner(new SpinnerNumberModel(rpFileLimit, 0, 9999, 1));
         limitSpinner.addChangeListener(e -> {
             rpFileLimit = (Integer) limitSpinner.getValue();
             try { configuration.saveValue(RP_FILE_LIMIT, "" + rpFileLimit); } catch (IOException ex) {}
         });
-        fileConfigPanel.add(limitSpinner);
+        dGbc.gridx = 1; dGbc.weightx = 1.0;
+        outDiagPanel.add(limitSpinner, dGbc);
 
+        // Custom Directory
+        dGbc.gridx = 0; dGbc.gridy = 6; dGbc.weightx = 0.0;
+        outDiagPanel.add(new JLabel("Directory:"), dGbc);
+        JPanel dirPanel = new JPanel(new BorderLayout(4, 0));
+        rpOutputDirField = new JTextField(receivedSignalsDir.getAbsolutePath());
+        rpOutputDirField.setEditable(false);
+        rpOutputDirBtn = new JButton("...");
+        rpOutputDirBtn.addActionListener(e -> {
+            JFileChooser chooser = new JFileChooser(rpOutputDirField.getText());
+            chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+            if (chooser.showOpenDialog(outputConfigDialog) == JFileChooser.APPROVE_OPTION) {
+                String chosenPath = chooser.getSelectedFile().getAbsolutePath();
+                rpOutputDirField.setText(chosenPath);
+                updateOutputPreview();
+            }
+        });
+        dirPanel.add(rpOutputDirField, BorderLayout.CENTER);
+        dirPanel.add(rpOutputDirBtn, BorderLayout.EAST);
+        dGbc.gridx = 1; dGbc.weightx = 1.0;
+        outDiagPanel.add(dirPanel, dGbc);
+
+        // Dialog Preview Labels
+        dGbc.gridx = 0; dGbc.gridy = 7; dGbc.gridwidth = 2; dGbc.weightx = 1.0;
+        dGbc.insets = new Insets(15, 4, 0, 4);
+        outDiagPanel.add(new JLabel("<html><b>Preview:</b></html>"), dGbc);
+        
+        dialogPreviewDirLabel = new JLabel("...");
+        dialogPreviewDirLabel.setFont(dialogPreviewDirLabel.getFont().deriveFont(Font.ITALIC, 11f));
+        dialogPreviewDirLabel.setForeground(Color.DARK_GRAY);
+        dGbc.gridy = 8; dGbc.insets = new Insets(2, 4, 0, 4);
+        outDiagPanel.add(dialogPreviewDirLabel, dGbc);
+
+        dialogPreviewFileLabel = new JLabel("...");
+        dialogPreviewFileLabel.setFont(dialogPreviewFileLabel.getFont().deriveFont(Font.BOLD, 12f));
+        dialogPreviewFileLabel.setForeground(Color.BLUE.darker());
+        dGbc.gridy = 9; dGbc.insets = new Insets(2, 4, 10, 4);
+        outDiagPanel.add(dialogPreviewFileLabel, dGbc);
+
+        // Dialog Close Button
+        JButton closeDiagBtn = new JButton("OK");
+        closeDiagBtn.addActionListener(e -> outputConfigDialog.setVisible(false));
+        dGbc.gridy = 10; dGbc.fill = GridBagConstraints.NONE; dGbc.anchor = GridBagConstraints.CENTER;
+        outDiagPanel.add(closeDiagBtn, dGbc);
+
+        outputConfigDialog.add(outDiagPanel);
+        outputConfigDialog.pack();
+        outputConfigDialog.setSize(Math.max(650, outputConfigDialog.getWidth()), outputConfigDialog.getHeight());
+
+        // === PANEL GŁÓWNY (PREVIEW I PRZYCISK) ===
+        fileConfigPanel = new JPanel(new GridBagLayout());
+        fileConfigPanel.setBorder(BorderFactory.createTitledBorder("Output Configuration"));
+        GridBagConstraints fcGbc = new GridBagConstraints();
+        fcGbc.fill = GridBagConstraints.HORIZONTAL;
+        fcGbc.insets = new Insets(2, 4, 2, 4);
+
+        outputDirLabel = new JLabel("...");
+        outputDirLabel.setFont(outputDirLabel.getFont().deriveFont(Font.ITALIC, 10f));
+        outputDirLabel.setForeground(Color.DARK_GRAY);
+        
+        outputFileLabel = new JLabel("...");
+        outputFileLabel.setFont(outputFileLabel.getFont().deriveFont(Font.BOLD, 11f));
+        outputFileLabel.setForeground(Color.BLUE.darker());
+
+        JButton configureOutputBtn = new JButton("Configure Output...");
+        configureOutputBtn.addActionListener(e -> {
+            outputConfigDialog.setLocationRelativeTo(this);
+            outputConfigDialog.setVisible(true);
+        });
+
+        fcGbc.gridx = 0; fcGbc.gridy = 0; fcGbc.weightx = 0.0;
+        fileConfigPanel.add(new JLabel("Directory:"), fcGbc);
+        fcGbc.gridx = 1; fcGbc.weightx = 1.0;
+        fileConfigPanel.add(outputDirLabel, fcGbc);
+
+        fcGbc.gridx = 0; fcGbc.gridy = 1; fcGbc.weightx = 0.0;
+        fileConfigPanel.add(new JLabel("File:"), fcGbc);
+        fcGbc.gridx = 1; fcGbc.weightx = 1.0;
+        fileConfigPanel.add(outputFileLabel, fcGbc);
+
+        fcGbc.gridx = 0; fcGbc.gridy = 2; fcGbc.gridwidth = 2;
+        fcGbc.fill = GridBagConstraints.NONE; fcGbc.anchor = GridBagConstraints.CENTER;
+        fcGbc.insets = new Insets(6, 4, 2, 4);
+        fileConfigPanel.add(configureOutputBtn, fcGbc);
+
+        // Wywołanie aktualizacji preview na start
+        updateOutputPreview();
         rpSettingsDialog = new JDialog(this, "Red Pitaya Settings", false);
         rpSettingsDialog.setDefaultCloseOperation(JDialog.HIDE_ON_CLOSE);
         JPanel dialogPanel = new JPanel(new BorderLayout(4, 4));
@@ -1472,7 +1648,7 @@ public class PRPDTool extends JFrame {
     }
 
     private void setDecimalSpinnerEditor(JSpinner spinner) {
-        spinner.setEditor(new JSpinner.NumberEditor(spinner, "0.###############"));
+        spinner.setEditor(new JSpinner.NumberEditor(spinner, "0.0##############"));
         if (spinner.getEditor() instanceof JSpinner.DefaultEditor editor) {
             editor.getTextField().setColumns(12);
         }
@@ -1824,6 +2000,18 @@ public class PRPDTool extends JFrame {
         config.durationS = spinnerDoubleValue(rpDurationSpinner);
         config.frameSize = spinnerIntValue(rpFrameSizeSpinner);
         config.frameCount = spinnerIntValue(rpFrameCountSpinner);
+        // --- Metadane eksperymentu ---
+        if (rpDefectTypeCombo != null) config.defectType = (String) rpDefectTypeCombo.getSelectedItem();
+        if (rpVoltageKvField != null) {
+            try {
+                config.voltageKv = Double.parseDouble(rpVoltageKvField.getText().trim().replace(',', '.'));
+            } catch (Exception e) {
+                config.voltageKv = 0.0;
+            }
+        }
+        if (rpSensorCombo != null) config.sensor = (String) rpSensorCombo.getSelectedItem();
+        if (rpVariantCombo != null) config.variant = (String) rpVariantCombo.getSelectedItem();
+        if (rpSessionLabelField != null) config.sessionLabel = rpSessionLabelField.getText();
         config.validate(BufferFactory.bufferSize());
         return config;
     }
@@ -1988,6 +2176,12 @@ public class PRPDTool extends JFrame {
             configuration.saveValue(RP_DURATION, Double.toString(config.durationS));
             configuration.saveValue(RP_FRAME_SIZE, Integer.toString(config.frameSize));
             configuration.saveValue(RP_FRAME_COUNT, Integer.toString(config.frameCount));
+            // --- Metadane eksperymentu ---
+            configuration.saveValue(RP_DEFECT_TYPE, config.defectType);
+            configuration.saveValue(RP_VOLTAGE_KV,  Double.toString(config.voltageKv));
+            configuration.saveValue(RP_SENSOR,       config.sensor);
+            configuration.saveValue(RP_VARIANT,      config.variant);
+            configuration.saveValue(RP_SESSION_LABEL, config.sessionLabel);
         } catch (IOException ex) {
             status.setText(ex.getMessage());
         }
@@ -2016,6 +2210,79 @@ public class PRPDTool extends JFrame {
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, ex.getMessage(), "Red Pitaya trigger", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    private void handleVoltageChange() {
+        if (rpVoltageKvField == null) return;
+        try {
+            String text = rpVoltageKvField.getText().trim().replace(',', '.');
+            if (!text.isEmpty()) {
+                Double.parseDouble(text); // tylko testujemy czy parsuje się poprawnie, jeśli nie, złapie exception
+            }
+        } catch (Exception ex) {
+            // Ignorujemy błędy parsowania podczas wpisywania (np. ktoś wpisał "12.")
+        }
+        updateOutputPreview();
+    }
+
+    private File getOutputBaseDirectory() {
+        if (rpOutputDirField != null && !rpOutputDirField.getText().trim().isEmpty()) {
+            return new File(rpOutputDirField.getText().trim());
+        }
+        return receivedSignalsDir;
+    }
+
+    private void updateOutputPreview() {
+        String defect = rpDefectTypeCombo != null ? (String) rpDefectTypeCombo.getSelectedItem() : "unknown";
+        if (defect == null || defect.isBlank()) defect = "unknown";
+        String rawLabel = rpSessionLabelField != null ? rpSessionLabelField.getText() : "";
+        String label = redpitaya.RedPitayaFileWriter.sanitizeForFilename(rawLabel);
+
+        String dirStr;
+        String fileBase;
+
+        double v = 0.0;
+        if (rpVoltageKvField != null) {
+            try {
+                v = Double.parseDouble(rpVoltageKvField.getText().trim().replace(',', '.'));
+            } catch (NumberFormatException ignored) {}
+        }
+        String rawSensor = rpSensorCombo != null ? (String) rpSensorCombo.getSelectedItem() : "";
+        String rawVariant = rpVariantCombo != null ? (String) rpVariantCombo.getSelectedItem() : "";
+        
+        String vStr = (v % 1 == 0) ? String.format(java.util.Locale.US, "%.0fkV", v) : String.format(java.util.Locale.US, "%.1fkV", v);
+        
+        StringBuilder extrasBuilder = new StringBuilder(vStr);
+        if (rawSensor != null && !rawSensor.isBlank() && !"<None>".equals(rawSensor)) {
+            extrasBuilder.append("_").append(redpitaya.RedPitayaFileWriter.sanitizeForFilename(rawSensor));
+        }
+        if (rawVariant != null && !rawVariant.isBlank() && !"<None>".equals(rawVariant)) {
+            extrasBuilder.append("_").append(redpitaya.RedPitayaFileWriter.sanitizeForFilename(rawVariant));
+        }
+        String extras = extrasBuilder.toString();
+
+        File baseDir = getOutputBaseDirectory();
+        boolean isDefault = baseDir.getAbsolutePath().equals(receivedSignalsDir.getAbsolutePath());
+        String displayBase = isDefault 
+                ? "..." + File.separator + "PRPDtool" + File.separator + "data" + File.separator + "received_bin" 
+                : baseDir.getAbsolutePath();
+
+        if ("<None / Custom>".equals(defect)) {
+            dirStr = displayBase + File.separator;
+            String prefix = label.isEmpty() ? "rp" : label;
+            fileBase = prefix + "_" + extras + "_[TIME].rppr.bin";
+        } else {
+            String cleanDefect = redpitaya.RedPitayaFileWriter.sanitizeForFilename(defect);
+            dirStr = displayBase + File.separator + "sessions" + File.separator + cleanDefect + File.separator;
+            fileBase = label.isEmpty()
+                    ? cleanDefect + "_" + extras + "_[TIME].rppr.bin"
+                    : cleanDefect + "_" + extras + "_" + label + "_[TIME].rppr.bin";
+        }
+
+        if (outputDirLabel != null) outputDirLabel.setText(dirStr);
+        if (outputFileLabel != null) outputFileLabel.setText(fileBase);
+        if (dialogPreviewDirLabel != null) dialogPreviewDirLabel.setText(dirStr);
+        if (dialogPreviewFileLabel != null) dialogPreviewFileLabel.setText(fileBase);
     }
 
     // ------------- Misc. helpers
@@ -2485,7 +2752,7 @@ public class PRPDTool extends JFrame {
                         live,
                         3,
                         bufferSize,
-                        receivedSignalsDir.toPath(),
+                        getOutputBaseDirectory().toPath(),
                         this::onRedPitayaCaptureSaved,
                         RP_LIVE_RESTART_DELAY_MS,
                         rpFilePrefix

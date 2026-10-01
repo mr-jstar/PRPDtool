@@ -28,6 +28,14 @@ public class RedPitayaConfig {
     public int frameSize = 1048576;
     public int frameCount = 1;
 
+    // --- Metadane eksperymentu (zadania 1-4) ---
+    public String defectType = "unknown";
+    public double voltageKv = 0.0;
+    public String sensor = "HFCT";
+    public String variant = "A_Lab";
+    /** Opcjonalna etykieta sesji wstawiana w nazwie pliku między typ defektu a timestamp. */
+    public String sessionLabel = "";
+
     public RedPitayaConfig copy() {
         RedPitayaConfig c = new RedPitayaConfig();
         c.host = host;
@@ -46,6 +54,11 @@ public class RedPitayaConfig {
         c.durationS = durationS;
         c.frameSize = frameSize;
         c.frameCount = frameCount;
+        c.defectType = defectType;
+        c.voltageKv = voltageKv;
+        c.sensor = sensor;
+        c.variant = variant;
+        c.sessionLabel = sessionLabel;
         return c;
     }
 
@@ -204,6 +217,12 @@ public class RedPitayaConfig {
         root.put("sample_rate", sampleRate());
         root.put("dtype", "int16");
         root.put("units", "RAW");
+        // --- Metadane eksperymentu ---
+        root.put("defect_type", defectType);
+        root.put("voltage_kv", voltageKv);
+        root.put("sensor", sensor);
+        root.put("variant", variant);
+        root.put("session_label", sessionLabel);
         return root;
     }
 

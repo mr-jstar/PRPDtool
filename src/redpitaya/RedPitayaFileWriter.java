@@ -36,8 +36,42 @@ public class RedPitayaFileWriter implements Closeable {
 
     public static Path buildOutputPath(File directory, Map<String, Object> metadata) {
         String stamp = LocalDateTime.now().format(STAMP_FORMAT);
-        String prefix = (String) metadata.getOrDefault("file_prefix", "rp_");
-        return directory.toPath().resolve(prefix + "_" + stamp + ".rppr.bin");
+        String rawDefect = (String) metadata.getOrDefault("defect_type", "unknown");
+        String rawLabel = (String) metadata.getOrDefault("session_label", "");
+        String label = sanitizeForFilename(rawLabel);
+
+        double v = metadata.containsKey("voltage_kv") ? ((Number) metadata.get("voltage_kv")).doubleValue() : 0.0;
+        String rawSensor = (String) metadata.getOrDefault("sensor", "");
+        String rawVariant = (String) metadata.getOrDefault("variant", "");
+        
+        String vStr = (v % 1 == 0) ? String.format(java.util.Locale.US, "%.0fkV", v) : String.format(java.util.Locale.US, "%.1fkV", v);
+        
+        StringBuilder extrasBuilder = new StringBuilder(vStr);
+        if (!rawSensor.isBlank() && !"<None>".equals(rawSensor)) {
+            extrasBuilder.append("_").append(sanitizeForFilename(rawSensor));
+        }
+        if (!rawVariant.isBlank() && !"<None>".equals(rawVariant)) {
+            extrasBuilder.append("_").append(sanitizeForFilename(rawVariant));
+        }
+        String extras = extrasBuilder.toString();
+
+        if ("<None / Custom>".equals(rawDefect)) {
+            String prefix = label.isEmpty() ? "rp" : label;
+            return directory.toPath().resolve(prefix + "_" + extras + "_" + stamp + ".rppr.bin");
+        } else {
+            String defect = sanitizeForFilename(rawDefect);
+            String filename = label.isEmpty()
+                    ? defect + "_" + extras + "_" + stamp + ".rppr.bin"
+                    : defect + "_" + extras + "_" + label + "_" + stamp + ".rppr.bin";
+            Path subdir = directory.toPath().resolve("sessions").resolve(defect);
+            return subdir.resolve(filename);
+        }
+    }
+
+    /** Zastępuje znaki niedozwolone w nazwach plików/folderów podkreślnikiem. */
+    public static String sanitizeForFilename(String name) {
+        if (name == null || name.isBlank()) return "unknown";
+        return name.trim().replaceAll("[^a-zA-Z0-9_\\-]", "_");
     }
 
     public Path path() {
