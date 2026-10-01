@@ -108,16 +108,30 @@ public class RedPitayaSignalReader implements SignalReader, Closeable {
         buf.clear();
         ByteBuffer bb = ByteBuffer.wrap(frame.payload).order(ByteOrder.LITTLE_ENDIAN);
         double fs = frame.sampleRate;
+        // Indeks fizycznego kanału CH2 w tablicy channels[] (-1 jeśli nie jest nagrywany)
+        int ch2Index = -1;
+        for (int i = 0; i < config.channels.length; i++) {
+            if (config.channels[i] == 2) { ch2Index = i; break; }
+        }
+
         for (int i = 0; i < frame.sampleCount; i++) {
             buf.t[i] = (sampleOffset + i) / fs;
             short selected = 0;
+            short reference = 0;
             for (int ch = 0; ch < frame.channelCount; ch++) {
                 short value = bb.getShort();
                 if (ch == visualIndex) {
                     selected = value;
                 }
+                // Referencja 50Hz to ZAWSZE fizyczny kanał 2 (IN2), niezależnie od wyboru Visual
+                if (ch == ch2Index && ch2Index != visualIndex) {
+                    reference = value;
+                }
             }
             buf.u[i] = selected;
+            if (buf.u2 != null) {
+                buf.u2[i] = reference;
+            }
         }
         sampleOffset += frame.sampleCount;
         buf.setUsed(frame.sampleCount);

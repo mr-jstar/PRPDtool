@@ -126,19 +126,29 @@ public class RpprFileSignalReader implements SignalReader, Closeable {
         if (visualIndex < 0 || visualIndex >= frame.channelCount) {
             visualIndex = 0;
         }
+        
+        int ch2Index = channels.indexOf(2); // Szukamy na którym miejscu zapisano IN2
+        
         Buffer buffer = BufferFactory.acquire(consumerCount);
         buffer.clear();
         ByteBuffer payload = ByteBuffer.wrap(frame.payload).order(ByteOrder.LITTLE_ENDIAN);
         for (int i = 0; i < frame.sampleCount; i++) {
             buffer.t[i] = (sampleOffset + i) / frame.sampleRate;
             short selected = 0;
+            short reference = 0;
             for (int ch = 0; ch < frame.channelCount; ch++) {
                 short value = payload.getShort();
                 if (ch == visualIndex) {
                     selected = value;
                 }
+                if (ch == ch2Index && ch2Index != visualIndex) {
+                    reference = value;
+                }
             }
             buffer.u[i] = selected;
+            if (buffer.u2 != null) {
+                buffer.u2[i] = reference;
+            }
         }
         sampleOffset += frame.sampleCount;
         buffer.setUsed(frame.sampleCount);

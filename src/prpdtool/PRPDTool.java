@@ -190,6 +190,7 @@ public class PRPDTool extends JFrame {
     private JButton applyButton;
     private JCheckBox autoscaleCb;
     private JCheckBox showRawDataCb;
+    private JCheckBox useHwPhaseRefCb;
 
     private JTextField dataServer;
     private JButton startBtn;
@@ -980,6 +981,10 @@ public class PRPDTool extends JFrame {
                 }
             });
             paramPanel.add(showRawDataCb);
+
+            useHwPhaseRefCb = new JCheckBox("Use HW Phase Ref (CH2)", false);
+            useHwPhaseRefCb.setToolTipText("If 2 channels are recorded, use CH2 for 50Hz phase synchronization instead of estimating from the main signal.");
+            paramPanel.add(useHwPhaseRefCb);
 
             center.setResetAction(() -> {
                 autoscaleCb.setSelected(true);
@@ -2761,7 +2766,8 @@ public class PRPDTool extends JFrame {
                 bufferSize,
                 2,
                 extractor,
-                createPipelineListener("Red Pitaya", "redpitaya")
+                createPipelineListener("Red Pitaya", "redpitaya",
+                        useHwPhaseRefCb != null && useHwPhaseRefCb.isSelected())
         );
 
         pipeline.setOnReaderProgress(n
@@ -2798,14 +2804,14 @@ public class PRPDTool extends JFrame {
         return new File(receivedSignalsDir, "recorded_" + stamp + ".prpdtool.bin");
     }
 
-    private PRPDPipelineListener createPipelineListener(String displayName, String exportName) {
+    private PRPDPipelineListener createPipelineListener(String displayName, String exportName, boolean useHwRef) {
         return new PRPDPipelineListener() {
             private long lastPaintTime = 0;
             
             @Override
             public void preExtract(Buffer buffer) {
                 if (signalStart.compareAndSet(true, false)) {
-                    double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0);
+                    double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0, useHwRef);
                     double estt0 = ph0 / (2 * Math.PI * f0);
                     if (estt0 < 0.5 / fs) {
                         estt0 = 0.0;
@@ -3048,6 +3054,8 @@ public class PRPDTool extends JFrame {
 
         int buffer_size = BufferFactory.bufferSize();
 
+        boolean useHwRefSnapshot = (useHwPhaseRefCb != null && useHwPhaseRefCb.isSelected());
+
         pipeline = new PRPDPipeline(
                 filename,
                 3, // 3 konsumentów: extractor, envelope, signal
@@ -3060,7 +3068,7 @@ public class PRPDTool extends JFrame {
             @Override
             public void preExtract(Buffer buffer) {
                 if (signalStart.compareAndSet(true, false)) {
-                    double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0);
+                    double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0, useHwRefSnapshot);
                     double estt0 = ph0 / (2 * Math.PI * f0);
                     if (estt0 < 0.5 / fs) {
                         estt0 = 0.0;

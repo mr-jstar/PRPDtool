@@ -10,17 +10,38 @@ import pipeline.Buffer;
 public class PhaseEstimator {
 
     public static double estimateIntialPhase(Buffer b, double f0) {
+        return estimateIntialPhase(b, f0, false); // wsteczna kompatybilność
+    }
+
+    public static double estimateIntialPhase(Buffer b, double f0, boolean useHardwareReference) {
         double nT = b.t[b.used - 1] * f0;
         if( nT < 10 )
             System.out.println("t/T="+nT+" t0 estimate is uncertain");
+            
+        // Wybieramy z którego strumienia próbek liczymy fazę.
+        // Sprawdzamy też czy u2 faktycznie zawiera sygnał (nie same zera),
+        // bo przy nagrywaniu tylko 1 kanału u2 będzie zerowe.
+        double[] signalToUse = b.u;
+        if (useHardwareReference && b.u2 != null) {
+            double maxAbs = 0.0;
+            for (int i = 0; i < b.used; i++) {
+                double a = Math.abs(b.u2[i]);
+                if (a > maxAbs) maxAbs = a;
+            }
+            if (maxAbs > 0.0) {
+                signalToUse = b.u2;
+            } else {
+                System.out.println("WARNING: HW Phase Ref (CH2) selected but u2 is all zeros — falling back to CH1. Is CH2 connected and IN1+IN2 mode selected?");
+            }
+        }
             
         // Calculate the fundamental component of the signal at f0 using DFT
         double re = 0.0;
         double im = 0.0;
         for (int i = 0; i < b.used; i++) {
             double angle = 2 * Math.PI * f0 * b.t[i];
-            re += b.u[i] * Math.cos(angle);
-            im += b.u[i] * Math.sin(angle);
+            re += signalToUse[i] * Math.cos(angle);
+            im += signalToUse[i] * Math.sin(angle);
         }
         
         // Signal can be approximated as A * cos(2*pi*f0*t + phi)

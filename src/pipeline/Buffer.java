@@ -10,23 +10,30 @@ public class Buffer {
 
     public final double[] t;
     public final double[] u;
+    public final double[] u2;
     private final int size;
     public int used;
     public boolean eof;
 
     private final AtomicInteger refs = new AtomicInteger(0);
 
-    public Buffer(double[] t, double[] u, int size, boolean eof) {
+    public Buffer(double[] t, double[] u, double[] u2, int size, boolean eof) {
         this.t = t;
         this.u = u;
+        this.u2 = u2;
         this.size = size;
         this.eof = eof;
         this.used = 0;
     }
 
+    public Buffer(double[] t, double[] u, int size, boolean eof) {
+        this(t, u, null, size, eof);
+    }
+
     public Buffer(int size) {
         this.t = new double[size];
         this.u = new double[size];
+        this.u2 = new double[size];
         this.size = size;
         this.eof = false;
         this.used = 0;
