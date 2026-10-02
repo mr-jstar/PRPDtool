@@ -28,12 +28,24 @@ public class RpprFileSignalReader implements SignalReader, Closeable {
     private final List<Integer> channels;
     private long sampleOffset;
 
+    private double[] mvPerAdc;
+
     public RpprFileSignalReader(String filename, int consumerCount, int visualChannel) throws IOException {
         this.channel = new FileInputStream(new File(filename)).getChannel();
         this.consumerCount = consumerCount;
         Map<String, Object> metadata = readFileHeader();
         this.channels = parseChannels(metadata.get("channels"));
         this.visualChannel = channels.contains(visualChannel) ? visualChannel : channels.get(0);
+        this.mvPerAdc = new double[channels.size()];
+        if (metadata.containsKey("gains")) {
+            Map<String, Object> gains = (Map<String, Object>) metadata.get("gains");
+            for (int i = 0; i < channels.size(); i++) {
+                String gainStr = (String) gains.get(String.valueOf(channels.get(i)));
+                mvPerAdc[i] = "HV".equals(gainStr) ? (20000.0/8192.0) : (1000.0/8192.0);
+            }
+        } else {
+            java.util.Arrays.fill(mvPerAdc, 1000.0/8192.0);
+        }
     }
 
     public static boolean isRpprFile(String filename) {
@@ -134,15 +146,16 @@ public class RpprFileSignalReader implements SignalReader, Closeable {
         ByteBuffer payload = ByteBuffer.wrap(frame.payload).order(ByteOrder.LITTLE_ENDIAN);
         for (int i = 0; i < frame.sampleCount; i++) {
             buffer.t[i] = (sampleOffset + i) / frame.sampleRate;
-            short selected = 0;
-            short reference = 0;
+            double selected = 0;
+            double reference = 0;
             for (int ch = 0; ch < frame.channelCount; ch++) {
                 short value = payload.getShort();
+                double mv = value * mvPerAdc[ch];
                 if (ch == visualIndex) {
-                    selected = value;
+                    selected = mv;
                 }
                 if (ch == ch2Index && ch2Index != visualIndex) {
-                    reference = value;
+                    reference = mv;
                 }
             }
             buffer.u[i] = selected;

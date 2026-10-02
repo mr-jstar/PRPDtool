@@ -146,7 +146,7 @@ public class PRPDTool extends JFrame {
     private double cutF = PRPDConstants.DEFAULT_CUTOFF; // f odcięcia
 
     private double ampMin = 0.0; // minimum histogramu
-    private double ampMax = 0.12; // maximum histogramu
+    private double ampMax = 100.0; // maximum histogramu
     private double deadUs = 0; //martwy czas po wykryciu impulsu [µs]
     private double filterQ = 0.707; // Q filtra
     private int filterOrder = 4; // rząd filtra

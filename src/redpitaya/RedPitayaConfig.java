@@ -230,6 +230,15 @@ public class RedPitayaConfig {
         return channel == 1 ? gainCh1 : gainCh2;
     }
 
+    public double getMvPerAdcCount(int channel) {
+        String gain = gainForChannel(channel);
+        if ("HV".equals(gain)) {
+            return 20000.0 / 8192.0;
+        } else {
+            return 1000.0 / 8192.0;
+        }
+    }
+
     public int visualChannelIndex() {
         for (int i = 0; i < channels.length; i++) {
             if (channels[i] == visualChannel) {

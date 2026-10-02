@@ -520,7 +520,7 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         g.drawString("Phase [deg]", left + plotW / 2 - 40, height - 13);
 
         g.rotate(-Math.PI / 2);
-        g.drawString("|Amplitude| [ADC]", -top - plotH / 2 - 55, 18);
+        g.drawString("|Amplitude| [mV]", -top - plotH / 2 - 55, 18);
         g.rotate(Math.PI / 2);
 
         g.dispose();

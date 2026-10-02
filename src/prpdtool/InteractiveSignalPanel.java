@@ -756,7 +756,7 @@ public class InteractiveSignalPanel extends JPanel {
         String xLabel = "Time [s]";
         g.setColor(isDark ? Color.LIGHT_GRAY : Color.BLACK);
         g.drawString(xLabel, plot.x + plot.width / 2 - fm.stringWidth(xLabel) / 2, plot.y + plot.height + 34);
-        String yLabel = "Amplitude [ADC]";
+        String yLabel = "Amplitude [mV]";
         Graphics2D copy = (Graphics2D) g.create();
         copy.rotate(-Math.PI / 2);
         copy.drawString(yLabel, -(plot.y + plot.height / 2 + fm.stringWidth(yLabel) / 2), 22);
