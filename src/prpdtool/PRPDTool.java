@@ -2600,6 +2600,9 @@ public class PRPDTool extends JFrame {
     }
 
     private void startRedPitaya(boolean live) {
+        if (autoscaleCb != null) {
+            autoscaleCb.setSelected(true);
+        }
         currentSessionFiles.clear();
         inBatchMode = false;
         realTimeData = true;

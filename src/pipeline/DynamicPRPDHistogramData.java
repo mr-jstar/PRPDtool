@@ -43,10 +43,35 @@ public class DynamicPRPDHistogramData {
         return ampMax;
     }
 
+    private static final int MAX_PULSES = 150000;
+
     public void addPulses(Pulses p) {
-        ensureCapacity(size + p.n);
+        if (p == null || p.n == 0) return;
         
-        for (int i = 0; i < p.n; i++) {
+        int added = p.n;
+        int startIndex = 0;
+        
+        if (added > MAX_PULSES) {
+            startIndex = added - MAX_PULSES;
+            added = MAX_PULSES;
+        }
+
+        if (size + added > MAX_PULSES) {
+            int shift = (size + added) - MAX_PULSES;
+            int keep = size - shift;
+            if (keep > 0) {
+                System.arraycopy(phases, shift, phases, 0, keep);
+                System.arraycopy(amps, shift, amps, 0, keep);
+                System.arraycopy(times, shift, times, 0, keep);
+                size = keep;
+            } else {
+                size = 0;
+            }
+        }
+        
+        ensureCapacity(size + added);
+        
+        for (int i = startIndex; i < p.n; i++) {
             double phase = p.phase[i];
             double amp = bipolar ? p.amp[i] : Math.abs(p.amp[i]);
             

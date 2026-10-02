@@ -288,6 +288,17 @@ public class InteractiveSignalPanel extends JPanel {
             }
             double[] upperValues = upperFilter == null ? copy(buffer.u, buffer.used) : upperFilter.filter(buffer.u, buffer.used);
             double[] lowerValues = lowerFilter == null ? copy(buffer.u, buffer.used) : lowerFilter.filter(buffer.u, buffer.used);
+            
+            // Wyciszenie stanów nieustalonych (szpilek) na krawędziach po przejściu przez filtry (micro-blanking na UI)
+            int blankSamples = 300;
+            if (upperFilter != null && buffer.used > blankSamples * 2) {
+                for (int i = 0; i < blankSamples; i++) upperValues[i] = 0.0;
+                for (int i = buffer.used - blankSamples; i < buffer.used; i++) upperValues[i] = 0.0;
+            }
+            if (lowerFilter != null && buffer.used > blankSamples * 2) {
+                for (int i = 0; i < blankSamples; i++) lowerValues[i] = 0.0;
+                for (int i = buffer.used - blankSamples; i < buffer.used; i++) lowerValues[i] = 0.0;
+            }
             int stride = Math.max(1, buffer.used / TARGET_POINTS_PER_BUFFER);
             int add = (stride == 1) ? buffer.used : ((buffer.used + stride - 1) / stride) * 2;
             ensureCapacity(size + add);
@@ -332,6 +343,14 @@ public class InteractiveSignalPanel extends JPanel {
                     }
                 }
             }
+            
+            // Wstawienie znacznika przerwy (Double.NaN) na końcu każdego okna akwizycji
+            ensureCapacity(size + 1);
+            t[size] = Double.NaN;
+            upper[size] = 0;
+            lower[size] = 0;
+            size++;
+            
             trimIfNeeded();
             updateAutoRanges();
             repaint();
@@ -383,9 +402,18 @@ public class InteractiveSignalPanel extends JPanel {
             return;
         }
         if (autoX) {
-            viewTMin = t[0];
-            viewTMax = t[size - 1];
-            if (viewTMax <= viewTMin) {
+            viewTMin = Double.POSITIVE_INFINITY;
+            viewTMax = Double.NEGATIVE_INFINITY;
+            for (int i = 0; i < size; i++) {
+                if (!Double.isNaN(t[i])) {
+                    viewTMin = Math.min(viewTMin, t[i]);
+                    viewTMax = Math.max(viewTMax, t[i]);
+                }
+            }
+            if (viewTMin == Double.POSITIVE_INFINITY) {
+                viewTMin = 0.0;
+                viewTMax = 1.0;
+            } else if (viewTMax <= viewTMin) {
                 viewTMax = viewTMin + 1.0;
             }
         }
@@ -402,7 +430,7 @@ public class InteractiveSignalPanel extends JPanel {
         double min = Double.POSITIVE_INFINITY;
         double max = Double.NEGATIVE_INFINITY;
         for (int i = 0; i < size; i++) {
-            if (t[i] < viewTMin || t[i] > viewTMax) {
+            if (Double.isNaN(t[i]) || t[i] < viewTMin || t[i] > viewTMax) {
                 continue;
             }
             min = Math.min(min, values[i]);
@@ -426,12 +454,26 @@ public class InteractiveSignalPanel extends JPanel {
         viewYMax[plot] = max + margin;
     }
 
+    private double getMinT() {
+        for (int i = 0; i < size; i++) {
+            if (!Double.isNaN(t[i])) return t[i];
+        }
+        return 0.0;
+    }
+
+    private double getMaxT() {
+        for (int i = size - 1; i >= 0; i--) {
+            if (!Double.isNaN(t[i])) return t[i];
+        }
+        return 1.0;
+    }
+
     private void zoomX(int mouseX, double factor) {
         Rectangle plot = plotBounds(0);
         double anchor = xToTime(mouseX, plot);
         double leftFrac = (anchor - viewTMin) / Math.max(1e-12, viewTMax - viewTMin);
         double newSpan = (viewTMax - viewTMin) * factor;
-        double minSpan = Math.max(1e-9, (t[size - 1] - t[0]) / 1_000_000.0);
+        double minSpan = Math.max(1e-9, (getMaxT() - getMinT()) / 1_000_000.0);
         newSpan = Math.max(minSpan, newSpan);
         viewTMin = anchor - leftFrac * newSpan;
         viewTMax = viewTMin + newSpan;
@@ -456,8 +498,8 @@ public class InteractiveSignalPanel extends JPanel {
         if (size == 0) {
             return;
         }
-        double min = t[0];
-        double max = t[size - 1];
+        double min = getMinT();
+        double max = getMaxT();
         double span = viewTMax - viewTMin;
         if (span >= max - min) {
             viewTMin = min;
@@ -621,6 +663,19 @@ public class InteractiveSignalPanel extends JPanel {
             int maxY = Integer.MIN_VALUE;
             int lastYInPixel = Integer.MIN_VALUE;
             for (int i = 0; i < size; i++) {
+                if (Double.isNaN(t[i])) {
+                    if (lastX != Integer.MIN_VALUE) {
+                        g.drawLine(lastX, minY, lastX, maxY);
+                        
+                        // Rysowanie wyraźnej (pomarańczowej) linii rozdzielającej bufory
+                        Color oldC = g.getColor();
+                        g.setColor(new Color(255, 140, 0, 180));
+                        g.drawLine(lastX, plot.y, lastX, plot.y + plot.height);
+                        g.setColor(oldC);
+                    }
+                    lastX = Integer.MIN_VALUE;
+                    continue;
+                }
                 if (t[i] < viewTMin || t[i] > viewTMax) {
                     continue;
                 }

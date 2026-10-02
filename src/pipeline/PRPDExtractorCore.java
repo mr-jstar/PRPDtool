@@ -67,9 +67,12 @@ public class PRPDExtractorCore {
         double [] filtered = filter.filter(b.u, b.used);
 
         int count = 0;
-        int i = 1;
+        // Odcięcie krawędzi (micro-blanking) omijające stan nieustalony (szpilkę) filtra po każdej przerwie
+        int skipSamples = Math.max(1, (int) Math.round(20e-6 * fs));
+        int i = skipSamples;
+        int maxI = n - skipSamples;
 
-        while (i < n - 1) {
+        while (i < maxI) {
             double ti = b.t[i];
 
             if (!Double.isNaN(lastT) && ti <= lastT) {

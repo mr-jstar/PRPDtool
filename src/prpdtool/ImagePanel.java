@@ -162,7 +162,7 @@ public class ImagePanel extends JPanel {
                         
                         double zoomX = histogram.getZoomX();
                         double baseOffsetX = histogram.getOffsetX();
-                        double newZoomX = zoomX * scale;
+                        double newZoomX = Math.max(1e-6, zoomX * scale);
                         
                         double xOldDiff = (mouseX - left - baseOffsetX) / zoomX;
                         double newOffsetX = mouseX - left - (xOldDiff * newZoomX);
@@ -176,7 +176,7 @@ public class ImagePanel extends JPanel {
                         
                         double zoomY = histogram.getZoomY();
                         double baseOffset = histogram.getOffsetY();
-                        double newZoom = zoomY * scale;
+                        double newZoom = Math.max(1e-6, zoomY * scale);
                         
                         double base = top + plotH;
                         double yOldDiff = (mouseY - base - baseOffset) / zoomY;
