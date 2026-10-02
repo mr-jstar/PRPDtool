@@ -2813,7 +2813,7 @@ public class PRPDTool extends JFrame {
             
             @Override
             public void preExtract(Buffer buffer) {
-                if (signalStart.compareAndSet(true, false)) {
+                if (signalStart.compareAndSet(true, false) || buffer.newWindow) {
                     double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0, useHwRef);
                     double estt0 = ph0 / (2 * Math.PI * f0);
                     if (estt0 < 0.5 / fs) {
@@ -3070,7 +3070,7 @@ public class PRPDTool extends JFrame {
             
             @Override
             public void preExtract(Buffer buffer) {
-                if (signalStart.compareAndSet(true, false)) {
+                if (signalStart.compareAndSet(true, false) || buffer.newWindow) {
                     double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0, useHwRefSnapshot);
                     double estt0 = ph0 / (2 * Math.PI * f0);
                     if (estt0 < 0.5 / fs) {

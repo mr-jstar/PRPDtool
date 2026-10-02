@@ -11,9 +11,10 @@ public class Buffer {
     public final double[] t;
     public final double[] u;
     public final double[] u2;
-    private final int size;
+    public final int size;
     public int used;
     public boolean eof;
+    public boolean newWindow;
 
     private final AtomicInteger refs = new AtomicInteger(0);
 
@@ -63,6 +64,7 @@ public class Buffer {
 
     public void clear() {
         this.eof = false;
+        this.newWindow = false;
         this.used = 0;
     }
 

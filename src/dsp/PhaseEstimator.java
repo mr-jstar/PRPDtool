@@ -35,10 +35,25 @@ public class PhaseEstimator {
             }
         }
             
+        // To prevent spectral leakage, compute DFT over an EXACT integer number of periods
+        double duration = b.t[b.used - 1] - b.t[0];
+        double T_period = 1.0 / f0;
+        int periods = (int) (duration / T_period);
+        int limit = b.used;
+        if (periods > 0) {
+            double exactDuration = periods * T_period;
+            for (int i = 0; i < b.used; i++) {
+                if (b.t[i] - b.t[0] > exactDuration) {
+                    limit = i;
+                    break;
+                }
+            }
+        }
+        
         // Calculate the fundamental component of the signal at f0 using DFT
         double re = 0.0;
         double im = 0.0;
-        for (int i = 0; i < b.used; i++) {
+        for (int i = 0; i < limit; i++) {
             double angle = 2 * Math.PI * f0 * b.t[i];
             re += signalToUse[i] * Math.cos(angle);
             im += signalToUse[i] * Math.sin(angle);

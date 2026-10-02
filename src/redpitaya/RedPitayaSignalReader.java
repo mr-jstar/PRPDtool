@@ -89,8 +89,11 @@ public class RedPitayaSignalReader implements SignalReader, Closeable {
             if (writer != null) {
                 writer.writeFrame(frame);
             }
+            boolean isNew = (windowSamplesRemaining == requestedSamplesPerWindow);
             windowSamplesRemaining = Math.max(0L, windowSamplesRemaining - frame.sampleCount);
-            return frameToBuffer(frame);
+            Buffer buf = frameToBuffer(frame);
+            buf.newWindow = isNew;
+            return buf;
         }
         return eofBuffer();
     }
