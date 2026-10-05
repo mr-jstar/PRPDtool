@@ -40,8 +40,8 @@ public class PRPDConstants {
     public static final String CONFIG_FILE = ".prpd_config";
     public static final Font[] FONTS = {
         new Font("Courier", Font.PLAIN, 12),
-        new Font("Courier", Font.PLAIN, 16),
-        new Font("Courier", Font.PLAIN, 18)
+        new Font("Courier", Font.PLAIN, 14),
+        new Font("Courier", Font.PLAIN, 16)
     };
 
     // Classifiers

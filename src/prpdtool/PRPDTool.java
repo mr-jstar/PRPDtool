@@ -61,6 +61,7 @@ import redpitaya.RpprFileSignalReader;
 
 public class PRPDTool extends JFrame {
 
+    private JDialog classifyDialog;
     private volatile boolean inBatchMode;
     private volatile boolean realTimeData;
     private String serverPort = "127.0.0.1:7777";
@@ -81,7 +82,6 @@ public class PRPDTool extends JFrame {
     private final String MODELS_DIR = "PRPDMonitor.models.dir";
     private final String FONTSIZE = "PRPDMonitor.font.size";
     private final String FRAMESIZE = "PRPDMonitor.frame.size";
-    private final String DAQ = "PRPDMonitor.daq.address";
     private final String RP_HOST = "PRPDMonitor.rp.host";
     private final String RP_PORT = "PRPDMonitor.rp.port";
     private final String RP_CHANNELS = "PRPDMonitor.rp.channels";
@@ -155,15 +155,15 @@ public class PRPDTool extends JFrame {
 
     Param<?>[] params = {
         Param.dbl("Basic frequency [Hz]", () -> f0, v -> f0 = v),
-        Param.dbl("Zero-crossing instant", () -> t0, v -> t0 = v),
+        Param.dbl("Zero-crossing instant [s]", () -> t0, v -> t0 = v),
         Param.dbl("Sampling frequency [Hz]", () -> fs, v -> fs = v),
-        Param.dbl("Pulse ampl. threshold", () -> threshold, v -> threshold = v),
+        Param.dbl("Pulse ampl. threshold [V]", () -> threshold, v -> threshold = v),
         Param.dbl("Dead time [us]", () -> deadUs, v -> deadUs = v),
         Param.dbl("HPF cutoff frequency [Hz]", () -> cutF, v -> cutF = v),
         Param.dbl("Filter Q", () -> filterQ, v -> filterQ = v),
         Param.integer("Filter Order", () -> filterOrder, v -> filterOrder = v),
-        Param.dbl("Histogram min", () -> ampMin, v -> ampMin = v),
-        Param.dbl("Histogram max", () -> ampMax, v -> ampMax = v)
+        Param.dbl("Histogram min [V]", () -> ampMin, v -> ampMin = v),
+        Param.dbl("Histogram max [V]", () -> ampMax, v -> ampMax = v)
     };
 
     // Misc options
@@ -192,9 +192,6 @@ public class PRPDTool extends JFrame {
     private JCheckBox showRawDataCb;
     private JCheckBox useHwPhaseRefCb;
 
-    private JTextField dataServer;
-    private JButton startBtn;
-    private JButton stopBtn;
     private JTextField rpHostField;
     private JSpinner rpPortSpinner;
     private JComboBox<String> rpChannelsCombo;
@@ -221,13 +218,6 @@ public class PRPDTool extends JFrame {
     private JTextField rpFilePrefixField;
     private JButton rpTriggerIn1Button;
     private JButton rpTriggerIn2Button;
-    private JButton startRecordButton;
-    private JButton stopRecordButton;
-    private FileChannel recordedData;
-    private File recordedFile;
-    private int recordLimit = 1024; // Maximal size of the registerd signal (in MB == 1 GB)
-    private int recordedMB;
-    private JLabel recordSizeLabel;
     // --- Komponenty metadanych eksperymentu (zadania 1-4) ---
     private JComboBox<String> rpDefectTypeCombo;
     private JTextField rpVoltageKvField;
@@ -461,11 +451,6 @@ public class PRPDTool extends JFrame {
         JMenuItem fileMI = new JMenuItem("Read (t,u) from file");
         fileMI.addActionListener(e -> loadFile());
         fileM.add(fileMI);
-        JMenuItem socketMI = new JMenuItem("Read (t,u) from socket");
-        socketMI.addActionListener(e -> {
-            openSocket();
-        });
-        fileM.add(socketMI);
         fileM.addSeparator();
 
         JMenuItem exportMI = new JMenuItem("Export histogram data");
@@ -481,7 +466,7 @@ public class PRPDTool extends JFrame {
         fileM.add(exportCsvMI);
 
         JMenuItem prpdMI = new JMenuItem("Export YOLO image");
-        prpdMI.addActionListener(e -> exportPRPD4YOLO(lastDataFile));
+        prpdMI.addActionListener(e -> exportPRPD4YOLODialog());
         fileM.add(prpdMI);
 
         fileM.addSeparator();
@@ -491,22 +476,30 @@ public class PRPDTool extends JFrame {
         fileM.add(exitMI);
         mb.add(fileM);
 
-        JMenu scriptsM = new JMenu("Scripts");
-        JMenuItem batchMI = new JMenuItem("Dir->PRPD");
+        JMenu scriptsM = new JMenu("Machine Learning");
+        JMenuItem batchMI = new JMenuItem("Batch Export (Dir -> YOLO PNGs)");
         batchMI.addActionListener(e -> dir2prpd());
         scriptsM.add(batchMI);
+        
+        JMenuItem classifyMI = new JMenuItem("Real-time Classification");
+        classifyMI.addActionListener(e -> {
+            if (classifyDialog != null) {
+                classifyDialog.setVisible(true);
+            }
+        });
+        scriptsM.add(classifyMI);
+        
         mb.add(scriptsM);
 
         JMenu profilesM = new JMenu("Profiles");
         buildProfilesMenu(profilesM);
         mb.add(profilesM);
 
-        JMenu optM = new JMenu("Options");
-        JMenuItem fontMI = new JMenuItem("Font size");
-        optM.add(fontMI);
+        JMenu optM = new JMenu("View");
+        JMenu fontM = new JMenu("Font size");
         ButtonGroup fgroup = new ButtonGroup();
         for (Font f : PRPDConstants.FONTS) {
-            JRadioButtonMenuItem fontOpt = new JRadioButtonMenuItem("\t\t" + String.valueOf(f.getSize()));
+            JRadioButtonMenuItem fontOpt = new JRadioButtonMenuItem(String.valueOf(f.getSize()));
             final Font cf = f;
             fontOpt.addActionListener(e -> {
                 currentFont = cf;
@@ -514,13 +507,13 @@ public class PRPDTool extends JFrame {
                 try {
                     configuration.saveValue(FONTSIZE, "" + cf.getSize());
                 } catch (IOException ex) {
-
                 }
             });
             fontOpt.setSelected(f == currentFont);
             fgroup.add(fontOpt);
-            optM.add(fontOpt);
+            fontM.add(fontOpt);
         }
+        optM.add(fontM);
         optM.addSeparator();
 
         JCheckBoxMenuItem sinMB = new JCheckBoxMenuItem("Draw base sine", drawF0);
@@ -535,25 +528,16 @@ public class PRPDTool extends JFrame {
         bipolarMB.addActionListener(e -> {
             if (bipolarMB.isSelected()) {
                 bipolarHistogram = true;
-                setParamField("Histogram min", "-" + roundme(histogram.getDataMax(), 3));
+                setParamField("Histogram min [V]", "-" + roundme(histogram.getDataMax(), 3));
             } else {
                 bipolarHistogram = false;
-                setParamField("Histogram min", "0");
+                setParamField("Histogram min [V]", "0");
             }
             onParameterChanged();
         });
         optM.add(bipolarMB);
 
-        JMenuItem ftHistMB = new JMenuItem("Fit histogram to data");
-        ftHistMB.addActionListener(e -> {
-            if (lastDataFile != null) {
-                setParamField("Histogram min", "" + roundme(histogram.getDataMin(), 3));
-                setParamField("Histogram max", "" + roundme(histogram.getDataMax(), 3));
-                bipolarHistogram = bipolarMB.isSelected();
-                onParameterChanged();
-            }
-        });
-        optM.add(ftHistMB);
+        // "Fit histogram to data" removed from menu, moved to FIT button in UI
         optM.addSeparator();
         
         JMenuItem fastMB = new JCheckBoxMenuItem("Fast rendering (no interpolator)", fastRendering);
@@ -595,7 +579,9 @@ public class PRPDTool extends JFrame {
                 } else {
                     UIManager.setLookAndFeel(new FlatLightLaf());
                 }
-                SwingUtilities.updateComponentTreeUI(this);
+                for (java.awt.Window window : java.awt.Window.getWindows()) {
+                    SwingUtilities.updateComponentTreeUI(window);
+                }
                 if (histogram != null && center != null) {
                     if (histogram instanceof pipeline.DynamicPRPDHistogram) {
                         ((pipeline.DynamicPRPDHistogram) histogram).forceRedraw();
@@ -685,16 +671,7 @@ public class PRPDTool extends JFrame {
         
         JMenuItem saveProfileMI = new JMenuItem("Save current profile...");
         saveProfileMI.addActionListener(e -> {
-            String name = JOptionPane.showInputDialog(this, "Enter profile name:");
-            if (name != null && !name.trim().isEmpty()) {
-                File dir = new File("profiles");
-                if (!dir.exists()) {
-                    dir.mkdirs();
-                }
-                File f = new File(dir, name.trim() + ".cfg");
-                saveProfile(f);
-                buildProfilesMenu(profilesM);
-            }
+            createNewProfile(profilesM);
         });
         profilesM.add(saveProfileMI);
 
@@ -725,58 +702,140 @@ public class PRPDTool extends JFrame {
         }
     }
 
-    private void saveProfile(File file) {
+
+    private String editProfileMap(java.util.Map<String, String> profileData, String title, String actionButton, boolean isSaveMode, String defaultName) {
+        javax.swing.table.DefaultTableModel model = new javax.swing.table.DefaultTableModel(new String[]{"Parameter", "Value"}, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return column == 1; // Only values are editable
+            }
+        };
+        for (java.util.Map.Entry<String, String> entry : profileData.entrySet()) {
+            model.addRow(new Object[]{entry.getKey(), entry.getValue()});
+        }
+        javax.swing.JTable table = new javax.swing.JTable(model);
+        table.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
+        javax.swing.JScrollPane scroll = new javax.swing.JScrollPane(table);
+        scroll.setPreferredSize(new Dimension(400, 300));
+
+        JPanel panel = new JPanel(new BorderLayout(0, 10));
+        JPanel topPanel = new JPanel(new BorderLayout(5, 5));
+        topPanel.add(new JLabel("Review and edit the profile parameters below:"), BorderLayout.NORTH);
+        
+        JTextField nameField = new JTextField(defaultName != null ? defaultName : "my_profile");
+        if (isSaveMode) {
+            JPanel namePanel = new JPanel(new BorderLayout(5, 5));
+            namePanel.add(new JLabel("Profile Name: "), BorderLayout.WEST);
+            namePanel.add(nameField, BorderLayout.CENTER);
+            topPanel.add(namePanel, BorderLayout.SOUTH);
+        }
+        
+        panel.add(topPanel, BorderLayout.NORTH);
+        panel.add(scroll, BorderLayout.CENTER);
+
+        Object[] options = {actionButton, "Cancel"};
+        int result = JOptionPane.showOptionDialog(this, panel, title,
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE,
+                null, options, options[0]);
+
+        if (result == JOptionPane.OK_OPTION) {
+            if (table.isEditing()) {
+                table.getCellEditor().stopCellEditing();
+            }
+            profileData.clear();
+            for (int i = 0; i < model.getRowCount(); i++) {
+                profileData.put(model.getValueAt(i, 0).toString(), model.getValueAt(i, 1) != null ? model.getValueAt(i, 1).toString() : "");
+            }
+            return isSaveMode ? nameField.getText().trim() : (defaultName != null ? defaultName : "");
+        }
+        return null;
+    }
+
+    private void createNewProfile(JMenu profilesM) {
         try {
-            Configuration prof = new Configuration(file.getAbsolutePath());
-            prof.saveValue(RP_HOST, rpHostField.getText());
-            prof.saveValue(RP_PORT, rpPortSpinner.getValue().toString());
-            prof.saveValue(RP_CHANNELS, rpChannelsCombo.getSelectedItem().toString());
-            prof.saveValue(RP_VISUAL_CHANNEL, rpVisualChannelCombo.getSelectedItem().toString());
-            prof.saveValue(RP_GAIN1, rpGain1Combo.getSelectedItem().toString());
-            prof.saveValue(RP_GAIN2, rpGain2Combo.getSelectedItem().toString());
-            prof.saveValue(RP_DECIMATION, rpDecimationSpinner.getValue().toString());
-            prof.saveValue(RP_AVERAGING, Boolean.toString(rpAveragingBox.isSelected()));
-            prof.saveValue(RP_TRIGGER_SOURCE, rpTriggerCombo.getSelectedItem().toString());
-            prof.saveValue(RP_TRIGGER_LEVEL, rpTriggerLevelSpinner.getValue().toString());
-            prof.saveValue(RP_TRIGGER_DELAY, rpTriggerDelaySpinner.getValue().toString());
-            prof.saveValue(RP_TRIGGER_TIMEOUT, rpTriggerTimeoutSpinner.getValue().toString());
-            prof.saveValue(RP_MODE, rpModeCombo.getSelectedItem().toString());
-            prof.saveValue(RP_DURATION, rpDurationSpinner.getValue().toString());
-            prof.saveValue(RP_FRAME_SIZE, rpFrameSizeSpinner.getValue().toString());
-            prof.saveValue(RP_FRAME_COUNT, rpFrameCountSpinner.getValue().toString());
+            java.util.Map<String, String> data = new java.util.LinkedHashMap<>();
+            data.put(RP_HOST, rpHostField.getText());
+            data.put(RP_PORT, rpPortSpinner.getValue().toString());
+            data.put(RP_CHANNELS, rpChannelsCombo.getSelectedItem().toString());
+            data.put(RP_VISUAL_CHANNEL, rpVisualChannelCombo.getSelectedItem().toString());
+            data.put(RP_GAIN1, rpGain1Combo.getSelectedItem().toString());
+            data.put(RP_GAIN2, rpGain2Combo.getSelectedItem().toString());
+            data.put(RP_DECIMATION, rpDecimationSpinner.getValue().toString());
+            data.put(RP_AVERAGING, Boolean.toString(rpAveragingBox.isSelected()));
+            data.put(RP_TRIGGER_SOURCE, rpTriggerCombo.getSelectedItem().toString());
+            data.put(RP_TRIGGER_LEVEL, rpTriggerLevelSpinner.getValue().toString());
+            data.put(RP_TRIGGER_DELAY, rpTriggerDelaySpinner.getValue().toString());
+            data.put(RP_TRIGGER_TIMEOUT, rpTriggerTimeoutSpinner.getValue().toString());
+            data.put(RP_MODE, rpModeCombo.getSelectedItem().toString());
+            data.put(RP_DURATION, rpDurationSpinner.getValue().toString());
+            data.put(RP_FRAME_SIZE, rpFrameSizeSpinner.getValue().toString());
+            data.put(RP_FRAME_COUNT, rpFrameCountSpinner.getValue().toString());
 
             for (Param<?> p : params) {
-                prof.saveValue("Param." + p.name, p.getText());
+                data.put("Param." + p.name, p.getText());
             }
 
+            String profileName = editProfileMap(data, "Save New Profile", "Save Profile", true, "my_profile");
+            if (profileName == null || profileName.isEmpty()) {
+                return; // User cancelled or entered empty name
+            }
+
+            File dir = new File("profiles");
+            if (!dir.exists()) {
+                dir.mkdirs();
+            }
+            File file = new File(dir, profileName + ".cfg");
+            
+            Configuration prof = new Configuration(file.getAbsolutePath());
+            for (java.util.Map.Entry<String, String> entry : data.entrySet()) {
+                prof.saveValue(entry.getKey(), entry.getValue());
+            }
             status.setText("Profile saved to " + file.getName());
-        } catch (IOException ex) {
-            status.setText(ex.getMessage());
+            buildProfilesMenu(profilesM);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            status.setText("Failed to save profile: " + ex.getMessage());
         }
     }
 
     private void loadProfile(File file) {
         Configuration prof = new Configuration(file.getAbsolutePath());
         
-        try { String v = prof.getValue(RP_HOST); if(v != null) rpHostField.setText(v); } catch(Exception e) {}
-        try { String v = prof.getValue(RP_PORT); if(v != null) rpPortSpinner.setValue(Integer.parseInt(v)); } catch(Exception e) {}
-        try { String v = prof.getValue(RP_CHANNELS); if(v != null) rpChannelsCombo.setSelectedItem(v); } catch(Exception e) {}
-        try { String v = prof.getValue(RP_VISUAL_CHANNEL); if(v != null) rpVisualChannelCombo.setSelectedItem(v); } catch(Exception e) {}
-        try { String v = prof.getValue(RP_GAIN1); if(v != null) rpGain1Combo.setSelectedItem(v); } catch(Exception e) {}
-        try { String v = prof.getValue(RP_GAIN2); if(v != null) rpGain2Combo.setSelectedItem(v); } catch(Exception e) {}
-        try { String v = prof.getValue(RP_DECIMATION); if(v != null) rpDecimationSpinner.setValue(Integer.parseInt(v)); } catch(Exception e) {}
-        try { String v = prof.getValue(RP_AVERAGING); if(v != null) rpAveragingBox.setSelected(Boolean.parseBoolean(v)); } catch(Exception e) {}
-        try { String v = prof.getValue(RP_TRIGGER_SOURCE); if(v != null) rpTriggerCombo.setSelectedItem(v); } catch(Exception e) {}
-        try { String v = prof.getValue(RP_TRIGGER_LEVEL); if(v != null) rpTriggerLevelSpinner.setValue(Double.parseDouble(v)); } catch(Exception e) {}
-        try { String v = prof.getValue(RP_TRIGGER_DELAY); if(v != null) rpTriggerDelaySpinner.setValue(Integer.parseInt(v)); } catch(Exception e) {}
-        try { String v = prof.getValue(RP_TRIGGER_TIMEOUT); if(v != null) rpTriggerTimeoutSpinner.setValue(Double.parseDouble(v)); } catch(Exception e) {}
-        try { String v = prof.getValue(RP_MODE); if(v != null) rpModeCombo.setSelectedItem(v); } catch(Exception e) {}
-        try { String v = prof.getValue(RP_DURATION); if(v != null) rpDurationSpinner.setValue(Double.parseDouble(v)); } catch(Exception e) {}
-        try { String v = prof.getValue(RP_FRAME_SIZE); if(v != null) rpFrameSizeSpinner.setValue(Integer.parseInt(v)); } catch(Exception e) {}
-        try { String v = prof.getValue(RP_FRAME_COUNT); if(v != null) rpFrameCountSpinner.setValue(Integer.parseInt(v)); } catch(Exception e) {}
+        java.util.Map<String, String> data = new java.util.LinkedHashMap<>();
+        String[] keys = {RP_HOST, RP_PORT, RP_CHANNELS, RP_VISUAL_CHANNEL, RP_GAIN1, RP_GAIN2, 
+                         RP_DECIMATION, RP_AVERAGING, RP_TRIGGER_SOURCE, RP_TRIGGER_LEVEL, 
+                         RP_TRIGGER_DELAY, RP_TRIGGER_TIMEOUT, RP_MODE, RP_DURATION, 
+                         RP_FRAME_SIZE, RP_FRAME_COUNT};
+        for(String k : keys) {
+            try { String v = prof.getValue(k); if(v != null) data.put(k, v); } catch(Exception e) {}
+        }
+        for (Param<?> p : params) {
+            try { String v = prof.getValue("Param." + p.name); if (v != null) data.put("Param." + p.name, v); } catch(Exception e) {}
+        }
+        
+        if (editProfileMap(data, "Load Profile: " + file.getName(), "Load into Application", false, file.getName()) == null) {
+            return;
+        }
+        
+        try { String v = data.get(RP_HOST); if(v != null) rpHostField.setText(v); } catch(Exception e) {}
+        try { String v = data.get(RP_PORT); if(v != null) rpPortSpinner.setValue(Integer.parseInt(v)); } catch(Exception e) {}
+        try { String v = data.get(RP_CHANNELS); if(v != null) rpChannelsCombo.setSelectedItem(v); } catch(Exception e) {}
+        try { String v = data.get(RP_VISUAL_CHANNEL); if(v != null) rpVisualChannelCombo.setSelectedItem(v); } catch(Exception e) {}
+        try { String v = data.get(RP_GAIN1); if(v != null) rpGain1Combo.setSelectedItem(v); } catch(Exception e) {}
+        try { String v = data.get(RP_GAIN2); if(v != null) rpGain2Combo.setSelectedItem(v); } catch(Exception e) {}
+        try { String v = data.get(RP_DECIMATION); if(v != null) rpDecimationSpinner.setValue(Integer.parseInt(v)); } catch(Exception e) {}
+        try { String v = data.get(RP_AVERAGING); if(v != null) rpAveragingBox.setSelected(Boolean.parseBoolean(v)); } catch(Exception e) {}
+        try { String v = data.get(RP_TRIGGER_SOURCE); if(v != null) rpTriggerCombo.setSelectedItem(v); } catch(Exception e) {}
+        try { String v = data.get(RP_TRIGGER_LEVEL); if(v != null) rpTriggerLevelSpinner.setValue(Double.parseDouble(v)); } catch(Exception e) {}
+        try { String v = data.get(RP_TRIGGER_DELAY); if(v != null) rpTriggerDelaySpinner.setValue(Integer.parseInt(v)); } catch(Exception e) {}
+        try { String v = data.get(RP_TRIGGER_TIMEOUT); if(v != null) rpTriggerTimeoutSpinner.setValue(Double.parseDouble(v)); } catch(Exception e) {}
+        try { String v = data.get(RP_MODE); if(v != null) rpModeCombo.setSelectedItem(v); } catch(Exception e) {}
+        try { String v = data.get(RP_DURATION); if(v != null) rpDurationSpinner.setValue(Double.parseDouble(v)); } catch(Exception e) {}
+        try { String v = data.get(RP_FRAME_SIZE); if(v != null) rpFrameSizeSpinner.setValue(Integer.parseInt(v)); } catch(Exception e) {}
+        try { String v = data.get(RP_FRAME_COUNT); if(v != null) rpFrameCountSpinner.setValue(Integer.parseInt(v)); } catch(Exception e) {}
 
         for (Param<?> p : params) {
-            String v = prof.getValue("Param." + p.name);
+            String v = data.get("Param." + p.name);
             if (v != null) {
                 p.setFromText(v);
                 if (p.field != null) {
@@ -786,7 +845,6 @@ public class PRPDTool extends JFrame {
         }
         
         onParameterChanged();
-        status.setText("Profile loaded from " + file.getName());
     }
 
     private void initGui() {
@@ -829,44 +887,6 @@ public class PRPDTool extends JFrame {
             splitLeft.setDividerLocation(0.22);
 
             JPanel rpPanel = initRedPitayaControls();
-            JPanel legacyPanel = initLegacySocketControls();
-
-            JPanel recordPanel = new JPanel();
-            recordPanel.setLayout(new GridLayout(0, 1, 5, 5));
-            recordPanel.setBorder(BorderFactory.createTitledBorder("Signal recording"));
-            recordPanel.add(new JLabel("Limit [MB]"));
-            JTextField limitTF = new JTextField("" + recordLimit);
-            limitTF.addActionListener(e -> {
-                recordLimit = Integer.parseInt(limitTF.getText());
-            });
-            recordPanel.add(limitTF);
-            
-            recordSizeLabel = new JLabel("0 MB used");
-            recordPanel.add(recordSizeLabel);
-
-            JPanel recBtns = new JPanel(new GridLayout(1, 2, 3, 3));
-            startRecordButton = new JButton("Start recording");
-            startRecordButton.addActionListener(e -> {
-                try {
-                    Files.createDirectories(receivedSignalsDir.toPath());
-                    recordedFile = buildReceivedSignalRecordFile();
-                    recordedData = new FileOutputStream(recordedFile).getChannel();
-                    recordedMB = 0;
-                    stopRecordButton.setEnabled(true);
-                    status.setText("Recording to " + recordedFile.getName());
-                } catch (IOException ex) {
-                    status.setText(ex.getMessage());
-                }
-            });
-            startRecordButton.setEnabled(false);
-            recBtns.add(startRecordButton);
-
-            stopRecordButton = new JButton("Stop recording");
-            stopRecordButton.setEnabled(false);
-            stopRecordButton.addActionListener(e -> stopRecorder());
-            recBtns.add(stopRecordButton);
-            
-            recordPanel.add(recBtns);
 
             histogram = new DynamicPRPDHistogram(
                     center.getWidth(), center.getHeight(),
@@ -893,8 +913,8 @@ public class PRPDTool extends JFrame {
                     null,
                     false
             );
+            JPanel recSignalsPanel = createReceivedSignalsPanel();
             bottom.setLayout(new BorderLayout());
-            bottom.add(createReceivedSignalsPanel(), BorderLayout.WEST);
             bottom.add(interactiveSignalPanel, BorderLayout.CENTER);
 
             paramPanel = new JPanel();
@@ -923,7 +943,7 @@ public class PRPDTool extends JFrame {
                 labelPanel.setOpaque(false);
                 JLabel label = new JLabel(p.name);
                 String tooltipText = paramHelpText(p.name);
-                label.setToolTipText(tooltipText);
+                label.setToolTipText(htmlTooltip(tooltipText));
                 
                 JLabel help = new JLabel(new HelpIcon());
                 help.setToolTipText(htmlTooltip(tooltipText));
@@ -935,7 +955,7 @@ public class PRPDTool extends JFrame {
 
                 JTextField field = new JTextField(p.getText(), 8);
                 p.setField(field);
-                field.setToolTipText(tooltipText);
+                field.setToolTipText(htmlTooltip(tooltipText));
                 field.addActionListener(e -> {
                     try {
                         p.setFromText(field.getText());
@@ -956,8 +976,28 @@ public class PRPDTool extends JFrame {
                         }
                     }
                 });
+                
+                Component toAdd = field;
+                if ("Histogram max [V]".equals(p.name)) {
+                    JPanel fp = new JPanel(new BorderLayout(4, 0));
+                    fp.setOpaque(false);
+                    fp.add(field, BorderLayout.CENTER);
+                    JButton fitBtn = new JButton("Fit");
+                    fitBtn.setToolTipText("Fit histogram vertical resolution to current data bounds");
+                    fitBtn.setMargin(new Insets(1, 4, 1, 4));
+                    fitBtn.addActionListener(ev -> {
+                        if (histogram != null) {
+                            setParamField("Histogram min [V]", "" + roundme(histogram.getDataMin(), 3));
+                            setParamField("Histogram max [V]", "" + roundme(histogram.getDataMax(), 3));
+                            onParameterChanged();
+                        }
+                    });
+                    fp.add(fitBtn, BorderLayout.EAST);
+                    toAdd = fp;
+                }
+                
                 paramPanel.add(labelPanel);
-                paramPanel.add(field);
+                paramPanel.add(toAdd);
             }
             paramChange = new JLabel(" ");
             applyButton = new JButton("APPLY");
@@ -971,7 +1011,15 @@ public class PRPDTool extends JFrame {
                     applyAutoscale();
                 }
             });
-            paramPanel.add(autoscaleCb);
+            JPanel autoPanel = new JPanel(new BorderLayout(4, 0));
+            autoPanel.setOpaque(false);
+            autoPanel.add(autoscaleCb, BorderLayout.CENTER);
+            JLabel autoHelp = new JLabel(new HelpIcon());
+            autoHelp.setToolTipText(htmlTooltip("Visual Zoom Adjustment.\n\nAutomatically adjusts the visual zoom of the PRPD plot to perfectly frame the visible pulses. Unlike \"Histogram min/max\" which rebuilds the actual image resolution, Autoscale only moves the camera.\n\nIt turns off automatically if you pan or zoom manually with the mouse."));
+            autoHelp.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+            autoHelp.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
+            autoPanel.add(autoHelp, BorderLayout.EAST);
+            paramPanel.add(autoPanel);
             
             showRawDataCb = new JCheckBox("Show Raw Data", false);
             showRawDataCb.addActionListener(e -> {
@@ -980,11 +1028,52 @@ public class PRPDTool extends JFrame {
                     center.setImage(histogram.getImage());
                 }
             });
-            paramPanel.add(showRawDataCb);
+            JPanel rawPanel = new JPanel(new BorderLayout(4, 0));
+            rawPanel.setOpaque(false);
+            rawPanel.add(showRawDataCb, BorderLayout.CENTER);
+            JLabel rawHelp = new JLabel(new HelpIcon());
+            rawHelp.setToolTipText(htmlTooltip("Toggle PRPD rendering mode.\n\nWhen unchecked (default), the plot uses a heatmap interpolation where colors represent pulse density (e.g. red=many, blue=few).\n\nWhen checked, it bypasses the heatmap and draws the exact, raw individual pulse points as a simple scatter plot."));
+            rawHelp.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+            rawHelp.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
+            rawPanel.add(rawHelp, BorderLayout.EAST);
+            paramPanel.add(rawPanel);
 
             useHwPhaseRefCb = new JCheckBox("Use HW Phase Ref (CH2)", false);
-            useHwPhaseRefCb.setToolTipText("If 2 channels are recorded, use CH2 for 50Hz phase synchronization instead of estimating from the main signal.");
-            paramPanel.add(useHwPhaseRefCb);
+            useHwPhaseRefCb.addActionListener(e -> {
+                if (useHwPhaseRefCb.isSelected()) {
+                    java.util.List<String> problems = new java.util.ArrayList<>();
+                    String channels = rpChannelsCombo != null ? (String) rpChannelsCombo.getSelectedItem() : "IN1";
+                    String visual = rpVisualChannelCombo != null ? (String) rpVisualChannelCombo.getSelectedItem() : "IN1";
+                    if (!"IN1+IN2".equals(channels)) {
+                        problems.add("  Channels   zmień na \"IN1+IN2\" (aktualnie: \"" + channels + "\")");
+                    }
+                    if ("IN2".equals(visual)) {
+                        problems.add("  Visual   zmień na \"IN1\" (IN2 jest zarezerwowany jako referencja 50 Hz)");
+                    }
+                    if (!problems.isEmpty()) {
+                        useHwPhaseRefCb.setSelected(false);
+                        JOptionPane.showMessageDialog(
+                            PRPDTool.this,
+                            "<html><b>Nie można użyć referencji CH2.</b><br><br>"
+                            + "Aby korzystać z \"Use HW Phase Ref (CH2)\", zmień<br>"
+                            + "następujące ustawienia w zakładce <i>Red Pitaya Settings</i>:<br><br>"
+                            + String.join("<br>", problems)
+                            + "</html>",
+                            "Błąd konfiguracji",
+                            JOptionPane.WARNING_MESSAGE
+                        );
+                    }
+                }
+            });
+            JPanel hwPanel = new JPanel(new BorderLayout(4, 0));
+            hwPanel.setOpaque(false);
+            hwPanel.add(useHwPhaseRefCb, BorderLayout.CENTER);
+            JLabel hwHelp = new JLabel(new HelpIcon());
+            hwHelp.setToolTipText(htmlTooltip("Hardware Phase Synchronization.\n\nForces the software to use the physical signal on IN2 for 50 Hz phase synchronization.\nIf unchecked, the software attempts to mathematically extract the reference from the main IN1 signal.\n\nNote: Requires \"Channels\" to be set to IN1+IN2 and \"Visual\" to IN1 in the Red Pitaya Settings."));
+            hwHelp.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+            hwHelp.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
+            hwPanel.add(hwHelp, BorderLayout.EAST);
+            paramPanel.add(hwPanel);
 
             center.setResetAction(() -> {
                 autoscaleCb.setSelected(true);
@@ -1003,7 +1092,7 @@ public class PRPDTool extends JFrame {
             setFontRecursively(paramPanel, currentFont, 0);
 
             JPanel classifyPanel = new JPanel(new BorderLayout());
-            classifyPanel.setBorder(BorderFactory.createTitledBorder("Classification"));
+            classifyPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
 
             modelPanel = new JPanel();
             cResults = new HashMap<>();
@@ -1011,18 +1100,22 @@ public class PRPDTool extends JFrame {
 
             classifyPanel.add(modelPanel, BorderLayout.CENTER);
 
-            classifyButton = new JButton("CLASIFY");
+            classifyButton = new JButton("CLASSIFY NOW");
+            classifyButton.setFont(classifyButton.getFont().deriveFont(Font.BOLD));
             classifyButton.addActionListener(e -> classifyPRPD(cResults));
             classifyButton.setEnabled(false);
             classifyPanel.add(classifyButton, BorderLayout.SOUTH);
 
             setFontRecursively(classifyPanel, currentFont, 0);
+            
+            classifyDialog = new JDialog(PRPDTool.this, "AI Classification", false);
+            classifyDialog.add(classifyPanel);
+            classifyDialog.setSize(500, 400);
+            classifyDialog.setLocationRelativeTo(PRPDTool.this);
 
             left.add(paramPanel);
             left.add(rpPanel);
-            left.add(legacyPanel);
-            left.add(recordPanel);
-            left.add(classifyPanel);
+            left.add(recSignalsPanel);
             left.add(Box.createVerticalGlue());
             
             setCurrentFont();
@@ -1070,45 +1163,9 @@ public class PRPDTool extends JFrame {
         modelPanel.repaint();
     }
 
-    private JPanel initLegacySocketControls() {
-        try {
-            String sp = configuration.getValue(DAQ).trim();
-            if (sp != null) {
-                serverPort = sp;
-            }
-        } catch (Exception ex) {
-
-        }
-
-        JPanel legacyPanel = new JPanel(new GridLayout(0, 1, 3, 3));
-        legacyPanel.setBorder(BorderFactory.createTitledBorder("Legacy t,u socket"));
-        legacyPanel.add(new JLabel("DAQ Server host:port"));
-        dataServer = new JTextField(serverPort);
-        dataServer.addActionListener(e -> {
-            try {
-                configuration.saveValue(DAQ, dataServer.getText());
-            } catch (IOException ex) {
-            }
-        });
-        legacyPanel.add(dataServer);
-        JPanel btns = new JPanel(new GridLayout(1, 2, 3, 3));
-        startBtn = new JButton("Start DAQ aquisition");
-        startBtn.addActionListener(e -> openSocket());
-        btns.add(startBtn);
-
-        stopBtn = new JButton("Stop DAQ aquisition");
-        stopBtn.addActionListener(e -> closeSocket());
-        stopBtn.setEnabled(false);
-        btns.add(stopBtn);
-        legacyPanel.add(btns);
-        return legacyPanel;
-    }
-
     private JPanel createReceivedSignalsPanel() {
         JPanel panel = new JPanel(new BorderLayout(4, 4));
         panel.setBorder(BorderFactory.createTitledBorder("Received signals"));
-        panel.setPreferredSize(new Dimension(330, 1));
-        panel.setMinimumSize(new Dimension(260, 1));
         
         receivedSignalsModel = new DefaultListModel<>();
         receivedSignalsList = new JList<>(receivedSignalsModel);
@@ -1307,7 +1364,13 @@ public class PRPDTool extends JFrame {
     }
 
     private JPanel initRedPitayaControls() {
-        JPanel rpPanel = new JPanel(new BorderLayout(4, 4));
+        JPanel rpPanel = new JPanel(new BorderLayout(4, 4)) {
+            @Override
+            public Dimension getMaximumSize() {
+                Dimension pref = getPreferredSize();
+                return new Dimension(Integer.MAX_VALUE, pref.height);
+            }
+        };
         rpPanel.setBorder(BorderFactory.createTitledBorder("Red Pitaya"));
         JPanel formPanel = new JPanel(new GridLayout(0, 2, 3, 3));
 
@@ -1367,7 +1430,7 @@ public class PRPDTool extends JFrame {
         addFormRow(formPanel, "Visual", rpVisualChannelCombo, helpText("visual"));
         addFormRow(formPanel, "IN1 range", rpGain1Combo, helpText("gain1"));
         addFormRow(formPanel, "IN2 range", rpGain2Combo, helpText("gain2"));
-        addFormRow(formPanel, "Decimation", rpDecimationSpinner, helpText("decimation"));
+        addFormRow(formPanel, "Decimation (fs)", rpDecimationSpinner, helpText("decimation"));
         addFormRow(formPanel, "Averaging", rpAveragingBox, helpText("averaging"));
         addFormRow(formPanel, "Trigger", rpTriggerCombo, helpText("trigger"));
         addFormRow(formPanel, "Trigger [V]", rpTriggerLevelSpinner, helpText("triggerLevel"));
@@ -1395,7 +1458,7 @@ public class PRPDTool extends JFrame {
         rpStartLiveButton.addActionListener(e -> startRedPitaya(true));
         rpStopButton = new JButton("Stop RP");
         rpStopButton.setToolTipText(htmlTooltip(helpText("stopRp")));
-        rpStopButton.addActionListener(e -> closeSocket());
+        rpStopButton.addActionListener(e -> stopPipeline());
         rpStopButton.setEnabled(false);
 
         JPanel actions = new JPanel(new GridBagLayout());
@@ -1567,13 +1630,11 @@ public class PRPDTool extends JFrame {
 
         outputDirLabel = new JLabel("...");
         outputDirLabel.setFont(outputDirLabel.getFont().deriveFont(Font.ITALIC, 10f));
-        outputDirLabel.setForeground(Color.DARK_GRAY);
         
         outputFileLabel = new JLabel("...");
         outputFileLabel.setFont(outputFileLabel.getFont().deriveFont(Font.BOLD, 11f));
-        outputFileLabel.setForeground(Color.BLUE.darker());
 
-        JButton configureOutputBtn = new JButton("Configure Output...");
+        JButton configureOutputBtn = new JButton("Configure Output");
         configureOutputBtn.addActionListener(e -> {
             outputConfigDialog.setLocationRelativeTo(this);
             outputConfigDialog.setVisible(true);
@@ -1610,10 +1671,11 @@ public class PRPDTool extends JFrame {
         rpSettingsDialog.setLocationRelativeTo(this);
 
         rpEstimatedSizeLabel.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
-        JPanel actionsAndFiles = new JPanel(new BorderLayout());
-        actionsAndFiles.add(actions, BorderLayout.CENTER);
-        actionsAndFiles.add(fileConfigPanel, BorderLayout.SOUTH);
-        rpPanel.add(actionsAndFiles, BorderLayout.CENTER);
+        JPanel actionsAndFiles = new JPanel();
+        actionsAndFiles.setLayout(new BoxLayout(actionsAndFiles, BoxLayout.Y_AXIS));
+        actionsAndFiles.add(actions);
+        actionsAndFiles.add(fileConfigPanel);
+        rpPanel.add(actionsAndFiles, BorderLayout.NORTH);
         rpPanel.add(rpEstimatedSizeLabel, BorderLayout.SOUTH);
 
         rpChannelsCombo.addActionListener(e -> updateRedPitayaChannelControls());
@@ -1671,36 +1733,45 @@ public class PRPDTool extends JFrame {
             case "host" ->
                 "IP address or DNS name of the Red Pitaya board.\n"
                 + "\n"
-                + "The rp_prpd_agent.py agent must be running on this board.";
+                + "Tip: The default hostname is usually printed on the front connector of the physical board. "
+                + "For example, if your board shows 'f0f771', the host name is 'rp-f0f771.local'.\n"
+                + "\n"
+                + "Note: The rp_prpd_agent.py agent must be running on this board.";
             case "port" ->
-                "TCP port of the agent running on Red Pitaya.\n"
+                "TCP network port used to communicate with the Red Pitaya board.\n"
                 + "\n"
-                + "It must be the same as the agent's --port parameter.";
+                + "This value must exactly match the port number configured in the Python agent running on the board (the --port parameter).\n"
+                + "\n"
+                + "Default value: 9999";
             case "channels" ->
-                "ADC input channels used for acquisition.\n"
+                "ADC input channels to record during acquisition.\n"
                 + "\n"
-                + "Options:\n"
-                + "- IN1\n"
-                + "- IN2\n"
-                + "- IN1+IN2";
+                + "Available options:\n"
+                + "- IN1: Record only channel 1 (typically the main PD signal).\n"
+                + "- IN2: Record only channel 2.\n"
+                + "- IN1+IN2: Record both channels simultaneously. Required if you want to use the 'HW Phase Ref' feature to synchronize the PRPD plot with a reference voltage on IN2.\n"
+                + "\n"
+                + "Note: Recording two channels doubles the memory and network bandwidth requirements compared to a single channel.";
             case "visual" ->
                 "Channel forwarded to the existing Java PRPD visualization.\n"
                 + "\n"
                 + "The Red Pitaya acquisition may contain IN1 and IN2, but the main PRPD viewer displays one selected channel.";
             case "gain1" ->
-                "Red Pitaya input range for channel IN1.\n"
+                "Red Pitaya input range configuration for channel IN1.\n"
                 + "\n"
-                + "LV: for small signals.\n"
-                + "HV: for larger input voltages.\n"
+                + "Available jumper settings:\n"
+                + "- LV (Low Voltage): ±1V range. Use for weak signals requiring high ADC precision.\n"
+                + "- HV (High Voltage): ±20V range. Use for strong signals to prevent clipping/saturation.\n"
                 + "\n"
-                + "Board: STEMlab 125-14 Pro Z7020 Gen 2.";
+                + "Note: This must physically match the jumper position on the STEMlab 125-14 board.";
             case "gain2" ->
-                "Red Pitaya input range for channel IN2.\n"
+                "Red Pitaya input range configuration for channel IN2.\n"
                 + "\n"
-                + "LV: for small signals.\n"
-                + "HV: for larger input voltages.\n"
+                + "Available jumper settings:\n"
+                + "- LV (Low Voltage): ±1V range. Use for weak signals requiring high ADC precision.\n"
+                + "- HV (High Voltage): ±20V range. Use for strong signals to prevent clipping/saturation.\n"
                 + "\n"
-                + "Board: STEMlab 125-14 Pro Z7020 Gen 2.";
+                + "Note: This must physically match the jumper position on the STEMlab 125-14 board.";
             case "decimation" ->
                 "Decimation reduces the effective ADC sampling frequency.\n"
                 + "Only powers of 2 are allowed.\n"
@@ -1717,7 +1788,14 @@ public class PRPDTool extends JFrame {
                 + "\n"
                 + "Higher decimation gives a longer possible acquisition time and a smaller file, but worsens pulse time resolution.";
             case "averaging" ->
-                "Red Pitaya hardware averaging, if it is supported by the API used on the board.";
+                "Red Pitaya hardware decimation averaging.\n"
+                + "\n"
+                + "How it works when Decimation > 1:\n"
+                + "- Disabled: Discards the extra samples (aliases high frequencies).\n"
+                + "- Enabled: Averages the extra samples inside the FPGA before outputting.\n"
+                + "\n"
+                + "Effect:\n"
+                + "Enabling acts as a digital low-pass filter, reducing high-frequency noise and increasing effective resolution (ENOB). Highly recommended for high decimation values.";
             case "trigger" ->
                 "The trigger defines when acquisition starts.\n"
                 + "\n"
@@ -1752,22 +1830,40 @@ public class PRPDTool extends JFrame {
                 + "\n"
                 + "Negative values may be used to inspect a fragment before the trigger if the specific Red Pitaya API/FPGA version supports it.";
             case "triggerTimeout" ->
-                "Maximum time to wait for the trigger and for the DMA buffer to fill.\n"
+                "Maximum time (in seconds) the system will wait for an acquisition to complete.\n"
                 + "\n"
-                + "If this time elapses, acquisition is interrupted with an error.";
+                + "This timer includes both:\n"
+                + "1. Waiting for the trigger condition to occur (if not using 'NOW').\n"
+                + "2. Filling the DMA buffer with the requested number of samples.\n"
+                + "\n"
+                + "If this time elapses before the data is ready, the acquisition will abort with a timeout error. It is recommended to set this value slightly higher than your expected Duration + Trigger wait time.";
             case "mode" ->
-                "Mode used to determine acquisition length:\n"
+                "Defines how the total length of the acquisition is specified.\n"
                 + "\n"
-                + "- by duration,\n"
-                + "- by number of frames.";
+                + "Available modes:\n"
+                + "- duration: You specify the exact time [s]. The program automatically calculates how many samples and frames are needed to cover this time period.\n"
+                + "- frames: You manually specify the exact number of frames (chunks) to capture. The duration is then calculated based on the Frame size and sampling frequency.";
             case "duration" ->
-                "Time used to collect data in duration mode.";
-            case "frameSize" ->
-                "Number of samples per channel in one TCP frame.\n"
+                "Total time (in seconds) to record data per single acquisition.\n"
                 + "\n"
-                + "The same size is used when writing frames to an RPPR file.";
+                + "This field is active only when Mode is set to 'duration'.\n"
+                + "\n"
+                + "Example:\n"
+                + "A duration of 0.06 seconds at a 50 Hz network frequency captures exactly 3 full sine wave cycles (20 ms each). The exact number of samples collected is calculated as: Duration * fs.";
+            case "frameSize" ->
+                "Number of samples per channel transmitted in a single DMA chunk (TCP packet).\n"
+                + "\n"
+                + "Impact on the system:\n"
+                + "- Small size (e.g., 4096): Lower latency, frequent UI updates, but higher CPU overhead and network traffic.\n"
+                + "- Large size (e.g., 65536): High throughput, efficient for saving large data, but UI updates in larger jumps.\n"
+                + "\n"
+                + "Note: This size directly dictates the chunking used when saving data to offline .rppr.bin files.";
             case "frameCount" ->
-                "Number of frames collected in frame-count mode.";
+                "Number of frames (data chunks) to collect per acquisition.\n"
+                + "\n"
+                + "Behavior depends on the selected Mode:\n"
+                + "- 'frames' mode: You set this value manually. The total number of recorded samples will exactly equal (Frame count * Frame size).\n"
+                + "- 'duration' mode: This value is auto-calculated. It shows the minimum number of frames required to cover the requested Duration. For example, if your duration requires 100,000 samples and frame size is 65,536, it must fetch 2 frames.";
             case "autoTriggerIn1" ->
                 "Open the trigger calibration window for IN1.\n"
                 + "\n"
@@ -1792,37 +1888,50 @@ public class PRPDTool extends JFrame {
     private String paramHelpText(String key) {
         return switch (key) {
             case "Basic frequency [Hz]" ->
-                "Base frequency of the AC power system (e.g., 50.0 Hz or 60.0 Hz).\n"
-                + "Used to determine the period for phase-resolved partial discharge patterns.";
-            case "Zero-crossing instant" ->
-                "Phase shift or time offset to align the start of the PRPD pattern\n"
-                + "with the true zero-crossing of the AC voltage wave.";
+                "Power line frequency.\n\n"
+                + "Serves as the reference to calculate the phase angle of each pulse (0-360 degrees) and to filter out slow background drift.\n\n"
+                + "Values: Typically 50.0";
+            case "Zero-crossing instant [s]" ->
+                "Phase shift correction.\n\n"
+                + "Determines the fraction of a second where the voltage crosses zero. Set automatically by the software.\n\n"
+                + "Values: Changing this manually (e.g., adding 0.005 s) will horizontally shift the PRPD plot by 90 degrees. Useful for manual phase alignment.";
             case "Sampling frequency [Hz]" ->
-                "The rate at which the signal is sampled by the ADC.\n"
-                + "Must match the actual acquisition rate (e.g., 1000000.0 for 1 MS/s).";
-            case "Pulse ampl. threshold" ->
-                "Minimum amplitude for a peak to be considered a valid partial discharge pulse.\n"
-                + "Peaks below this threshold are ignored as background noise.";
+                "Data acquisition speed.\n\n"
+                + "Defines how many measurement points per second were recorded. Set automatically from data files.\n\n"
+                + "Values: Typically 1953125.0 (for decimation 64). Edit only if loading a raw text file missing header information.";
+            case "Pulse ampl. threshold [V]" ->
+                "Noise rejection threshold.\n\n"
+                + "Any peaks with a voltage lower than this value are considered background noise and ignored.\n\n"
+                + "Values: Typically 0.005 to 0.05. Increase this value slightly until dense background noise disappears from the screen, leaving only clear discharge pulses.";
             case "Dead time [us]" ->
-                "Minimum time required between consecutive pulses.\n"
-                + "Prevents multiple detections from a single oscillating or ringing pulse.";
+                "Detector blind time.\n\n"
+                + "The time immediately following a detected pulse during which the software ignores any further peaks. Prevents falsely counting a single oscillating (ringing) peak as multiple pulses.\n\n"
+                + "Values: Typically 5.0 to 20.0 us.";
             case "HPF cutoff frequency [Hz]" ->
-                "Cutoff frequency for the High-Pass Filter (HPF).\n"
-                + "Filters out the low-frequency AC voltage component and baseline wander.";
+                "High-Pass Filter boundary.\n\n"
+                + "Removes slow background fluctuations (including the 50 Hz sine wave). Lets only ultra-fast partial discharge spikes pass through.\n\n"
+                + "Values: Usually 50000.0 (50 kHz) or 100000.0 (100 kHz).";
             case "Filter Q" ->
-                "Quality factor of the filter.\n"
-                + "Determines the sharpness and damping of the filter's frequency response.";
+                "Filter Quality Factor.\n\n"
+                + "Determines the steepness and shape of the digital filter at the cutoff point.\n\n"
+                + "Values: Recommended to leave at the default 0.707 (Butterworth) to prevent artificial ringing in the signal.";
             case "Filter Order" ->
-                "The number of poles in the filter.\n"
-                + "Higher order means steeper roll-off but requires more computational power.";
-            case "Histogram min" ->
-                "Minimum amplitude displayed on the Y-axis of the PRPD histogram.";
-            case "Histogram max" ->
-                "Maximum amplitude displayed on the Y-axis of the PRPD histogram.";
+                "Digital filter steepness.\n\n"
+                + "Determines how aggressively the filter cuts off unwanted frequencies.\n\n"
+                + "Values: Typically 2, 4, or 8. Higher values cut the signal more sharply but significantly increase CPU usage and can distort tiny pulses.";
+            case "Histogram min [V]" ->
+                "Lower boundary of the Y-axis.\n\n"
+                + "Sets the absolute minimum physical limit for the rendered PRPD image.\n\n"
+                + "Tip: Use the 'Fit' button to let the software automatically calculate the ideal boundaries for maximum image sharpness.";
+            case "Histogram max [V]" ->
+                "Upper boundary of the Y-axis.\n\n"
+                + "Sets the absolute maximum physical limit. Directly influences the vertical resolution of the internal PRPD matrix.\n\n"
+                + "Tip: Use the 'Fit' button to automatically scale this to your highest detected pulse.";
             default ->
                 "";
         };
     }
+
 
     private static class HelpIcon implements javax.swing.Icon {
         @Override
@@ -1840,11 +1949,10 @@ public class PRPDTool extends JFrame {
             g2.dispose();
         }
         @Override
-        public int getIconWidth() { return 18; }
+        public int getIconWidth() { return 16; }
         @Override
-        public int getIconHeight() { return 18; }
+        public int getIconHeight() { return 16; }
     }
-
     private String htmlTooltip(String text) {
         StringBuilder html = new StringBuilder("<html><div style='width: 340px; white-space: normal;'>");
         String separator = "";
@@ -1955,14 +2063,23 @@ public class PRPDTool extends JFrame {
             long frameHeaderBytes = multiplySaturating(frameCount, 34L);
             long approximateFileBytes = addSaturating(addSaturating(payloadBytes, frameHeaderBytes), 4096L);
 
+            String fsStr;
+            if (sampleRate >= 1_000_000) {
+                fsStr = String.format(Locale.US, "%.3f MHz", sampleRate / 1_000_000.0);
+            } else if (sampleRate >= 1_000) {
+                fsStr = String.format(Locale.US, "%.3f kHz", sampleRate / 1_000.0);
+            } else {
+                fsStr = String.format(Locale.US, "%.3f Hz", sampleRate);
+            }
+
             rpEstimatedSizeLabel.setText(String.format(
                     Locale.US,
-                    "<html>Approx. file/data: %s<br>Samples: %s | Frames: %s | %d ch | fs=%.6g Hz</html>",
+                    "<html>Approx. file/data: %s<br>Samples: %s | Frames: %s | %d ch | fs=%s</html>",
                     formatBytes(approximateFileBytes),
                     formatInteger(totalSamples),
                     formatInteger(frameCount),
                     channelCount,
-                    sampleRate
+                    fsStr
             ));
             if (rpSettingsEstimatedSizeLabel != null) {
                 rpSettingsEstimatedSizeLabel.setText(rpEstimatedSizeLabel.getText());
@@ -2155,7 +2272,7 @@ public class PRPDTool extends JFrame {
 
     private void updateRedPitayaEstimateFont() {
         if (rpEstimatedSizeLabel != null) {
-            float size = Math.max(9.0f, currentFont.getSize2D() - 3.0f);
+            float size = Math.max(9.0f, currentFont.getSize2D() - 2.0f);
             rpEstimatedSizeLabel.setFont(currentFont.deriveFont(size));
             if (rpSettingsEstimatedSizeLabel != null) {
                 rpSettingsEstimatedSizeLabel.setFont(currentFont.deriveFont(size));
@@ -2485,37 +2602,8 @@ public class PRPDTool extends JFrame {
     }
 
     // Record data
-    public static double writeBuffer(FileChannel channel, Buffer buf) throws IOException {
-
-        int samples = buf.used;
-
-        int bytesToWrite = samples * 2 * Double.BYTES;
-
-        ByteBuffer byteBuffer
-                = ByteBuffer.allocateDirect(bytesToWrite);
-
-        byteBuffer.order(ByteOrder.LITTLE_ENDIAN);
-
-        DoubleBuffer db = byteBuffer.asDoubleBuffer();
-
-        for (int i = 0; i < samples; i++) {
-            db.put(buf.t[i]);
-            db.put(buf.u[i]);
-        }
-
-        byteBuffer.position(0);
-        byteBuffer.limit(bytesToWrite);
-
-        while (byteBuffer.hasRemaining()) {
-            channel.write(byteBuffer);
-        }
-
-        return bytesToWrite / (1024.0 * 1024.0);
-    }
-
-    //---------------- Actions ------
     private void onExit() {
-        closeSocket();
+        stopPipeline();
         try {
             if (pipeline != null) {
                 pipeline.awaitFinished(1);
@@ -2591,7 +2679,7 @@ public class PRPDTool extends JFrame {
                 pipeline.setThreshold(0.0);
             }
         } catch (Exception ex) {
-            setParamField("Pulse ampl. threshold", "" + PRPDConstants.DEFAULT_THRESHOLD);
+            setParamField("Pulse ampl. threshold [V]", "" + PRPDConstants.DEFAULT_THRESHOLD);
         }
         if (histogram instanceof DynamicPRPDHistogram) {
             ((DynamicPRPDHistogram) histogram).setDisplayThreshold(threshold);
@@ -2611,47 +2699,12 @@ public class PRPDTool extends JFrame {
             saveRedPitayaConfig(config);
             getRedPitayaData(config, live);
             rpStopButton.setEnabled(true);
-            stopBtn.setEnabled(false);
             dataSource.setText("Red Pitaya (" + config.host + ":" + config.port + ", " + (live ? "live" : "once") + ")");
-            startRecordButton.setEnabled(true);
-            stopRecordButton.setEnabled(true);
         } catch (Exception ex) {
             realTimeData = false;
             JOptionPane.showMessageDialog(this, ex.getMessage(), "Red Pitaya", JOptionPane.ERROR_MESSAGE);
             status.setText(ex.getMessage());
             setLastDataFile(null);
-        }
-    }
-
-    private void openSocket() {
-        inBatchMode = false;
-        realTimeData = true;
-        String daqSocketAddr = dataServer.getText();
-        try {
-            getData(daqSocketAddr);
-            stopBtn.setEnabled(true);
-            dataSource.setText("socket (" + daqSocketAddr + ")");
-            startRecordButton.setEnabled(true);
-            stopRecordButton.setEnabled(true);
-        } catch (Exception ex) {
-            System.err.println("Bad socket: " + daqSocketAddr + " : " + ex.getMessage());
-            setLastDataFile(null);
-            //ex.printStackTrace();
-        }
-    }
-
-    private void closeSocket() {
-        if (realTimeData) {
-            startRecordButton.setEnabled(false);
-            stopRecordButton.setEnabled(false);
-            if (pipeline != null) {
-                pipeline.stop();
-            }
-            stopBtn.setEnabled(false);
-            if (rpStopButton != null) {
-                rpStopButton.setEnabled(false);
-            }
-            realTimeData = false;
         }
     }
 
@@ -2822,7 +2875,7 @@ public class PRPDTool extends JFrame {
                     t0 = estt0;
                     extractor.setT0(t0);
                     SwingUtilities.invokeLater(() -> {
-                        setParamField("Zero-crossing instant", "" + t0);
+                        setParamField("Zero-crossing instant [s]", "" + t0);
                         classifyButton.setEnabled(true);
                     });
                 }
@@ -2831,31 +2884,6 @@ public class PRPDTool extends JFrame {
             @Override
             public void bufferRead(Buffer buffer) {
                 receivedSignalCache.add(buffer);
-                if (realTimeData && recordedData != null && recordedData.isOpen()) {
-                    if (recordedMB < recordLimit) {
-                        try {
-                            recordedMB += (int) writeBuffer(recordedData, buffer);
-                            recordSizeLabel.setText(recordedMB + " MB used");
-                        } catch (IOException ex) {
-                            JOptionPane.showConfirmDialog(
-                                    PRPDTool.this,
-                                    "Error while recording",
-                                    "Warning",
-                                    JOptionPane.WARNING_MESSAGE
-                            );
-                            stopRecorder();
-                        }
-                    } else {
-                        JOptionPane.showConfirmDialog(
-                                PRPDTool.this,
-                                "Record size limit reached",
-                                "Warning",
-                                JOptionPane.WARNING_MESSAGE
-                        );
-                        stopRecorder();
-                        recordSizeLabel.setText(recordedMB + " MB used");
-                    }
-                }
                 interactiveSignalPanel.addBuffer(buffer);
             }
 
@@ -2912,9 +2940,7 @@ public class PRPDTool extends JFrame {
                 setCursor(Cursor.getDefaultCursor());
                 classifyButton.setEnabled(true);
                 if (realTimeData && rpStopButton != null) {
-                    startRecordButton.setEnabled(false);
-                    stopRecordButton.setEnabled(false);
-                    rpStopButton.setEnabled(false);
+                                    rpStopButton.setEnabled(false);
                     realTimeData = false;
                 }
             }
@@ -2929,8 +2955,7 @@ public class PRPDTool extends JFrame {
                         JOptionPane.ERROR_MESSAGE
                 );
                 if (realTimeData) {
-                    stopBtn.setEnabled(false);
-                    if (rpStopButton != null) {
+                            if (rpStopButton != null) {
                         rpStopButton.setEnabled(false);
                     }
                     realTimeData = false;
@@ -3079,7 +3104,7 @@ public class PRPDTool extends JFrame {
                     t0 = estt0;
                     extractor.setT0(t0);
                     SwingUtilities.invokeLater(() -> {
-                        setParamField("Zero-crossing instant", "" + t0);
+                        setParamField("Zero-crossing instant [s]", "" + t0);
                         classifyButton.setEnabled(true);
                     });
                 }
@@ -3088,31 +3113,6 @@ public class PRPDTool extends JFrame {
             @Override
             public void bufferRead(Buffer buffer) {
                 receivedSignalCache.add(buffer);
-                if (realTimeData && recordedData != null && recordedData.isOpen()) {
-                    if (recordedMB < recordLimit) {
-                        try {
-                            recordedMB += (int) writeBuffer(recordedData, buffer);
-                            recordSizeLabel.setText(recordedMB + " MB used");
-                        } catch (IOException ex) {
-                            JOptionPane.showConfirmDialog(
-                                    PRPDTool.this,
-                                    "Error while recording",
-                                    "Warning",
-                                    JOptionPane.WARNING_MESSAGE
-                            );
-                            stopRecorder();
-                        }
-                    } else {
-                        JOptionPane.showConfirmDialog(
-                                PRPDTool.this,
-                                "Record size limit reached",
-                                "Warning",
-                                JOptionPane.WARNING_MESSAGE
-                        );
-                        stopRecorder();
-                        recordSizeLabel.setText(recordedMB + " MB used");
-                    }
-                }
                 interactiveSignalPanel.addBuffer(buffer);
             }
 
@@ -3180,8 +3180,7 @@ public class PRPDTool extends JFrame {
                         JOptionPane.ERROR_MESSAGE
                 );
                 if (realTimeData) {
-                    stopBtn.setEnabled(false);
-                    realTimeData = false;
+                            realTimeData = false;
                 }
             }
         }
@@ -3205,8 +3204,7 @@ public class PRPDTool extends JFrame {
             BufferFactory.reset();
             pipeline = null;
             if (realTimeData) {
-                stopBtn.setEnabled(false);
-                if (rpStopButton != null) {
+                    if (rpStopButton != null) {
                     rpStopButton.setEnabled(false);
                 }
                 realTimeData = false;
@@ -3293,6 +3291,35 @@ public class PRPDTool extends JFrame {
         }
     }
 
+    private void exportPRPD4YOLODialog() {
+        if (histogram == null) return;
+        
+        prpd4YOLO = histogram.getPRPD(224, 224);
+        JFileChooser fileChooser = new JFileChooser(getLastUsedDirectory());
+        setFontRecursively(fileChooser, currentFont, 0);
+        
+        if (lastDataFile != null) {
+            String defaultName = new File(lastDataFile).getName().replaceAll("\\..*$", ".png");
+            fileChooser.setSelectedFile(new File(getLastUsedDirectory(), defaultName));
+        }
+
+        int result = fileChooser.showSaveDialog(this);
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File file = fileChooser.getSelectedFile();
+            String path = file.getAbsolutePath();
+            if (!path.toLowerCase().endsWith(".png")) {
+                file = new File(path + ".png");
+            }
+            try {
+                javax.imageio.ImageIO.write(prpd4YOLO, "png", file);
+                status.setText("YOLO IMG saved to " + file.getName());
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                status.setText("Failed to save YOLO image: " + ex.getMessage());
+            }
+        }
+    }
+
     private void exportPRPD4YOLO(String fileName) {
         if (histogram != null) {
             prpd4YOLO = histogram.getPRPD(224, 224);
@@ -3313,28 +3340,6 @@ public class PRPDTool extends JFrame {
             for (Classifier c : map.keySet()) {
                 classifyPRPD(c, map.get(c));
             }
-        }
-    }
-
-    private void stopRecorder() {
-        try {
-            if (recordedData != null) {
-                recordedData.close();
-            }
-            recordedData = null;
-            stopRecordButton.setEnabled(false);
-            startRecordButton.setEnabled(true);
-            if (recordedFile != null) {
-                status.setText("Saved recording: " + recordedFile.getName());
-            }
-            refreshReceivedSignals();
-        } catch (IOException ex) {
-            JOptionPane.showMessageDialog(
-                    PRPDTool.this,
-                    ex.getMessage(),
-                    "Warning",
-                    JOptionPane.WARNING_MESSAGE
-            );
         }
     }
 
