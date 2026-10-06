@@ -208,12 +208,13 @@ public class PRPDTool extends JFrame {
     private JSpinner rpDurationSpinner;
     private JSpinner rpFrameSizeSpinner;
     private JSpinner rpFrameCountSpinner;
+    private JLabel rpMaxFilesDisplayLabel;
     private JLabel rpEstimatedSizeLabel;
     private JLabel rpSettingsEstimatedSizeLabel;
     private JDialog rpSettingsDialog;
     private boolean updatingRedPitayaDerivedFields;
     private JButton rpStartOnceButton;
-    private JButton rpStartLiveButton;
+            private JButton rpStartLiveButton;
     private JButton rpStopButton;
     private JTextField rpFilePrefixField;
     private JButton rpTriggerIn1Button;
@@ -346,6 +347,7 @@ public class PRPDTool extends JFrame {
 
         try {
             rpFileLimit = Integer.parseInt(configuration.getValue(RP_FILE_LIMIT).trim());
+            if (rpFileLimit < 1) rpFileLimit = 30;
         } catch (Exception ex) {
         }
         try {
@@ -1409,10 +1411,10 @@ public class PRPDTool extends JFrame {
         rpTriggerTimeoutSpinner = new JSpinner(new SpinnerNumberModel(configDouble(RP_TRIGGER_TIMEOUT, 10.0), 0.1, 600.0, 0.001));
         rpModeCombo = new JComboBox<>(new String[]{"duration", "frames"});
         rpModeCombo.setSelectedItem(configValue(RP_MODE, "duration"));
-        rpDurationSpinner = new JSpinner(new SpinnerNumberModel(configDouble(RP_DURATION, 0.01), 0.000001, 3600.0, 0.000001));
+        rpDurationSpinner = new JSpinner(new SpinnerNumberModel(Math.min(100000.0, configDouble(RP_DURATION, 0.01)), 0.000001, 100000.0, 0.000001));
         rpFrameSizeSpinner = new JSpinner(new SpinnerNumberModel(configInt(RP_FRAME_SIZE, 65_536), 2, BufferFactory.bufferSize(), 2));
         rpFrameCountSpinner = new JSpinner(new SpinnerNumberModel(configInt(RP_FRAME_COUNT, 1), 1, Integer.MAX_VALUE, 1));
-        rpEstimatedSizeLabel = new JLabel(" ");
+                rpEstimatedSizeLabel = new JLabel(" ");
         rpEstimatedSizeLabel.setForeground(Color.DARK_GRAY);
         rpSettingsEstimatedSizeLabel = new JLabel(" ");
         rpSettingsEstimatedSizeLabel.setForeground(Color.DARK_GRAY);
@@ -1455,9 +1457,10 @@ public class PRPDTool extends JFrame {
         rpStartOnceButton = new JButton("Start once");
         rpStartOnceButton.setToolTipText(htmlTooltip(helpText("startOnce")));
         rpStartOnceButton.addActionListener(e -> startRedPitaya(false));
-        rpStartLiveButton = new JButton("Start live");
+        rpStartLiveButton = new JButton("Start sequence");
         rpStartLiveButton.setToolTipText(htmlTooltip(helpText("startLive")));
         rpStartLiveButton.addActionListener(e -> startRedPitaya(true));
+        
         rpStopButton = new JButton("Stop RP");
         rpStopButton.setToolTipText(htmlTooltip(helpText("stopRp")));
         rpStopButton.addActionListener(e -> stopPipeline());
@@ -1541,6 +1544,10 @@ public class PRPDTool extends JFrame {
         actions.add(rpStartLiveButton, gbc);
         gbc.gridx = 1;
         actions.add(rpStopButton, gbc);
+        
+        gbc.gridx = 0;
+        gbc.gridy = 4;
+        gbc.gridwidth = 2;
 
         JPanel fileConfigPanel = new JPanel(new GridBagLayout());
         // === TWORZENIE OKNA "CONFIGURE OUTPUT" ===
@@ -1621,9 +1628,12 @@ public class PRPDTool extends JFrame {
         // Max Files
         dGbc.gridx = 0; dGbc.gridy = 5; dGbc.weightx = 0.0;
         outDiagPanel.add(new JLabel("Max files:"), dGbc);
-        JSpinner limitSpinner = new JSpinner(new SpinnerNumberModel(rpFileLimit, 0, 9999, 1));
+        JSpinner limitSpinner = new JSpinner(new SpinnerNumberModel(Math.max(1, rpFileLimit), 1, 9999, 1));
         limitSpinner.addChangeListener(e -> {
             rpFileLimit = (Integer) limitSpinner.getValue();
+            if (rpMaxFilesDisplayLabel != null) {
+                rpMaxFilesDisplayLabel.setText(String.valueOf(rpFileLimit));
+            }
             try { configuration.saveValue(RP_FILE_LIMIT, "" + rpFileLimit); } catch (IOException ex) {}
         });
         dGbc.gridx = 1; dGbc.weightx = 1.0;
@@ -1706,7 +1716,22 @@ public class PRPDTool extends JFrame {
         fcGbc.gridx = 1; fcGbc.weightx = 1.0;
         fileConfigPanel.add(outputFileLabel, fcGbc);
 
-        fcGbc.gridx = 0; fcGbc.gridy = 2; fcGbc.gridwidth = 2;
+        fcGbc.gridx = 0; fcGbc.gridy = 2; fcGbc.weightx = 0.0;
+        fileConfigPanel.add(new JLabel("Max files:"), fcGbc);
+        
+        JPanel maxFilesPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        rpMaxFilesDisplayLabel = new JLabel(String.valueOf(rpFileLimit));
+        rpMaxFilesDisplayLabel.setFont(rpMaxFilesDisplayLabel.getFont().deriveFont(Font.BOLD, 11f));
+        maxFilesPanel.add(rpMaxFilesDisplayLabel);
+        JLabel maxFilesHelp = new JLabel(new HelpIcon());
+        maxFilesHelp.setToolTipText(htmlTooltip("Controls how many files are kept on disk during sequential acquisition.\n\nFor example, if set to 30, the program acts as a rolling buffer, keeping only the 30 newest files and automatically deleting older ones to save disk space.\n\nYou can change this limit in the 'Configure Output' window."));
+        maxFilesHelp.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+        maxFilesPanel.add(maxFilesHelp);
+        
+        fcGbc.gridx = 1; fcGbc.weightx = 1.0;
+        fileConfigPanel.add(maxFilesPanel, fcGbc);
+
+        fcGbc.gridx = 0; fcGbc.gridy = 3; fcGbc.gridwidth = 2;
         fcGbc.fill = GridBagConstraints.NONE; fcGbc.anchor = GridBagConstraints.CENTER;
         fcGbc.insets = new Insets(6, 4, 2, 4);
         fileConfigPanel.add(configureOutputBtn, fcGbc);
@@ -2924,7 +2949,6 @@ public class PRPDTool extends JFrame {
     private PRPDPipelineListener createPipelineListener(String displayName, String exportName, boolean useHwRef) {
         return new PRPDPipelineListener() {
             private long lastPaintTime = 0;
-            
             @Override
             public void preExtract(Buffer buffer) {
                 if (signalStart.compareAndSet(true, false) || buffer.newWindow) {
@@ -3153,7 +3177,6 @@ public class PRPDTool extends JFrame {
                 extractor,
                 new PRPDPipelineListener() {
             private long lastPaintTime = 0;
-            
             @Override
             public void preExtract(Buffer buffer) {
                 if (signalStart.compareAndSet(true, false) || buffer.newWindow) {

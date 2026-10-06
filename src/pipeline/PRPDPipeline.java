@@ -161,9 +161,15 @@ public class PRPDPipeline implements AutoCloseable {
             }
 
         } catch (Throwable ex) {
-            running.set(false);
+            boolean wasRunning = running.getAndSet(false);
             readerFinished.set(true);
-            SwingUtilities.invokeLater(() -> listener.error(ex, " in readerLoop"));
+            if (wasRunning) {
+                boolean isInterrupted = ex instanceof InterruptedException || ex.getCause() instanceof InterruptedException;
+                if (ex.getMessage() != null && ex.getMessage().contains("Interrupted before")) isInterrupted = true;
+                if (!isInterrupted) {
+                    SwingUtilities.invokeLater(() -> listener.error(ex, " in readerLoop"));
+                }
+            }
         } finally {
             try {
                 if (reader != null) {
@@ -228,8 +234,12 @@ public class PRPDPipeline implements AutoCloseable {
             running.set(false);
             SwingUtilities.invokeAndWait(listener::finished);
         } catch (Throwable ex) {
-            running.set(false);
-            SwingUtilities.invokeLater(() -> listener.error(ex, " in extractorLoop"));
+            boolean wasRunning = running.getAndSet(false);
+            if (wasRunning) {
+                if (!(ex instanceof InterruptedException)) {
+                    SwingUtilities.invokeLater(() -> listener.error(ex, " in extractorLoop"));
+                }
+            }
         } finally {
             doneLatch.countDown();
         }
