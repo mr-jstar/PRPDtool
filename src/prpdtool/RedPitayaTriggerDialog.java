@@ -41,7 +41,6 @@ public class RedPitayaTriggerDialog extends JDialog {
     private final JButton okButton = new JButton("OK");
     private final JButton cancelButton = new JButton("Cancel");
     private final JComboBox<String> mode = new JComboBox<>(new String[]{"ABS | abs(IN1)", "+/- | IN1"});
-    private final JComboBox<String> theme = new JComboBox<>(new String[]{"Light", "Dark"});
     private final JSpinner triggerValue = new JSpinner(new SpinnerNumberModel(0.0, -20.0, 20.0, 0.000001));
     private final JLabel status = new JLabel("Collect reference without defect first.");
     private final JLabel stats = new JLabel(" ");
@@ -60,10 +59,30 @@ public class RedPitayaTriggerDialog extends JDialog {
         JPanel toolbar = new JPanel();
         toolbar.add(referenceButton);
         toolbar.add(defectButton);
+        
+        JLabel procedureHelp = new JLabel(new PRPDTool.HelpIcon());
+        String procedureText = "Calibration Procedure.\n\n"
+            + "1. Connect your setup with NO discharges active, then click 'Start: reference' to measure the background noise floor.\n"
+            + "2. Turn on the high voltage to activate discharges, then click 'Start: defect'.\n"
+            + "3. The algorithm will automatically place the golden trigger line between the noise and the discharges.\n"
+            + "4. Review the golden line and click 'OK' to apply this trigger level to the main program.";
+        procedureHelp.setToolTipText(PRPDTool.htmlTooltip(procedureText));
+        procedureHelp.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+        toolbar.add(procedureHelp);
+        
         toolbar.add(new JLabel("Mode"));
         toolbar.add(mode);
-        toolbar.add(new JLabel("Theme"));
-        toolbar.add(theme);
+        
+        JLabel modeHelp = new JLabel(new PRPDTool.HelpIcon());
+        String modeHelpText = "Trigger algorithm mode.\n\n"
+            + "ABS (Absolute): Analyzes the absolute value of the signal. The trigger will always be positive (CHx_PE). "
+            + "Best for symmetric discharges where you want to trigger on any large pulse regardless of its polarity.\n\n"
+            + "+/- (Signed): Analyzes the raw, unrectified signal. The algorithm checks both positive and negative peaks "
+            + "and selects the direction with the best signal-to-noise ratio. Best when discharges have a clear dominant polarity.";
+        modeHelp.setToolTipText(PRPDTool.htmlTooltip(modeHelpText));
+        modeHelp.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+        toolbar.add(modeHelp);
+        
         toolbar.add(new JLabel("Trigger [V]"));
         triggerValue.setEditor(new JSpinner.NumberEditor(triggerValue, "0.###############"));
         if (triggerValue.getEditor() instanceof JSpinner.DefaultEditor editor) {
@@ -103,7 +122,6 @@ public class RedPitayaTriggerDialog extends JDialog {
         });
         cancelButton.addActionListener(e -> setVisible(false));
         mode.addActionListener(e -> recompute());
-        theme.addActionListener(e -> updateTheme());
         triggerValue.addChangeListener(e -> updateTriggerLines());
         mode.removeAllItems();
         mode.addItem("ABS | abs(IN" + channel + ")");
@@ -239,7 +257,7 @@ public class RedPitayaTriggerDialog extends JDialog {
     }
 
     private void updateTheme() {
-        boolean dark = theme.getSelectedIndex() == 1;
+        boolean dark = PRPDConstants.isDarkTheme();
         referencePlot.setDarkTheme(dark);
         defectPlot.setDarkTheme(dark);
     }
@@ -391,7 +409,7 @@ public class RedPitayaTriggerDialog extends JDialog {
 
         void setDarkTheme(boolean darkTheme) {
             this.darkTheme = darkTheme;
-            setBackground(darkTheme ? new Color(18, 18, 18) : Color.WHITE);
+            setBackground(darkTheme ? new Color(30, 30, 30) : Color.WHITE);
             repaint();
         }
 
@@ -406,16 +424,16 @@ public class RedPitayaTriggerDialog extends JDialog {
             super.paintComponent(graphics);
             Graphics2D g = (Graphics2D) graphics.create();
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            Color background = darkTheme ? new Color(18, 18, 18) : Color.WHITE;
-            Color foreground = darkTheme ? new Color(235, 235, 235) : Color.BLACK;
-            Color axis = darkTheme ? new Color(150, 150, 150) : Color.GRAY;
-            Color grid = darkTheme ? new Color(55, 55, 55) : new Color(225, 225, 225);
-            Color labelBackground = darkTheme ? new Color(40, 40, 40) : new Color(255, 255, 230);
+            Color background = darkTheme ? new Color(30, 30, 30) : Color.WHITE;
+            Color foreground = darkTheme ? Color.LIGHT_GRAY : Color.BLACK;
+            Color axis = darkTheme ? Color.GRAY : Color.BLACK;
+            Color grid = darkTheme ? new Color(60, 60, 60) : new Color(230, 230, 230);
+            Color labelBackground = darkTheme ? new Color(50, 50, 50) : new Color(255, 255, 230);
             Color triggerColor = new Color(230, 180, 0);
 
-            int left = 78;
+            int left = 85;
             int top = 22;
-            int right = 24;
+            int right = 35;
             int bottom = 54;
             int w = Math.max(1, getWidth() - left - right);
             int h = Math.max(1, getHeight() - top - bottom);
@@ -551,14 +569,13 @@ public class RedPitayaTriggerDialog extends JDialog {
         }
 
         private static String formatTick(double value) {
-            double abs = Math.abs(value);
-            if ((abs > 0.0 && abs < 0.001) || abs >= 10_000.0) {
-                return String.format("%.6e", value);
+            if (Math.abs(value) < 1e-12) return "0";
+            String s = String.format(java.util.Locale.US, "%.4g", value);
+            if (s.contains("e") || s.contains("E")) return s;
+            if (s.indexOf('.') > 0) {
+                s = s.replaceAll("0*$", "").replaceAll("\\.$", "");
             }
-            if (abs < 10.0) {
-                return String.format("%.8g", value);
-            }
-            return String.format("%.8g", value);
+            return s;
         }
     }
 }

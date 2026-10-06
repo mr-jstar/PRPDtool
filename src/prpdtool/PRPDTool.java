@@ -218,6 +218,8 @@ public class PRPDTool extends JFrame {
     private JTextField rpFilePrefixField;
     private JButton rpTriggerIn1Button;
     private JButton rpTriggerIn2Button;
+    private JLabel mainTriggerModeValue;
+    private JLabel mainTriggerLevelValue;
     // --- Komponenty metadanych eksperymentu (zadania 1-4) ---
     private JComboBox<String> rpDefectTypeCombo;
     private JTextField rpVoltageKvField;
@@ -1432,7 +1434,7 @@ public class PRPDTool extends JFrame {
         addFormRow(formPanel, "IN2 range", rpGain2Combo, helpText("gain2"));
         addFormRow(formPanel, "Decimation (fs)", rpDecimationSpinner, helpText("decimation"));
         addFormRow(formPanel, "Averaging", rpAveragingBox, helpText("averaging"));
-        addFormRow(formPanel, "Trigger", rpTriggerCombo, helpText("trigger"));
+        addFormRow(formPanel, "Trigger mode", rpTriggerCombo, helpText("trigger"));
         addFormRow(formPanel, "Trigger [V]", rpTriggerLevelSpinner, helpText("triggerLevel"));
         addFormRow(formPanel, "Delay [samples]", rpTriggerDelaySpinner, helpText("triggerDelay"));
         addFormRow(formPanel, "Timeout [s]", rpTriggerTimeoutSpinner, helpText("triggerTimeout"));
@@ -1474,13 +1476,67 @@ public class PRPDTool extends JFrame {
         gbc.gridx = 1;
         actions.add(rpTriggerIn2Button, gbc);
 
+        mainTriggerModeValue = new JLabel(rpTriggerCombo.getSelectedItem().toString());
+        mainTriggerModeValue.setFont(mainTriggerModeValue.getFont().deriveFont(java.awt.Font.BOLD));
+        mainTriggerLevelValue = new JLabel(String.format(java.util.Locale.US, "%.6f", ((Number)rpTriggerLevelSpinner.getValue()).doubleValue()));
+        mainTriggerLevelValue.setFont(mainTriggerLevelValue.getFont().deriveFont(java.awt.Font.BOLD));
+        
+        rpTriggerCombo.addActionListener(e -> mainTriggerModeValue.setText(rpTriggerCombo.getSelectedItem().toString()));
+        rpTriggerLevelSpinner.addChangeListener(e -> mainTriggerLevelValue.setText(String.format(java.util.Locale.US, "%.6f", ((Number)rpTriggerLevelSpinner.getValue()).doubleValue())));
+        
+        if (rpTriggerLevelSpinner.getEditor() instanceof javax.swing.JSpinner.DefaultEditor) {
+            javax.swing.JSpinner.DefaultEditor editor = (javax.swing.JSpinner.DefaultEditor) rpTriggerLevelSpinner.getEditor();
+            editor.getTextField().getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+                private void update() {
+                    try {
+                        double v = Double.parseDouble(editor.getTextField().getText().replace(',', '.'));
+                        mainTriggerLevelValue.setText(String.format(java.util.Locale.US, "%.6f", v));
+                    } catch (Exception ex) {}
+                }
+                public void insertUpdate(javax.swing.event.DocumentEvent e) { update(); }
+                public void removeUpdate(javax.swing.event.DocumentEvent e) { update(); }
+                public void changedUpdate(javax.swing.event.DocumentEvent e) { update(); }
+            });
+        }
+
+        JPanel triggerDisplayPanel = new JPanel(new GridLayout(2, 1, 2, 2));
+        
+                String modeTooltipStr = helpText("trigger") + "\n\nThis parameter can be calibrated automatically using the Auto trigger assistant above, or set manually in the Red Pitaya Settings window.";
+        String levelTooltipStr = helpText("triggerLevel") + "\n\nThis parameter can be calibrated automatically using the Auto trigger assistant above, or set manually in the Red Pitaya Settings window.";
+        
+        JPanel modePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 0));
+        modePanel.add(new JLabel("Trigger mode:"));
+        modePanel.add(mainTriggerModeValue);
+        JLabel modeHelp = new JLabel(new HelpIcon());
+        modeHelp.setToolTipText(htmlTooltip(modeTooltipStr));
+        modeHelp.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+        modePanel.add(modeHelp);
+        
+        JPanel levelPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 0));
+        levelPanel.add(new JLabel("Trigger [V]:"));
+        levelPanel.add(mainTriggerLevelValue);
+        JLabel levelHelp = new JLabel(new HelpIcon());
+        levelHelp.setToolTipText(htmlTooltip(levelTooltipStr));
+        levelHelp.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+        levelPanel.add(levelHelp);
+        
+        triggerDisplayPanel.add(modePanel);
+        triggerDisplayPanel.add(levelPanel);
+
         gbc.gridx = 0;
         gbc.gridy = 1;
+        gbc.gridwidth = 2;
+        gbc.insets = new java.awt.Insets(6, 4, 10, 4);
+        actions.add(triggerDisplayPanel, gbc);
+        gbc.insets = new java.awt.Insets(2, 4, 2, 4);
+
+        gbc.gridx = 0;
+        gbc.gridy = 2;
         gbc.gridwidth = 2;
         actions.add(rpStartOnceButton, gbc);
 
         gbc.gridx = 0;
-        gbc.gridy = 2;
+        gbc.gridy = 3;
         gbc.gridwidth = 1;
         actions.add(rpStartLiveButton, gbc);
         gbc.gridx = 1;
@@ -1813,7 +1869,12 @@ public class PRPDTool extends JFrame {
                 "Trigger level in volts for CH1_PE, CH1_NE, CH2_PE, and CH2_NE modes.\n"
                 + "\n"
                 + "Example:\n"
-                + "CH1_PE with level 0.1 V starts acquisition when IN1 crosses about 0.1 V on a rising edge.";
+                + "CH1_PE with level 0.1 V starts acquisition when IN1 crosses about 0.1 V on a rising edge.\n"
+                + "\n"
+                + "Note on Hysteresis:\n"
+                + "Red Pitaya hardware has a built-in trigger hysteresis (typically around 5-10 mV). "
+                + "If the signal's peak-to-peak amplitude is extremely small (e.g., background noise of just a few mV), "
+                + "the trigger will not arm and will result in a timeout. To observe such tiny signals, use the 'NOW' trigger mode.";
             case "triggerDelay" ->
                 "Trigger delay in samples used by the DMA buffer.\n"
                 + "\n"
@@ -1933,7 +1994,7 @@ public class PRPDTool extends JFrame {
     }
 
 
-    private static class HelpIcon implements javax.swing.Icon {
+    public static class HelpIcon implements javax.swing.Icon {
         @Override
         public void paintIcon(Component c, Graphics g, int x, int y) {
             Graphics2D g2 = (Graphics2D) g.create();
@@ -1953,7 +2014,7 @@ public class PRPDTool extends JFrame {
         @Override
         public int getIconHeight() { return 16; }
     }
-    private String htmlTooltip(String text) {
+    public static String htmlTooltip(String text) {
         StringBuilder html = new StringBuilder("<html><div style='width: 340px; white-space: normal;'>");
         String separator = "";
         for (String line : text.split("\\R", -1)) {
