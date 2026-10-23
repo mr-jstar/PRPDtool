@@ -225,7 +225,7 @@ public class PRPDPipeline implements AutoCloseable {
 
                 Pulses pulses = extractor.extract(buffer);
 
-                if (pulses.size > 0) {
+                if (pulses.size > 0 || pulses.newWindow) {
                     uiPulsesQueue.add(pulses);
                     scheduleUiUpdate();
                 }

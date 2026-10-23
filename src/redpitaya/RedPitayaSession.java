@@ -28,7 +28,7 @@ public class RedPitayaSession implements Closeable {
     public RedPitayaSession(RedPitayaConfig config) throws IOException {
         this.socket = new Socket();
         this.socket.connect(new InetSocketAddress(config.host, config.port), 10_000);
-        socket.setReceiveBufferSize(8 * 1024 * 1024);
+        socket.setReceiveBufferSize(32 * 1024 * 1024);
         socket.setTcpNoDelay(true);
         this.in = new BufferedInputStream(socket.getInputStream(), 1 << 20);
         this.out = new BufferedOutputStream(socket.getOutputStream(), 1 << 20);

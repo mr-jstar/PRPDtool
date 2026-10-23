@@ -7,7 +7,7 @@ import java.util.Map;
 public class PRPDConstants {
 
     // PRPD defaults
-    public static final double DEFAULT_THRESHOLD = 0.012;
+    public static final double DEFAULT_THRESHOLD = 0.0;
     public static final double DEFAULT_FS = 1e6;
     public static final double DEFAULT_CUTOFF = 1e5;
 
@@ -17,6 +17,7 @@ public class PRPDConstants {
 
     // Configuration keys
     public static final String DARK_MODE = "PRPDMonitor.dark.mode";
+    public static final String PRPD_PALETTE = "PRPDMonitor.palette";
 
     public static boolean isDarkTheme() {
         try {

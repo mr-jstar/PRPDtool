@@ -10,7 +10,7 @@ import java.util.concurrent.BlockingQueue;
 public final class BufferFactory {
 
     private static final int BUFFER_COUNT = 4;
-    private static final int BUFFER_SIZE = 1024 * 1024;
+    private static final int BUFFER_SIZE = 4 * 1024 * 1024; // 4,194,304 probek (~33.55 ms przy 125 MSps, >1.67 okresu 50 Hz)
     
     private static final Buffer [] buffers = new Buffer[BUFFER_COUNT];
 

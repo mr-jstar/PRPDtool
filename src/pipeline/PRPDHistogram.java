@@ -11,6 +11,10 @@ public interface PRPDHistogram {
 
     void reset();
 
+    default void clearPulses() {
+        reset();
+    }
+
     void addPulses(Pulses p);
 
     int[][] getHistogram();
@@ -41,4 +45,7 @@ public interface PRPDHistogram {
     double getAmpAt(int y, int panelHeight);
     int getXForPhase(double phase, int panelWidth);
     int getYForAmp(double amp, int panelHeight);
+
+    default void setPalette(PRPDPalette palette) {}
+    default PRPDPalette getPalette() { return PRPDPalette.HIGH_CONTRAST; }
 }

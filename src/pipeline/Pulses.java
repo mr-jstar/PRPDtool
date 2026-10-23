@@ -11,6 +11,7 @@ public class Pulses {
     public int size;
     public int n;
     public double fs;
+    public boolean newWindow;
 
     public Pulses(double[] t, double[] phase, double[] amp, int size) {
         this.t = t;
@@ -18,5 +19,6 @@ public class Pulses {
         this.amp = amp;
         this.size = size;
         this.n = 0;
+        this.newWindow = false;
     }
 }

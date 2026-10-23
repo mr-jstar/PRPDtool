@@ -165,6 +165,7 @@ public class RpprFileSignalReader implements SignalReader, Closeable {
         }
         sampleOffset += frame.sampleCount;
         buffer.setUsed(frame.sampleCount);
+        buffer.newWindow = (frame.seq == 0);
         return buffer;
     }
 

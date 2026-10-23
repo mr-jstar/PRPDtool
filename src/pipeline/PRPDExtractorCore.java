@@ -50,7 +50,12 @@ public class PRPDExtractorCore {
             b.release();
             Pulses p = new Pulses(new double[0], new double[0], new double[0], 0);
             p.n = 0;
+            p.newWindow = b.newWindow;
             return p;
+        }
+
+        if (b.newWindow || Double.isNaN(lastT) || (b.used > 0 && b.t[0] < lastT)) {
+            lastT = Double.NaN;
         }
 
         double fs = estimateFs(b.t, n);
@@ -126,6 +131,7 @@ public class PRPDExtractorCore {
         Pulses p = new Pulses(finalT, finalPhase, finalAmp, count);
         p.n = count;
         p.fs = fs;
+        p.newWindow = b.newWindow;
         
         b.release();
 

@@ -43,7 +43,7 @@ public class DynamicPRPDHistogramData {
         return ampMax;
     }
 
-    private static final int MAX_PULSES = 1500000;
+    private static final int MAX_PULSES = 10_000_000;
 
     public void addPulses(Pulses p) {
         if (p == null || p.n == 0) return;

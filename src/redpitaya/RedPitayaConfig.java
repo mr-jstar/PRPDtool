@@ -25,7 +25,7 @@ public class RedPitayaConfig {
     public double triggerTimeoutS = 10.0;
     public boolean durationMode = true;
     public double durationS = 0.01;
-    public int frameSize = 1048576;
+    public int frameSize = pipeline.BufferFactory.bufferSize();
     public int frameCount = 1;
 
     // --- Metadane eksperymentu (zadania 1-4) ---
@@ -92,7 +92,15 @@ public class RedPitayaConfig {
     }
 
     public int normalizedFrameSize() {
-        return 1048576;
+        if (durationMode) {
+            return pipeline.BufferFactory.bufferSize();
+        }
+        int sz = (frameSize > 0) ? frameSize : pipeline.BufferFactory.bufferSize();
+        sz = Math.min(sz, pipeline.BufferFactory.bufferSize());
+        if (sz % 4096 != 0) {
+            sz = ((sz + 4095) / 4096) * 4096;
+        }
+        return Math.min(sz, pipeline.BufferFactory.bufferSize());
     }
 
     public long totalSamples() {
@@ -138,7 +146,6 @@ public class RedPitayaConfig {
         if (count > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("Liczba ramek jest zbyt duza");
         }
-        c.durationMode = true;
         c.frameCount = (int) count;
         c.durationS = total / c.sampleRate();
         return c;

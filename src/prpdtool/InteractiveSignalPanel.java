@@ -270,6 +270,11 @@ public class InteractiveSignalPanel extends JPanel {
         resetView();
     }
 
+    public void clearData() {
+        this.size = 0;
+        resetView();
+    }
+
     public void resetView() {
         autoX = true;
         autoY[0] = true;
@@ -286,6 +291,7 @@ public class InteractiveSignalPanel extends JPanel {
             if (buffer.used <= 0) {
                 return;
             }
+
             double[] upperValues = upperFilter == null ? copy(buffer.u, buffer.used) : upperFilter.filter(buffer.u, buffer.used);
             double[] lowerValues = lowerFilter == null ? copy(buffer.u, buffer.used) : lowerFilter.filter(buffer.u, buffer.used);
             
@@ -344,7 +350,7 @@ public class InteractiveSignalPanel extends JPanel {
                 }
             }
             
-            // Wstawienie znacznika przerwy (Double.NaN) na końcu każdego okna akwizycji
+            // Wstawienie znacznika przerwy (Double.NaN) na końcu każdego bufora / ramki
             ensureCapacity(size + 1);
             t[size] = Double.NaN;
             upper[size] = 0;

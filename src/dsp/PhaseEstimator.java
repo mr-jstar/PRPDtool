@@ -1,6 +1,5 @@
 package dsp;
 
-import java.util.ArrayList;
 import pipeline.Buffer;
 
 /**
@@ -14,10 +13,15 @@ public class PhaseEstimator {
     }
 
     public static double estimateIntialPhase(Buffer b, double f0, boolean useHardwareReference) {
-        double nT = b.t[b.used - 1] * f0;
-        if( nT < 10 )
-            System.out.println("t/T="+nT+" t0 estimate is uncertain");
-            
+        if (b == null || b.used < 10) {
+            return Double.NaN;
+        }
+
+        double duration = b.t[b.used - 1] - b.t[0];
+        if (duration <= 0.0) {
+            return Double.NaN;
+        }
+
         // Wybieramy z którego strumienia próbek liczymy fazę.
         // Sprawdzamy też czy u2 faktycznie zawiera sygnał (nie same zera),
         // bo przy nagrywaniu tylko 1 kanału u2 będzie zerowe.
@@ -31,52 +35,77 @@ public class PhaseEstimator {
             if (maxAbs > 0.0) {
                 signalToUse = b.u2;
             } else {
-                System.out.println("WARNING: HW Phase Ref (CH2) selected but u2 is all zeros — falling back to CH1. Is CH2 connected and IN1+IN2 mode selected?");
+                System.out.println("WARNING: HW Phase Ref (CH2) selected but u2 is all zeros — falling back to CH1.");
             }
         }
-            
-        // To prevent spectral leakage, compute DFT over an EXACT integer number of periods
-        double duration = b.t[b.used - 1] - b.t[0];
-        double T_period = 1.0 / f0;
-        int periods = (int) (duration / T_period);
-        int limit = b.used;
-        if (periods > 0) {
-            double exactDuration = periods * T_period;
-            for (int i = 0; i < b.used; i++) {
-                if (b.t[i] - b.t[0] > exactDuration) {
-                    limit = i;
-                    break;
-                }
-            }
-        }
-        
-        // Calculate the fundamental component of the signal at f0 using DFT
-        double re = 0.0;
-        double im = 0.0;
-        for (int i = 0; i < limit; i++) {
-            double angle = 2 * Math.PI * f0 * b.t[i];
-            re += signalToUse[i] * Math.cos(angle);
-            im += signalToUse[i] * Math.sin(angle);
-        }
-        
-        // Signal can be approximated as A * cos(2*pi*f0*t + phi)
-        // DFT gives X = sum(u * e^(-j * 2*pi*f0*t)) = sum(u * cos) - j * sum(u * sin)
-        double phi = Math.atan2(-im, re);
-        
-        // We want the time of the positive-slope zero crossing.
-        // For A * cos(wt + phi), positive zero crossing occurs when wt + phi = -pi/2
-        double t0 = (-Math.PI / 2.0 - phi) / (2 * Math.PI * f0);
-        
-        // Wrap t0 to the first period [0, T)
+
+        // Subsampling dla natychmiastowego dopasowania MNK (do 10 000 punktów w buforze)
+        int stride = Math.max(1, b.used / 10000);
+        double w = 2.0 * Math.PI * f0;
         double T = 1.0 / f0;
+
+        double m00 = 0.0, m01 = 0.0, m02 = 0.0;
+        double m11 = 0.0, m12 = 0.0, m22 = 0.0;
+        double v0 = 0.0, v1 = 0.0, v2 = 0.0;
+
+        for (int i = 0; i < b.used; i += stride) {
+            double ti = b.t[i] % T;
+            if (ti < 0.0) ti += T;
+            double angle = w * ti;
+            double s = Math.sin(angle);
+            double c = Math.cos(angle);
+            double val = signalToUse[i];
+
+            m00 += s * s;
+            m01 += s * c;
+            m02 += s;
+            m11 += c * c;
+            m12 += c;
+            m22 += 1.0;
+
+            v0 += s * val;
+            v1 += c * val;
+            v2 += val;
+        }
+
+        // Wyznacznik macierzy 3x3 normalnych równań MNK
+        double det = m00 * (m11 * m22 - m12 * m12)
+                   - m01 * (m01 * m22 - m12 * m02)
+                   + m02 * (m01 * m12 - m11 * m02);
+
+        if (Math.abs(det) < 1e-12) {
+            return Double.NaN;
+        }
+
+        double detA = v0 * (m11 * m22 - m12 * m12)
+                    - m01 * (v1 * m22 - m12 * v2)
+                    + m02 * (v1 * m12 - m11 * v2);
+        double A = detA / det;
+
+        double detB = m00 * (v1 * m22 - m12 * v2)
+                    - v0 * (m01 * m22 - m12 * m02)
+                    + m02 * (m01 * v2 - v1 * m02);
+        double B = detB / det;
+
+        double amp = Math.sqrt(A * A + B * B);
+        // Jeśli amplituda składowej 50Hz jest znikoma (< 0.1 mV), uznajemy brak sygnału sieciowego
+        if (amp < 0.1) {
+            return Double.NaN;
+        }
+
+        // Model sygnału: u(t) = A*sin(w*t) + B*cos(w*t) + C = amp*sin(w*t + theta) + C
+        // gdzie theta = atan2(B, A).
+        // Dodatnie przejście przez zero (zbocze rosnące): w*t0 + theta = 0 => t0 = -theta / w
+        double theta = Math.atan2(B, A);
+        double t0 = -theta / w;
+
         t0 = t0 % T;
-        if (t0 < 0) {
+        if (t0 < 0.0) {
             t0 += T;
         }
-        
-        // Return ph0 as expected by PRPDTool: ph0 = t0 / T * 2 * Math.PI
-        double ph0 = t0 / T * 2 * Math.PI;
-        
-        return ph0;
+
+        // Zwracamy ph0 = (t0 / T) * 2 * Math.PI, co w PRPDTool daje estt0 = t0
+        return (t0 / T) * 2.0 * Math.PI;
     }
 }
+
