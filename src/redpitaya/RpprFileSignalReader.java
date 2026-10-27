@@ -154,7 +154,7 @@ public class RpprFileSignalReader implements SignalReader, Closeable {
                 if (ch == visualIndex) {
                     selected = mv;
                 }
-                if (ch == ch2Index && ch2Index != visualIndex) {
+                if (ch == ch2Index) {
                     reference = mv;
                 }
             }

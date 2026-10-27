@@ -51,7 +51,12 @@ public class InteractiveSignalPanel extends JPanel {
     private double[] t = new double[16_384];
     private double[] upper = new double[16_384];
     private double[] lower = new double[16_384];
+    private double[] upperIn2 = new double[16_384];
     private int size;
+
+    private boolean showIn2 = false;
+    private double viewYIn2Min = -1.0;
+    private double viewYIn2Max = 1.0;
 
     private boolean autoX = true;
     private final boolean[] autoY = {true, true};
@@ -87,6 +92,16 @@ public class InteractiveSignalPanel extends JPanel {
             }
         }
         repaint();
+    }
+
+    public void setShowIn2(boolean showIn2) {
+        this.showIn2 = showIn2;
+        updateAutoRanges();
+        repaint();
+    }
+
+    public boolean isShowIn2() {
+        return showIn2;
     }
 
     public InteractiveSignalPanel() {
@@ -173,6 +188,7 @@ public class InteractiveSignalPanel extends JPanel {
                     viewTMax = dragTMax - dx;
                     clampXView();
                     autoX = false;
+                    fitYIn2();
                 }
 
                 if (dragPlot >= 0) {
@@ -298,11 +314,13 @@ public class InteractiveSignalPanel extends JPanel {
                 t[size] = Double.NaN;
                 upper[size] = 0;
                 lower[size] = 0;
+                upperIn2[size] = 0;
                 size++;
             }
 
             double[] upperValues = upperFilter == null ? copy(buffer.u, buffer.used) : upperFilter.filter(buffer.u, buffer.used);
             double[] lowerValues = lowerFilter == null ? copy(buffer.u, buffer.used) : lowerFilter.filter(buffer.u, buffer.used);
+            double[] in2Values = buffer.u2;
             
             // Wyciszenie stanów nieustalonych (szpilek) na początku nowego okna pomiarowego po filtracji cyfrowej (micro-blanking na UI).
             // Stosowane TYLKO na początku nowego okna pomiarowego (nigdy między ciągłymi ramkami) i NIGDY dla Base signal.
@@ -325,6 +343,7 @@ public class InteractiveSignalPanel extends JPanel {
                     t[size] = buffer.t[i];
                     upper[size] = upperValues[i];
                     lower[size] = lowerValues[i];
+                    upperIn2[size] = (in2Values != null && i < in2Values.length) ? in2Values[i] : 0.0;
                     size++;
                 } else {
                     double uMin = upperValues[i], uMax = upperValues[i];
@@ -341,21 +360,25 @@ public class InteractiveSignalPanel extends JPanel {
                         t[size] = buffer.t[uMinIdx];
                         upper[size] = uMin;
                         lower[size] = lMin;
+                        upperIn2[size] = (in2Values != null && uMinIdx < in2Values.length) ? in2Values[uMinIdx] : 0.0;
                         size++;
                         
                         t[size] = buffer.t[uMaxIdx];
                         upper[size] = uMax;
                         lower[size] = lMax;
+                        upperIn2[size] = (in2Values != null && uMaxIdx < in2Values.length) ? in2Values[uMaxIdx] : 0.0;
                         size++;
                     } else {
                         t[size] = buffer.t[uMaxIdx];
                         upper[size] = uMax;
                         lower[size] = lMax;
+                        upperIn2[size] = (in2Values != null && uMaxIdx < in2Values.length) ? in2Values[uMaxIdx] : 0.0;
                         size++;
                         
                         t[size] = buffer.t[uMinIdx];
                         upper[size] = uMin;
                         lower[size] = lMin;
+                        upperIn2[size] = (in2Values != null && uMinIdx < in2Values.length) ? in2Values[uMinIdx] : 0.0;
                         size++;
                     }
                 }
@@ -385,6 +408,7 @@ public class InteractiveSignalPanel extends JPanel {
         t = Arrays.copyOf(t, next);
         upper = Arrays.copyOf(upper, next);
         lower = Arrays.copyOf(lower, next);
+        upperIn2 = Arrays.copyOf(upperIn2, next);
     }
 
     private void trimIfNeeded() {
@@ -395,6 +419,7 @@ public class InteractiveSignalPanel extends JPanel {
         System.arraycopy(t, drop, t, 0, MAX_POINTS);
         System.arraycopy(upper, drop, upper, 0, MAX_POINTS);
         System.arraycopy(lower, drop, lower, 0, MAX_POINTS);
+        System.arraycopy(upperIn2, drop, upperIn2, 0, MAX_POINTS);
         size = MAX_POINTS;
         if (liveMode) {
             clampXView();
@@ -409,6 +434,8 @@ public class InteractiveSignalPanel extends JPanel {
             viewYMax[0] = 1.0;
             viewYMin[1] = -1.0;
             viewYMax[1] = 1.0;
+            viewYIn2Min = -1.0;
+            viewYIn2Max = 1.0;
             return;
         }
         if (autoX) {
@@ -433,6 +460,7 @@ public class InteractiveSignalPanel extends JPanel {
         if (autoY[1]) {
             fitY(1);
         }
+        fitYIn2();
     }
 
     private void fitY(int plot) {
@@ -464,6 +492,39 @@ public class InteractiveSignalPanel extends JPanel {
         viewYMax[plot] = max + margin;
     }
 
+    private void fitYIn2() {
+        if (size == 0) {
+            viewYIn2Min = -1.0;
+            viewYIn2Max = 1.0;
+            return;
+        }
+        double min = Double.POSITIVE_INFINITY;
+        double max = Double.NEGATIVE_INFINITY;
+        for (int i = 0; i < size; i++) {
+            if (Double.isNaN(t[i]) || t[i] < viewTMin || t[i] > viewTMax) {
+                continue;
+            }
+            min = Math.min(min, upperIn2[i]);
+            max = Math.max(max, upperIn2[i]);
+        }
+        if (!Double.isFinite(min) || !Double.isFinite(max)) {
+            min = -1.0;
+            max = 1.0;
+        }
+        if (min > 0.0) {
+            min = 0.0;
+        }
+        if (max < 0.0) {
+            max = 0.0;
+        }
+        if (max <= min) {
+            max = min + 1.0;
+        }
+        double margin = 0.08 * (max - min);
+        viewYIn2Min = min - margin;
+        viewYIn2Max = max + margin;
+    }
+
     private double getMinT() {
         for (int i = 0; i < size; i++) {
             if (!Double.isNaN(t[i])) return t[i];
@@ -491,6 +552,7 @@ public class InteractiveSignalPanel extends JPanel {
         autoX = false;
         autoY[0] = false;
         autoY[1] = false;
+        fitYIn2();
     }
 
     private void zoomY(int plotIndex, int mouseY, double factor) {
@@ -538,11 +600,15 @@ public class InteractiveSignalPanel extends JPanel {
         return p.y < getHeight() / 2 ? 0 : 1;
     }
 
+    private int getRightMargin() {
+        return (showIn2 && "Base signal".equalsIgnoreCase(upperTitle)) ? 62 : RIGHT;
+    }
+
     private Rectangle plotBounds(int plot) {
         int availableH = Math.max(1, getHeight() - TOP - BOTTOM - GAP);
         int plotH = availableH / 2;
         int y = TOP + (plot == 0 ? 0 : plotH + GAP);
-        return new Rectangle(LEFT, y, Math.max(1, getWidth() - LEFT - RIGHT), Math.max(1, plotH));
+        return new Rectangle(LEFT, y, Math.max(1, getWidth() - LEFT - getRightMargin()), Math.max(1, plotH));
     }
 
     private double xToTime(int x, Rectangle plot) {
@@ -563,6 +629,11 @@ public class InteractiveSignalPanel extends JPanel {
 
     private int valueToY(double value, Rectangle plot, int plotIndex) {
         return plot.y + plot.height - (int) Math.round((value - viewYMin[plotIndex]) / (viewYMax[plotIndex] - viewYMin[plotIndex]) * plot.height);
+    }
+
+    private int valueToYIn2(double value, Rectangle plot) {
+        double span = Math.max(1e-12, viewYIn2Max - viewYIn2Min);
+        return plot.y + plot.height - (int) Math.round((value - viewYIn2Min) / span * plot.height);
     }
 
     @Override
@@ -589,6 +660,7 @@ public class InteractiveSignalPanel extends JPanel {
         Rectangle plot1 = plotBounds(1);
         int topY = plot0.y;
         int bottomY = plot1.y + plot1.height;
+        int rightMargin = getRightMargin();
         
         int x1 = timeToX(cursorT1, plot0);
         int x2 = timeToX(cursorT2, plot0);
@@ -597,9 +669,9 @@ public class InteractiveSignalPanel extends JPanel {
         
         // Draw T1, T2
         g.setColor(new Color(255, 165, 0)); // Orange
-        if (x1 >= LEFT && x1 <= getWidth() - RIGHT) g.drawLine(x1, topY, x1, bottomY);
+        if (x1 >= LEFT && x1 <= getWidth() - rightMargin) g.drawLine(x1, topY, x1, bottomY);
         g.setColor(new Color(255, 215, 0)); // Gold
-        if (x2 >= LEFT && x2 <= getWidth() - RIGHT) g.drawLine(x2, topY, x2, bottomY);
+        if (x2 >= LEFT && x2 <= getWidth() - rightMargin) g.drawLine(x2, topY, x2, bottomY);
         
         // Draw Y1, Y2
         for (int p = 0; p < 2; p++) {
@@ -611,16 +683,16 @@ public class InteractiveSignalPanel extends JPanel {
             int y2 = Math.max(plot.y, Math.min(plot.y + plot.height, y2Raw));
             
             g.setColor(new Color(255, 100, 100)); // Red-ish
-            g.drawLine(LEFT, y1, getWidth() - RIGHT, y1);
+            g.drawLine(LEFT, y1, getWidth() - rightMargin, y1);
             g.setColor(new Color(255, 150, 150)); // Light red
-            g.drawLine(LEFT, y2, getWidth() - RIGHT, y2);
+            g.drawLine(LEFT, y2, getWidth() - rightMargin, y2);
         }
         
         // Draw info box
         g.setStroke(new BasicStroke(1.0f));
         int boxW = 160;
         int boxH = 205;
-        int boxX = getWidth() - RIGHT - boxW - 10;
+        int boxX = getWidth() - rightMargin - boxW - 10;
         int boxY = TOP + 10;
         
         g.setColor(isDark ? new Color(30, 30, 30, 200) : new Color(255, 255, 255, 200));
@@ -663,9 +735,62 @@ public class InteractiveSignalPanel extends JPanel {
         g.setColor(isDark ? Color.LIGHT_GRAY : Color.BLACK);
         g.drawString(title, plot.x, plot.y - 8);
 
+        boolean isBaseSignalIn2 = (plotIndex == 0 && showIn2 && "Base signal".equalsIgnoreCase(upperTitle));
+        if (isBaseSignalIn2) {
+            FontMetrics fmTitle = g.getFontMetrics();
+            int titleW = fmTitle.stringWidth(title);
+            g.setFont(new Font("Arial", Font.PLAIN, 12));
+            g.setColor(isDark ? new Color(180, 180, 180) : new Color(110, 110, 110));
+            g.drawString(" (IN1: " + (isDark ? "cyan" : "blue") + ", IN2: grey)", plot.x + titleW + 4, plot.y - 8);
+        }
+
         if (size > 1) {
             Shape oldClip = g.getClip();
             g.clipRect(plot.x + 1, plot.y + 1, Math.max(1, plot.width - 1), Math.max(1, plot.height - 1));
+
+            // Rysowanie drugiego wykresu IN2 w tle (kolor szary), tylko gdy zaznaczono IN1 + IN2 i tytuł to Base signal
+            if (isBaseSignalIn2) {
+                Color in2CurveColor = isDark ? new Color(160, 160, 160, 200) : new Color(130, 130, 130, 220);
+                g.setColor(in2CurveColor);
+                g.setStroke(new BasicStroke(1.2f));
+                int lastX = Integer.MIN_VALUE;
+                int minY = Integer.MAX_VALUE;
+                int maxY = Integer.MIN_VALUE;
+                int lastYInPixel = Integer.MIN_VALUE;
+                for (int i = 0; i < size; i++) {
+                    if (Double.isNaN(t[i])) {
+                        if (lastX != Integer.MIN_VALUE) {
+                            g.drawLine(lastX, minY, lastX, maxY);
+                        }
+                        lastX = Integer.MIN_VALUE;
+                        continue;
+                    }
+                    if (t[i] < viewTMin || t[i] > viewTMax) {
+                        continue;
+                    }
+                    int x = timeToX(t[i], plot);
+                    int y = valueToYIn2(upperIn2[i], plot);
+                    if (x == lastX) {
+                        minY = Math.min(minY, y);
+                        maxY = Math.max(maxY, y);
+                        lastYInPixel = y;
+                    } else {
+                        if (lastX != Integer.MIN_VALUE) {
+                            g.drawLine(lastX, minY, lastX, maxY);
+                            g.drawLine(lastX, lastYInPixel, x, y);
+                        }
+                        lastX = x;
+                        minY = y;
+                        maxY = y;
+                        lastYInPixel = y;
+                    }
+                }
+                if (lastX != Integer.MIN_VALUE) {
+                    g.drawLine(lastX, minY, lastX, maxY);
+                }
+            }
+
+            // Rysowanie wykresu głównego (IN1) na wierzchu
             g.setColor(color);
             g.setStroke(new BasicStroke(1.2f));
             int lastX = Integer.MIN_VALUE;
@@ -712,6 +837,33 @@ public class InteractiveSignalPanel extends JPanel {
             g.setClip(oldClip);
         }
         drawAxisLabels(g, plot, plotIndex);
+        if (isBaseSignalIn2) {
+            drawRightAxisLabelsIn2(g, plot);
+        }
+    }
+
+    private void drawRightAxisLabelsIn2(Graphics2D g, Rectangle plot) {
+        boolean isDark = PRPDConstants.isDarkTheme();
+        Color in2Color = isDark ? new Color(175, 175, 175) : new Color(110, 110, 110);
+        
+        // Etykieta nagłówkowa nad prawą osią
+        g.setColor(in2Color);
+        g.setFont(new Font("Arial", Font.BOLD, 11));
+        g.drawString("IN2 [mV]", plot.x + plot.width + 5, plot.y - 8);
+        
+        g.setFont(new Font("Arial", Font.PLAIN, 10));
+        for (int i = 0; i <= 4; i++) {
+            double r = i / 4.0;
+            int y = plot.y + plot.height - (int) Math.round(r * plot.height);
+            double value = viewYIn2Min + r * (viewYIn2Max - viewYIn2Min);
+            
+            // Delikatny tick na prawej osi
+            g.setColor(in2Color);
+            g.drawLine(plot.x + plot.width, y, plot.x + plot.width + 3, y);
+            
+            String text = formatCompactTick(value);
+            g.drawString(text, plot.x + plot.width + 5, y + 4);
+        }
     }
 
     private void drawGrid(Graphics2D g, Rectangle plot, int plotIndex) {
@@ -786,6 +938,23 @@ public class InteractiveSignalPanel extends JPanel {
         String s = String.format(java.util.Locale.US, "%.4g", value);
         if (s.contains("e") || s.contains("E")) return s;
         if (s.indexOf('.') > 0) {
+            s = s.replaceAll("0*$", "").replaceAll("\\.$", "");
+        }
+        return s;
+    }
+
+    private static String formatCompactTick(double value) {
+        if (Math.abs(value) < 1e-6) return "0";
+        double abs = Math.abs(value);
+        String s;
+        if (abs >= 100.0) {
+            s = String.format(java.util.Locale.US, "%.0f", value);
+        } else if (abs >= 1.0) {
+            s = String.format(java.util.Locale.US, "%.1f", value);
+        } else {
+            s = String.format(java.util.Locale.US, "%.2f", value);
+        }
+        if (s.contains(".") && s.indexOf('.') > 0) {
             s = s.replaceAll("0*$", "").replaceAll("\\.$", "");
         }
         return s;

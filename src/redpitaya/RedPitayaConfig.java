@@ -15,7 +15,7 @@ public class RedPitayaConfig {
 
     public String host = "rp-f0f771.local";
     public int port = 9999;
-    public int[] channels = {1};
+    public int[] channels = {1, 2};
     public int visualChannel = 1;
     public String gainCh1 = "LV";
     public String gainCh2 = "LV";

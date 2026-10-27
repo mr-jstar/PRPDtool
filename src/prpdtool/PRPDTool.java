@@ -50,6 +50,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.text.ParseException;
+import java.text.DecimalFormat;
+import javax.swing.text.DefaultFormatterFactory;
+import javax.swing.text.NumberFormatter;
 import pipeline.PRPDExtractorCore;
 import pipeline.PRPDHistogram;
 import pipeline.PRPDPipeline;
@@ -724,11 +727,27 @@ public class PRPDTool extends JFrame {
         JMenuItem rpSettingsMI = new JMenuItem("Settings");
         rpSettingsMI.addActionListener(e -> {
             if (rpSettingsDialog != null) {
+                updateRedPitayaDerivedControls();
                 rpSettingsDialog.setVisible(true);
             }
         });
         rpMenu.add(rpSettingsMI);
         mb.add(rpMenu);
+
+        JMenu aboutMenu = new JMenu("About");
+        aboutMenu.addMenuListener(new javax.swing.event.MenuListener() {
+            @Override
+            public void menuSelected(javax.swing.event.MenuEvent e) {
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    aboutMenu.setSelected(false);
+                    aboutMenu.getPopupMenu().setVisible(false);
+                    showAboutDialog();
+                });
+            }
+            @Override public void menuDeselected(javax.swing.event.MenuEvent e) {}
+            @Override public void menuCanceled(javax.swing.event.MenuEvent e) {}
+        });
+        mb.add(aboutMenu);
 
         setJMenuBar(mb);
     }
@@ -739,6 +758,227 @@ public class PRPDTool extends JFrame {
             return darkStr != null && Boolean.parseBoolean(darkStr);
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    private boolean aboutDialogShowing = false;
+
+    private void showAboutDialog() {
+        if (aboutDialogShowing) return;
+        aboutDialogShowing = true;
+        try {
+            boolean dark = isDarkMode();
+            String titleColor = dark ? "#ffffff" : "#000000";
+            String bodyColor = dark ? "#dcdcdc" : "#222222";
+            String boldColor = dark ? "#ffffff" : "#000000";
+            String hrColor = dark ? "#555555" : "#cccccc";
+            String codeBg = dark ? "#383a3e" : "#f0f0f0";
+            String quoteBg = dark ? "#33363a" : "#f4f4f4";
+            String quoteBorder = dark ? "#666666" : "#aaaaaa";
+            String bgColor = dark ? "#2b2d30" : "#ffffff";
+
+            String html = String.format(Locale.US, """
+                <html>
+                <head>
+                <style>
+                body { font-family: Segoe UI, Arial, sans-serif; font-size: 11px; color: %s; background-color: %s; margin: 10px; }
+                h2 { font-size: 15px; font-weight: bold; color: %s; margin-top: 4px; margin-bottom: 8px; }
+                h3 { font-size: 13px; font-weight: bold; color: %s; margin-top: 14px; margin-bottom: 5px; }
+                p, li { font-size: 11px; color: %s; line-height: 1.4; margin-bottom: 4px; }
+                b, strong { color: %s; font-weight: bold; }
+                code { font-family: Consolas, monospace; font-size: 11px; background-color: %s; padding: 1px 4px; }
+                hr { border: 0; border-top: 1px solid %s; margin: 10px 0; }
+                blockquote { margin: 6px 0; padding: 4px 8px; background-color: %s; border-left: 3px solid %s; }
+                ol { margin-top: 4px; margin-bottom: 6px; padding-left: 20px; }
+                ul { margin-top: 4px; margin-bottom: 6px; padding-left: 20px; }
+                li { margin-bottom: 4px; }
+                </style>
+                </head>
+                <body>
+                <h2>PRPD Tool &ndash; jak działa program?</h2>
+                <p>Program służy do rejestracji i analizy <b>wyładowań niezupełnych (WNZ / PD &ndash; Partial Discharge)</b>
+                w urządzeniach elektroenergetycznych (np. rozdzielnicach SN, transformatorach, kablach).
+                Poniżej opisano krok po kroku, co dzieje się z sygnałem od chwili wejścia na przetwornik ADC
+                aż do wygenerowania wykresu PRPD.</p>
+                <hr>
+
+                <h3>1. Akwizycja &ndash; skąd pochodzi sygnał?</h3>
+                <p>Sygnał pomiarowy pochodzi z karty <b>Red Pitaya STEMlab 125-14</b> &ndash; miniaturowego systemu akwizycji
+                z 14-bitowym przetwornikiem ADC o częstotliwości próbkowania do <b>125 MS/s</b> (125 milionów próbek
+                na sekundę, regulowanej decymacją).</p>
+                <ul>
+                  <li><b>CH1 (IN1)</b> &ndash; główny kanał pomiarowy. Podłącza się tu czujnik WNZ
+                      (np. cewkę HFCT, czujnik TEV lub antenę VHF). Pracuje zwykle w zakresie <b>LV (Low Voltage, &plusmn;1&nbsp;V)</b>
+                      dla zapewnienia maksymalnej czułości i rozdzielczości pomiaru.</li>
+                  <li><b>CH2 (IN2)</b> &ndash; kanał sygnału referencyjnego napięcia zasilającego 50&nbsp;Hz.
+                      Podłącza się tu wyjście dzielnika napięcia lub sygnał referencyjny z generatora.
+                      Pracuje zwykle w zakresie <b>HV (High Voltage, &plusmn;20&nbsp;V)</b>.</li>
+                </ul>
+                <p>Po naciśnięciu <b>Start once</b> (jeden pomiar) lub <b>Start live</b> (ciągły podgląd na żywo)
+                program wysyła ramkę konfiguracyjną JSON przez połączenie TCP/IP (port&nbsp;9999). Agent Python na płytce
+                konfiguruje rejestry FPGA, uzbraja trigger i przesyła bufor próbek w pamięci DDR RAM (AXI DMA)
+                z powrotem do komputera.</p>
+
+                <h3>2. Przetwarzanie wstępne &ndash; przeliczenie na miliwolty [mV]</h3>
+                <p>Każda odebrana próbka to 14-bitowa liczba całkowita ze znakiem (int16 od &minus;8192 do +8191).
+                Program przelicza każdą wartość na <b>miliwolty [mV]</b> według wybranego zakresu wejścia:</p>
+                <ul>
+                  <li><b>LV (&plusmn;1&nbsp;V)</b>: 1 LSB = 1000&nbsp;mV / 8192 &asymp; <b>0,122&nbsp;mV</b></li>
+                  <li><b>HV (&plusmn;20&nbsp;V)</b>: 1 LSB = 20&nbsp;000&nbsp;mV / 8192 &asymp; <b>2,441&nbsp;mV</b> (20-krotnie większy zakres)</li>
+                </ul>
+                <p>Ustawienie w programie (IN range) musi bezwzględnie odpowiadać fizycznemu położeniu zworki na płytce Red Pitaya.</p>
+
+                <h3>3. Czym jest wykres Base signal?</h3>
+                <p><b>Base signal</b> (górny wykres, kolor niebieski) to <b>surowy sygnał napięciowy wprost z przetwornika</b>
+                &ndash; bez żadnej filtracji. Na tym wykresie widać:</p>
+                <ul>
+                  <li>wolnozmienną sinusoidę 50&nbsp;Hz (tło napięcia sieciowego lub zakłócenia sieci),</li>
+                  <li>szybkie szpilki wyładowań niezupełnych nałożone na tę sinusoidę,</li>
+                  <li>szum termiczny i elektroniczny toru pomiarowego.</li>
+                </ul>
+                <p>Gdy w opcji <i>Visual plot</i> wybrano <b>IN1 + IN2</b>, w tle wykresu pojawia się szary przebieg
+                z prawej osi Y &ndash; jest to fizyczny sygnał referencyjny 50&nbsp;Hz z wejścia IN2.</p>
+
+                <h3>4. Czym jest wykres Filtered signal i do czego służą filtry?</h3>
+                <p><b>Filtered signal</b> (dolny wykres, kolor zielony) to sygnał po przepuszczeniu przez
+                <b>cyfrowy filtr górnoprzepustowy (HPF &ndash; High-Pass Filter)</b>. Rola filtra jest kluczowa:</p>
+                <ul>
+                  <li><b>odcina</b> wolną sinusoidę 50&nbsp;Hz oraz wolne dryfy napięcia stałego i zakłócenia sieciowe,</li>
+                  <li><b>przepuszcza</b> wyłącznie wąskie, strome impulsy wyładowań niezupełnych (o czasach narastania w mikrosekundach).</li>
+                </ul>
+                <p>Parametry filtra (konfigurowane w panelu parametrów po lewej stronie):</p>
+                <ul>
+                  <li><b>HPF cutoff frequency [Hz]</b> &ndash; dolna granica pasma przepustowego. Typowo 50&nbsp;000&nbsp;Hz (50&nbsp;kHz)
+                      lub 100&nbsp;000&nbsp;Hz. Wszystko poniżej tej częstotliwości jest wycinane.</li>
+                  <li><b>Filter Q</b> &ndash; dobroć filtra (kształt kolana filtracji). Domyślna wartość <b>0,707</b> (filtr Butterwortha)
+                      zapewnia maksymalnie płaską charakterystykę w paśmie i brak sztucznego oscylowania (dzwonienia) na impulsach.</li>
+                  <li><b>Filter Order</b> &ndash; rząd filtra (np. 2, 4, 8). Wyższy rząd ostrzej tłumi częstotliwości poniżej granicy,
+                      ale wymaga więcej obliczeń CPU.</li>
+                </ul>
+
+                <h3>5. Wyznaczanie kąta fazowego (0&ndash;360&deg;)</h3>
+                <p>W analizie WNZ kluczowa jest informacja, w której fazie sinusoidy napięcia roboczego wystąpiło dane wyładowanie.
+                Program wyznacza chwilę przejścia napięcia 50&nbsp;Hz przez zero w kierunku dodatnim (<b>Zero-crossing instant [s]</b>):</p>
+                <ul>
+                  <li>Gdy włączona jest opcja <b>HW Phase Ref</b> &ndash; faza estymowana jest z fizycznego sygnału na kanale CH2 (IN2),</li>
+                  <li>Gdy opcja jest wyłączona &ndash; faza estymowana jest matematycznie z tła sygnału CH1 (IN1).</li>
+                </ul>
+                <p>Każdy wykryty impuls otrzymuje kąt fazowy &phi; wyliczony ze wzoru:</p>
+                <blockquote><code>&phi; = 360 &times; f0 &times; (t &minus; t0) mod 360&deg;</code></blockquote>
+
+                <h3>6. Kwalifikacja impulsów &ndash; kiedy sygnał jest uznawany za puls (Pulses)?</h3>
+                <p>Detekcja impulsów odbywa się wyłącznie na <b>przefiltrowanym sygnale (Filtered signal)</b>.
+                Algorytm przegląda próbki z zachowaniem następujących kryteriów:</p>
+                <ol>
+                  <li><b>Ignorowanie brzegów bufora (blanking):</b> pierwsze i ostatnie ~20&nbsp;&mu;s każdego bufora danych
+                      są pomijane, aby filtr cyfrowy osiągnął stan ustalony i nie wygenerował fałszywej szpilki na krawędzi.</li>
+                  <li><b>Warunek progu amplitudy:</b> próbka jest kandydatem na impuls, gdy jej moduł przekroczy próg
+                      <b>Pulse ampl. threshold [mV]</b>: <code>|y| &ge; threshold</code>. Szum tła poniżej tego progu jest odrzucany.</li>
+                  <li><b>Wyszukiwanie wierzchołka (Peak Picker):</b> po przekroczeniu progu program nie zatrzymuje się na pierwszej próbce,
+                      lecz w oknie czasowym o długości <b>Dead time [µs]</b> wyszukuje punkt o <i>maksymalnej wartości bezwzględnej</i>.
+                      To właśnie ten lokalny ekstremum jest rejestrowany jako właściwy impuls.</li>
+                  <li><b>Czas martwy (Dead time):</b> po zarejestrowaniu impulsu kolejne próbki przez czas <b>Dead time [µs]</b>
+                      są bezwzględnie ignorowane. Zapobiega to wielokrotnemu zliczaniu gasnących oscylacji (dzwonienia obwodu)
+                      jako rzekomo oddzielnych wyładowań. Typowa wartość: 5&ndash;20&nbsp;&mu;s.</li>
+                </ol>
+                <p>Każdy zakwalifikowany impuls zapisywany jest jako trójka danych: czas <i>t</i> [s], kąt fazowy <i>&phi;</i> [0&ndash;360&deg;] oraz amplituda <i>amp</i> [mV] (dodatnia lub ujemna).</p>
+
+                <h3>7. Czym jest wykres PRPD oraz licznik Pulses?</h3>
+                <p><b>PRPD (Phase Resolved Partial Discharge)</b> to dwuwymiarowy rozkład fazowo-amplitudowy wyładowań:</p>
+                <ul>
+                  <li><b>Oś X:</b> kąt fazowy napięcia zasilającego (0&ndash;360&deg;) &ndash; jeden pełny okres 50&nbsp;Hz (20&nbsp;ms),</li>
+                  <li><b>Oś Y:</b> amplituda impulsu w miliwoltach [mV],</li>
+                  <li><b>Kolor punktu:</b> gęstość występowania wyładowań (mapa ciepła). Kolor niebieski oznacza pojedyncze zdarzenia,
+                      a kolory ciepłe (żółty, czerwony) oznaczają obszary, w których wyładowania powtarzają się najczęściej.
+                      Pozwala to natychmiast rozpoznać typ defektu (np. ulot, wyładowania wtrącone, ślizgowe).</li>
+                </ul>
+                <p><b>Jakie próbki i za jaki okres są brane pod uwagę?</b></p>
+                <ul>
+                  <li>Na wykres PRPD trafiają <b>wyłącznie zakwalifikowane impulsy</b> (spełniające kryteria z punktu 6).</li>
+                  <li><b>Start once (Pojedynczy pomiar):</b> Każde kliknięcie <i>Start once</i> czyści poprzedni wykres oraz bufor oscylogramów i wykonuje nowy pomiar dla zadanego czasu trwania (<i>Duration</i>). Wykres PRPD prezentuje impulsy zebrane w tym jednym oknie pomiarowym.</li>
+                  <li><b>Start sequence (Pomiar sekwencyjny):</b> Program zbiera wykres PRPD dla zadanego czasu <i>Duration</i>, zapisuje plik, a następnie automatycznie czyści wykres PRPD i rozpoczyna tworzenie kolejnego nowego wykresu dla następnego okna czasowego. Cykl powtarza się w pętli aż do kliknięcia <b>Stop RP</b>.</li>
+                </ul>
+                <p><b>Licznik "Pulses":</b> wskazuje łączną liczbę zarejestrowanych impulsów o amplitudzie &ge; <i>Pulse ampl. threshold</i> w bieżącym oknie. Jeśli zmienisz próg po pomiarze, program natychmiast zaktualizuje liczbę zliczonych impulsów oraz widok wykresu.</p>
+
+                <h3>8. Zapisywanie plików (.rppr.bin) i ich późniejsze odczytywanie</h3>
+                <p>Każdy pomiar rejestrowany przez program jest zapisywany w postaci binarnego pliku archiwalnego z rozszerzeniem <b>.rppr.bin</b>.</p>
+
+                <p><b>Kiedy i jak tworzone są pliki? Różnica między Start once a Start sequence:</b></p>
+                <ul>
+                  <li><b>Start once:</b> Program wykonuje pojedynczą akwizycję o zadanym czasie trwania (<i>Duration</i>). Po odebraniu wszystkich danych plik zostaje sfinalizowany i zapisany na dysku. Powstaje dokładnie <b>jeden plik</b> odpowiadający temu pomiarowi.</li>
+                  <li><b>Start sequence:</b> Program rejestruje dane w sposób ciągły w powtarzających się oknach czasowych (o długości <i>Duration</i>). Dla każdego okna tworzony jest <b>osobny, nowy plik</b> z unikalnym znacznikiem czasu (z dokładnością do milisekund). Po zakończeniu okna plik jest zapisywany, a program natychmiast rozpoczyna zapis kolejnego pliku w następnym oknie, aż do naciśnięcia przycisku <b>Stop RP</b>.
+                  <br><i>Wskazówka:</i> Parametr <b>File limit</b> w panelu <i>Output Configuration</i> pozwala ograniczyć maksymalną liczbę przechowywanych plików w sesji (starsze pliki są usuwane w kolejce FIFO, chroniąc dysk przed zapełnieniem).</li>
+                </ul>
+
+                <p><b>Gdzie pliki są zapisywane i jak są nazywane?</b></p>
+                <ul>
+                  <li>Pliki trafiają do katalogu wyjściowego (domyślnie <code>data/received_bin</code> lub ścieżki wybranej w <i>Output Configuration</i>).</li>
+                  <li>W zależności od wybranego defektu pliki są automatycznie segregowane do podkatalogów tematycznych, np. <code>sessions/Corona_HV/</code>.</li>
+                  <li>Nazwa pliku tworzona jest automatycznie z parametrów eksperymentu:<br>
+                  <code>&lt;TypDefektu&gt;_&lt;Napięcie&gt;kV_&lt;Czujnik&gt;_&lt;Wariant&gt;_[Etykieta]_[Data_Godzina_Milisekundy].rppr.bin</code><br>
+                  Przykładowo: <code>Corona_HV_12kV_HFCT_A_Lab_20261027_124530_123.rppr.bin</code>. Dzięki temu już sama nazwa i ścieżka pliku precyzyjnie opisują warunki fizyczne badania.</li>
+                </ul>
+
+                <p><b>Co jest zapisane wewnątrz pliku?</b></p>
+                <ul>
+                  <li><b>Nagłówek JSON:</b> Pełne metadane konfiguracji sprzętowej i eksperymentu &ndash; lista nagrywanych kanałów (IN1, IN2), ustawione zakresy wejściowe (gains: LV/HV), częstotliwość próbkowania <i>fs</i>, decymacja, parametry wyzwalania (trigger), typ defektu, napięcie probiercze [kV], typ czujnika i wariant obiektu.</li>
+                  <li><b>Ramki danych binarnych:</b> Każda ramka posiada sumę kontrolną CRC32 (gwarantującą spójność danych) oraz 14-bitowe surowe próbki przetwornika ADC (int16). Jeśli wybrano 2 kanały (IN1 + IN2), plik zawiera jednocześnie pełny sygnał wyładowań (CH1) oraz fizyczną sinusoidę referencyjną 50 Hz (CH2).</li>
+                </ul>
+
+                <p><b>Co można zrobić po ponownym wczytaniu pliku do programu?</b></p>
+                <ul>
+                  <li>Plik można wczytać w dowolnym momencie z dysku (menu <i>File &rarr; Open data file...</i> lub z listy odebranych sygnałów).</li>
+                  <li>Program odczytuje z nagłówka parametry próbkowania i zakresów LV/HV, odtwarzając rzeczywiste amplitudy w miliwoltach [mV].</li>
+                  <li><b>Pełna analiza post-processing:</b> Na wczytanym sygnale można <b>dowolnie zmieniać parametry filtracji i detekcji</b> (częstotliwość odcięcia HPF, dobroć Q, rząd filtra, próg <i>Pulse ampl. threshold</i> oraz czas martwy <i>Dead time</i>). Wykres PRPD oraz oscylogramy są natychmiast przeliczane i przerysowywane na nowo z oryginalnych surowych próbek!</li>
+                  <li>Możliwa jest automatyczna klasyfikacja defektu (przycisk <i>Classify</i>) oraz eksport wyekstrahowanych impulsów do pliku CSV (<i>File &rarr; Export raw pulses to CSV</i>).</li>
+                </ul>
+
+                <h3>9. Podsumowanie &ndash; cały łańcuch przetwarzania krok po kroku</h3>
+                <ol>
+                  <li><b>Akwizycja ADC:</b> Red Pitaya pobiera próbki sygnału z wejść IN1 i IN2 z częstotliwością <i>fs = 125 MS/s / Decimation</i>.</li>
+                  <li><b>Transmisja danych:</b> Serwer strumieniuje ramki danych binarnie przez sieć TCP/IP do programu.</li>
+                  <li><b>Skalowanie napięcia:</b> Program przelicza surowe bity int16 na miliwolty [mV] wg zakresu LV/HV.</li>
+                  <li><b>Podgląd Base signal:</b> Sygnał trafia na górny wykres jako niefiltrowany przebieg wejściowy (z opcjonalną referencją IN2).</li>
+                  <li><b>Filtracja cyfrowa HPF:</b> Filtr górnoprzepustowy usuwa wolną sinusoidę 50&nbsp;Hz i zakłócenia tła.</li>
+                  <li><b>Podgląd Filtered signal:</b> Wykres dolny prezentuje wyczyszczone, szybkie piki WNZ.</li>
+                  <li><b>Detekcja impulsów:</b> Algorytm lokalizuje wierzchołki powyżej progu z uwzględnieniem czasu martwego (Dead time).</li>
+                  <li><b>Wyznaczenie fazy:</b> Każdemu impulsowi przypisywany jest kąt fazowy &phi; (0&ndash;360&deg;) względem przejścia przez zero napięcia 50&nbsp;Hz.</li>
+                  <li><b>Wykres PRPD i licznik Pulses:</b> Wyznaczone impulsy nanoszone są na diagram fazowo-rozdzielczy, a licznik Pulses ulega zwiększeniu.</li>
+                </ol>
+                <br>
+                </body>
+                </html>
+                """,
+                bodyColor, bgColor,
+                titleColor,
+                titleColor,
+                bodyColor,
+                boldColor,
+                codeBg,
+                hrColor,
+                quoteBg, quoteBorder
+            );
+
+            JEditorPane editorPane = new JEditorPane("text/html", html);
+            editorPane.setEditable(false);
+            editorPane.setCaretPosition(0);
+            editorPane.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
+            Color panelBg = dark ? new Color(43, 45, 48) : Color.WHITE;
+            editorPane.setBackground(panelBg);
+
+            JScrollPane scrollPane = new JScrollPane(editorPane);
+            scrollPane.getViewport().setBackground(panelBg);
+            scrollPane.setPreferredSize(new Dimension(760, 580));
+            scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+
+            JOptionPane.showMessageDialog(
+                this,
+                scrollPane,
+                "About – jak działa program PRPD Tool",
+                JOptionPane.PLAIN_MESSAGE
+            );
+        } finally {
+            aboutDialogShowing = false;
         }
     }
 
@@ -895,8 +1135,20 @@ public class PRPDTool extends JFrame {
         
         try { String v = data.get(RP_HOST); if(v != null) rpHostField.setText(v); } catch(Exception e) {}
         try { String v = data.get(RP_PORT); if(v != null) rpPortSpinner.setValue(Integer.parseInt(v)); } catch(Exception e) {}
-        try { String v = data.get(RP_CHANNELS); if(v != null) rpChannelsCombo.setSelectedItem(v); } catch(Exception e) {}
-        try { String v = data.get(RP_VISUAL_CHANNEL); if(v != null) rpVisualChannelCombo.setSelectedItem(v); } catch(Exception e) {}
+        try {
+            String v = data.get(RP_CHANNELS);
+            if (v != null) {
+                if ("IN1+IN2".equals(v)) v = "IN1 + IN2";
+                rpChannelsCombo.setSelectedItem(v);
+            }
+        } catch(Exception e) {}
+        try {
+            String v = data.get(RP_VISUAL_CHANNEL);
+            if (v != null) {
+                if ("IN1+IN2".equals(v)) v = "IN1 + IN2";
+                rpVisualChannelCombo.setSelectedItem(v);
+            }
+        } catch(Exception e) {}
         try { String v = data.get(RP_GAIN1); if(v != null) rpGain1Combo.setSelectedItem(v); } catch(Exception e) {}
         try { String v = data.get(RP_GAIN2); if(v != null) rpGain2Combo.setSelectedItem(v); } catch(Exception e) {}
         try { String v = data.get(RP_DECIMATION); if(v != null) rpDecimationSpinner.setValue(Integer.parseInt(v)); } catch(Exception e) {}
@@ -1144,11 +1396,11 @@ public class PRPDTool extends JFrame {
                     java.util.List<String> problems = new java.util.ArrayList<>();
                     String channels = rpChannelsCombo != null ? (String) rpChannelsCombo.getSelectedItem() : "IN1";
                     String visual = rpVisualChannelCombo != null ? (String) rpVisualChannelCombo.getSelectedItem() : "IN1";
-                    if (!"IN1+IN2".equals(channels)) {
-                        problems.add("  Channels   zmień na \"IN1+IN2\" (aktualnie: \"" + channels + "\")");
+                    if (!"IN1 + IN2".equals(channels) && !"IN1+IN2".equals(channels)) {
+                        problems.add("  Channels   zmień na \"IN1 + IN2\" (aktualnie: \"" + channels + "\")");
                     }
                     if ("IN2".equals(visual)) {
-                        problems.add("  Visual   zmień na \"IN1\" (IN2 jest zarezerwowany jako referencja 50 Hz)");
+                        problems.add("  Visual plot   zmień na \"IN1\" lub \"IN1 + IN2\" (IN2 jest zarezerwowany jako referencja 50 Hz)");
                     }
                     if (!problems.isEmpty()) {
                         useHwPhaseRefCb.setSelected(false);
@@ -1169,7 +1421,7 @@ public class PRPDTool extends JFrame {
             hwPanel.setOpaque(false);
             hwPanel.add(useHwPhaseRefCb, BorderLayout.CENTER);
             JLabel hwHelp = new JLabel(new HelpIcon());
-            hwHelp.setToolTipText(htmlTooltip("Hardware Phase Synchronization.\n\nForces the software to use the physical signal on IN2 for 50 Hz phase synchronization.\nIf unchecked, the software attempts to mathematically extract the reference from the main IN1 signal.\n\nNote: Requires \"Channels\" to be set to IN1+IN2 and \"Visual\" to IN1 in the Red Pitaya Settings."));
+            hwHelp.setToolTipText(htmlTooltip("Hardware Phase Synchronization.\n\nForces the software to use the physical signal on IN2 for 50 Hz phase synchronization.\nIf unchecked, the software attempts to mathematically extract the reference from the main IN1 signal.\n\nNote: Requires \"Channels\" to be set to IN1 + IN2 and \"Visual plot\" to IN1 or IN1 + IN2 in the Red Pitaya Settings."));
             hwHelp.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
             hwHelp.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
             hwPanel.add(hwHelp, BorderLayout.EAST);
@@ -1475,10 +1727,18 @@ public class PRPDTool extends JFrame {
 
         rpHostField = new JTextField(configValue(RP_HOST, "rp-f0f84e.local"), 12);
         rpPortSpinner = new JSpinner(new SpinnerNumberModel(configInt(RP_PORT, 9999), 1, 65535, 1));
-        rpChannelsCombo = new JComboBox<>(new String[]{"IN1", "IN2", "IN1+IN2"});
-        rpChannelsCombo.setSelectedItem(configValue(RP_CHANNELS, "IN1"));
-        rpVisualChannelCombo = new JComboBox<>(new String[]{"IN1", "IN2"});
-        rpVisualChannelCombo.setSelectedItem(configValue(RP_VISUAL_CHANNEL, "IN1"));
+        rpChannelsCombo = new JComboBox<>(new String[]{"IN1", "IN2", "IN1 + IN2"});
+        String savedChannels = configValue(RP_CHANNELS, "IN1 + IN2");
+        if ("IN1+IN2".equals(savedChannels)) {
+            savedChannels = "IN1 + IN2";
+        }
+        rpChannelsCombo.setSelectedItem(savedChannels);
+        rpVisualChannelCombo = new JComboBox<>(new String[]{"IN1", "IN2", "IN1 + IN2"});
+        String savedVisual = configValue(RP_VISUAL_CHANNEL, "IN1 + IN2");
+        if ("IN1+IN2".equals(savedVisual)) {
+            savedVisual = "IN1 + IN2";
+        }
+        rpVisualChannelCombo.setSelectedItem(savedVisual);
         rpGain1Combo = new JComboBox<>(new String[]{"LV", "HV"});
         rpGain1Combo.setSelectedItem(configValue(RP_GAIN1, "LV"));
         rpGain2Combo = new JComboBox<>(new String[]{"LV", "HV"});
@@ -1533,7 +1793,7 @@ public class PRPDTool extends JFrame {
         addFormRow(formPanel, "Host", rpHostField, helpText("host"));
         addFormRow(formPanel, "Port", rpPortSpinner, helpText("port"));
         addFormRow(formPanel, "Channels", rpChannelsCombo, helpText("channels"));
-        addFormRow(formPanel, "Visual", rpVisualChannelCombo, helpText("visual"));
+        addFormRow(formPanel, "Visual plot", rpVisualChannelCombo, helpText("visual"));
         addFormRow(formPanel, "IN1 range", rpGain1Combo, helpText("gain1"));
         addFormRow(formPanel, "IN2 range", rpGain2Combo, helpText("gain2"));
         addFormRow(formPanel, "Decimation (fs)", rpDecimationSpinner, helpText("decimation"));
@@ -1878,7 +2138,13 @@ public class PRPDTool extends JFrame {
         rpPanel.add(actionsAndFiles, BorderLayout.NORTH);
         rpPanel.add(rpEstimatedSizeLabel, BorderLayout.SOUTH);
 
-        rpChannelsCombo.addActionListener(e -> updateRedPitayaChannelControls());
+        rpChannelsCombo.addActionListener(e -> updateRedPitayaChannelControls(true));
+        rpVisualChannelCombo.addActionListener(e -> {
+            boolean isDual = "IN1 + IN2".equals(rpVisualChannelCombo.getSelectedItem());
+            if (interactiveSignalPanel != null) {
+                interactiveSignalPanel.setShowIn2(isDual);
+            }
+        });
         rpModeCombo.addActionListener(e -> updateRedPitayaModeControls());
         rpDecimationSpinner.addChangeListener(e -> {
             int val = (Integer) rpDecimationSpinner.getValue();
@@ -1893,6 +2159,15 @@ public class PRPDTool extends JFrame {
         rpDurationSpinner.addChangeListener(e -> updateRedPitayaDerivedControls());
         rpFrameSizeCombo.addActionListener(e -> updateRedPitayaDerivedControls());
         rpFrameCountSpinner.addChangeListener(e -> updateRedPitayaDerivedControls());
+
+        setupAutoClampListener(rpDurationSpinner);
+        setupAutoClampListener(rpFrameCountSpinner);
+        setupAutoClampListener(rpDecimationSpinner);
+        setupAutoClampListener(rpPortSpinner);
+        setupAutoClampListener(rpTriggerLevelSpinner);
+        setupAutoClampListener(rpTriggerDelaySpinner);
+        setupAutoClampListener(rpTriggerTimeoutSpinner);
+
         updateRedPitayaChannelControls();
         updateRedPitayaModeControls();
         return rpPanel;
@@ -1957,17 +2232,94 @@ public class PRPDTool extends JFrame {
     }
 
     private void setDecimalSpinnerEditor(JSpinner spinner) {
-        spinner.setEditor(new JSpinner.NumberEditor(spinner, "0.0##############"));
-        if (spinner.getEditor() instanceof JSpinner.DefaultEditor editor) {
-            editor.getTextField().setColumns(12);
+        JSpinner.NumberEditor editor = new JSpinner.NumberEditor(spinner, "0.0##############");
+        if (spinner.getModel() instanceof SpinnerNumberModel numberModel) {
+            DecimalFormat df = (DecimalFormat) editor.getFormat();
+            NumberFormatter clampingFormatter = new NumberFormatter(df) {
+                @Override
+                public Object stringToValue(String text) throws ParseException {
+                    if (text == null || text.trim().isEmpty()) {
+                        throw new ParseException("Empty text", 0);
+                    }
+                    try {
+                        double v = Double.parseDouble(text.trim().replace(',', '.'));
+                        Comparable<?> max = numberModel.getMaximum();
+                        Comparable<?> min = numberModel.getMinimum();
+                        if (max instanceof Number maxN && v > maxN.doubleValue()) {
+                            v = maxN.doubleValue();
+                        }
+                        if (min instanceof Number minN && v < minN.doubleValue()) {
+                            v = minN.doubleValue();
+                        }
+                        return v;
+                    } catch (NumberFormatException e) {
+                        throw new ParseException(e.getMessage(), 0);
+                    }
+                }
+            };
+            clampingFormatter.setValueClass(Double.class);
+            editor.getTextField().setFormatterFactory(new DefaultFormatterFactory(clampingFormatter));
+        }
+        spinner.setEditor(editor);
+        if (spinner.getEditor() instanceof JSpinner.DefaultEditor defaultEditor) {
+            defaultEditor.getTextField().setColumns(12);
         }
     }
 
     private void setIntegerSpinnerEditor(JSpinner spinner) {
-        spinner.setEditor(new JSpinner.NumberEditor(spinner, "#"));
-        if (spinner.getEditor() instanceof JSpinner.DefaultEditor editor) {
-            editor.getTextField().setColumns(10);
+        JSpinner.NumberEditor editor = new JSpinner.NumberEditor(spinner, "#");
+        if (spinner.getModel() instanceof SpinnerNumberModel numberModel) {
+            DecimalFormat df = (DecimalFormat) editor.getFormat();
+            NumberFormatter clampingFormatter = new NumberFormatter(df) {
+                @Override
+                public Object stringToValue(String text) throws ParseException {
+                    if (text == null || text.trim().isEmpty()) {
+                        throw new ParseException("Empty text", 0);
+                    }
+                    try {
+                        long v = Math.round(Double.parseDouble(text.trim().replace(',', '.')));
+                        Comparable<?> max = numberModel.getMaximum();
+                        Comparable<?> min = numberModel.getMinimum();
+                        if (max instanceof Number maxN && v > maxN.longValue()) {
+                            v = maxN.longValue();
+                        }
+                        if (min instanceof Number minN && v < minN.longValue()) {
+                            v = minN.longValue();
+                        }
+                        if (numberModel.getValue() instanceof Long) {
+                            return v;
+                        }
+                        return (int) Math.min(Integer.MAX_VALUE, Math.max(Integer.MIN_VALUE, v));
+                    } catch (NumberFormatException e) {
+                        throw new ParseException(e.getMessage(), 0);
+                    }
+                }
+            };
+            clampingFormatter.setValueClass(numberModel.getValue() instanceof Long ? Long.class : Integer.class);
+            editor.getTextField().setFormatterFactory(new DefaultFormatterFactory(clampingFormatter));
         }
+        spinner.setEditor(editor);
+        if (spinner.getEditor() instanceof JSpinner.DefaultEditor defaultEditor) {
+            defaultEditor.getTextField().setColumns(10);
+        }
+    }
+
+    private void setupAutoClampListener(JSpinner spinner) {
+        if (spinner == null || !(spinner.getEditor() instanceof JSpinner.DefaultEditor editor)) {
+            return;
+        }
+        JFormattedTextField tf = editor.getTextField();
+        tf.addActionListener(e -> {
+            commitSpinnerEdit(spinner);
+            updateRedPitayaDerivedControls();
+        });
+        tf.addFocusListener(new java.awt.event.FocusAdapter() {
+            @Override
+            public void focusLost(java.awt.event.FocusEvent e) {
+                commitSpinnerEdit(spinner);
+                updateRedPitayaDerivedControls();
+            }
+        });
     }
 
     private String helpText(String key) {
@@ -1991,18 +2343,21 @@ public class PRPDTool extends JFrame {
                 + "Available options:\n"
                 + "- IN1: Record only channel 1 (typically the main PD signal).\n"
                 + "- IN2: Record only channel 2.\n"
-                + "- IN1+IN2: Record both channels simultaneously. Required if you want to use the 'HW Phase Ref' feature to synchronize the PRPD plot with a reference voltage on IN2.\n"
+                + "- IN1 + IN2: Record both channels simultaneously. Required if you want to use the 'HW Phase Ref' feature to synchronize the PRPD plot with a reference voltage on IN2.\n"
                 + "\n"
                 + "Hardware Buffer Impact (256 MB AXI DMA DDR RAM):\n"
                 + "Red Pitaya STEMlab 125-14 allocates a dedicated 256 MB block in DDR RAM for hardware AXI DMA streaming (134,215,680 total 16-bit samples).\n"
                 + "- 1 Channel (IN1 or IN2): The entire buffer is dedicated to one channel: 134,215,680 samples (~1.07 s at 125 MS/s, ~68.7 s at Decimation 64).\n"
-                + "- 2 Channels (IN1+IN2): The 256 MB buffer is shared equally: 67,107,840 samples per channel (~0.53 s at 125 MS/s, ~34.3 s at Decimation 64).\n"
+                + "- 2 Channels (IN1 + IN2): The 256 MB buffer is shared equally: 67,107,840 samples per channel (~0.53 s at 125 MS/s, ~34.3 s at Decimation 64).\n"
                 + "\n"
                 + "Selecting 2 channels halves the maximum allowed acquisition duration.";
             case "visual" ->
-                "Channel forwarded to the existing Java PRPD visualization.\n"
+                "Channel forwarded to the PRPD visualization and signal viewer.\n"
                 + "\n"
-                + "The Red Pitaya acquisition may contain IN1 and IN2, but the main PRPD viewer displays one selected channel.";
+                + "Available options:\n"
+                + "- IN1: Visualize channel 1.\n"
+                + "- IN2: Visualize channel 2.\n"
+                + "- IN1 + IN2: Display IN1 on the main plot and overlay IN2 in the background (grey curve, right Y-axis) on the Base signal graph.";
             case "gain1" ->
                 "Red Pitaya input range configuration for channel IN1.\n"
                 + "\n"
@@ -2112,7 +2467,7 @@ public class PRPDTool extends JFrame {
                 + "The Red Pitaya FPGA streams continuous samples into a dedicated 256 MB (268,431,360 bytes) "
                 + "circular DDR RAM buffer via AXI DMA. Each sample is 16-bit (2 bytes), allowing up to:\n"
                 + "- 134,215,680 samples for 1 channel (IN1 or IN2)\n"
-                + "- 67,107,840 samples per channel for 2 channels (IN1+IN2)\n"
+                + "- 67,107,840 samples per channel for 2 channels (IN1 + IN2)\n"
                 + "\n"
                 + "Why Duration is bounded:\n"
                 + "If an acquisition exceeds the buffer capacity before data is transferred, the circular DMA pointer "
@@ -2342,6 +2697,10 @@ public class PRPDTool extends JFrame {
     }
 
     private void updateRedPitayaChannelControls() {
+        updateRedPitayaChannelControls(false);
+    }
+
+    private void updateRedPitayaChannelControls(boolean syncVisualToChannels) {
         String channels = (String) rpChannelsCombo.getSelectedItem();
         Object selectedVisual = rpVisualChannelCombo.getSelectedItem();
         boolean hasIn1 = !"IN2".equals(channels);
@@ -2355,8 +2714,25 @@ public class PRPDTool extends JFrame {
         if (hasIn2) {
             rpVisualChannelCombo.addItem("IN2");
         }
-        if (selectedVisual != null) {
-            rpVisualChannelCombo.setSelectedItem(selectedVisual);
+        if (hasIn1 && hasIn2) {
+            rpVisualChannelCombo.addItem("IN1 + IN2");
+        }
+        if (syncVisualToChannels) {
+            if ("IN1 + IN2".equals(channels) || "IN1+IN2".equals(channels)) {
+                rpVisualChannelCombo.setSelectedItem("IN1 + IN2");
+            } else if ("IN2".equals(channels)) {
+                rpVisualChannelCombo.setSelectedItem("IN2");
+            } else {
+                rpVisualChannelCombo.setSelectedItem("IN1");
+            }
+        } else {
+            if (selectedVisual != null) {
+                rpVisualChannelCombo.setSelectedItem(selectedVisual);
+            }
+        }
+        boolean isDual = "IN1 + IN2".equals(rpVisualChannelCombo.getSelectedItem());
+        if (interactiveSignalPanel != null) {
+            interactiveSignalPanel.setShowIn2(isDual);
         }
         updateRedPitayaDerivedControls();
     }
@@ -2434,8 +2810,12 @@ public class PRPDTool extends JFrame {
             }
 
             if (durationMode) {
-                durationS = Math.max(0.0, currentSpinnerDoubleValue(rpDurationSpinner));
-                if (durationS > maxDurationS) {
+                durationS = currentSpinnerDoubleValue(rpDurationSpinner);
+                double minDurationS = Math.max(0.000001, 1.0 / sampleRate);
+                if (durationS < minDurationS) {
+                    durationS = minDurationS;
+                    setSpinnerDoubleValue(rpDurationSpinner, durationS);
+                } else if (durationS > maxDurationS) {
                     durationS = maxDurationS;
                     setSpinnerDoubleValue(rpDurationSpinner, durationS);
                 }
@@ -2451,8 +2831,11 @@ public class PRPDTool extends JFrame {
                 frameCount = ceilDiv(totalSamples, frameSize);
                 setSpinnerLongValue(rpFrameCountSpinner, frameCount);
             } else {
-                frameCount = Math.max(1L, currentSpinnerIntValue(rpFrameCountSpinner));
-                if (frameCount > maxFrameCount) {
+                frameCount = currentSpinnerIntValue(rpFrameCountSpinner);
+                if (frameCount < 1L) {
+                    frameCount = 1L;
+                    setSpinnerLongValue(rpFrameCountSpinner, frameCount);
+                } else if (frameCount > maxFrameCount) {
                     frameCount = maxFrameCount;
                     setSpinnerLongValue(rpFrameCountSpinner, frameCount);
                 }
@@ -2544,7 +2927,7 @@ public class PRPDTool extends JFrame {
         config.channels = switch ((String) rpChannelsCombo.getSelectedItem()) {
             case "IN2" ->
                 new int[]{2};
-            case "IN1+IN2" ->
+            case "IN1 + IN2", "IN1+IN2" ->
                 new int[]{1, 2};
             default ->
                 new int[]{1};
@@ -2594,17 +2977,43 @@ public class PRPDTool extends JFrame {
     }
 
     private void commitSpinnerEdit(JSpinner spinner) {
+        if (spinner == null) return;
         if (spinner.getEditor() instanceof JSpinner.DefaultEditor editor) {
             String text = editor.getTextField().getText().trim().replace(',', '.');
+            if (text.isEmpty() || text.equals(".") || text.equals("-")) {
+                editor.getTextField().setValue(spinner.getValue());
+                return;
+            }
             SpinnerModel model = spinner.getModel();
             if (model instanceof SpinnerNumberModel numberModel) {
                 Number current = numberModel.getNumber();
                 try {
+                    Comparable<?> max = numberModel.getMaximum();
+                    Comparable<?> min = numberModel.getMinimum();
                     if (current instanceof Integer || current instanceof Long) {
-                        spinner.setValue(Integer.parseInt(text));
+                        long val = Math.round(Double.parseDouble(text));
+                        if (max instanceof Number maxN && val > maxN.longValue()) {
+                            val = maxN.longValue();
+                        }
+                        if (min instanceof Number minN && val < minN.longValue()) {
+                            val = minN.longValue();
+                        }
+                        if (current instanceof Long) {
+                            spinner.setValue(val);
+                        } else {
+                            spinner.setValue((int) val);
+                        }
                     } else {
-                        spinner.setValue(Double.parseDouble(text));
+                        double val = Double.parseDouble(text);
+                        if (max instanceof Number maxN && val > maxN.doubleValue()) {
+                            val = maxN.doubleValue();
+                        }
+                        if (min instanceof Number minN && val < minN.doubleValue()) {
+                            val = minN.doubleValue();
+                        }
+                        spinner.setValue(val);
                     }
+                    editor.getTextField().setValue(spinner.getValue());
                     editor.getTextField().setBackground(UIManager.getColor("TextField.background"));
                     return;
                 } catch (NumberFormatException ex) {
@@ -2629,10 +3038,26 @@ public class PRPDTool extends JFrame {
     }
 
     private double currentSpinnerDoubleValue(JSpinner spinner) {
+        if (spinner != null && spinner.getEditor() instanceof JSpinner.DefaultEditor editor) {
+            String text = editor.getTextField().getText().trim().replace(',', '.');
+            if (!text.isEmpty() && !text.equals(".") && !text.equals("-")) {
+                try {
+                    return Double.parseDouble(text);
+                } catch (NumberFormatException ignored) {}
+            }
+        }
         return ((Number) spinner.getValue()).doubleValue();
     }
 
     private int currentSpinnerIntValue(JSpinner spinner) {
+        if (spinner != null && spinner.getEditor() instanceof JSpinner.DefaultEditor editor) {
+            String text = editor.getTextField().getText().trim().replace(',', '.');
+            if (!text.isEmpty() && !text.equals(".") && !text.equals("-")) {
+                try {
+                    return (int) Math.min(Integer.MAX_VALUE, Math.max(Integer.MIN_VALUE, Math.round(Double.parseDouble(text))));
+                } catch (NumberFormatException ignored) {}
+            }
+        }
         return ((Number) spinner.getValue()).intValue();
     }
 
@@ -2652,12 +3077,15 @@ public class PRPDTool extends JFrame {
 
     private int redPitayaChannelCount() {
         String channels = (String) rpChannelsCombo.getSelectedItem();
-        return "IN1+IN2".equals(channels) ? 2 : 1;
+        return ("IN1 + IN2".equals(channels) || "IN1+IN2".equals(channels)) ? 2 : 1;
     }
 
     private void setSpinnerLongValue(JSpinner spinner, long value) {
         long bounded = Math.max(1L, Math.min(Integer.MAX_VALUE, value));
         spinner.setValue((int) bounded);
+        if (spinner.getEditor() instanceof JSpinner.DefaultEditor editor) {
+            editor.getTextField().setValue((int) bounded);
+        }
     }
 
     private void setSpinnerDoubleValue(JSpinner spinner, double value) {
@@ -2672,6 +3100,9 @@ public class PRPDTool extends JFrame {
             }
         }
         spinner.setValue(value);
+        if (spinner.getEditor() instanceof JSpinner.DefaultEditor editor) {
+            editor.getTextField().setValue(value);
+        }
     }
 
     private long multiplySaturating(long a, long b) {
@@ -2725,7 +3156,7 @@ public class PRPDTool extends JFrame {
             configuration.saveValue(RP_HOST, config.host);
             configuration.saveValue(RP_PORT, Integer.toString(config.port));
             configuration.saveValue(RP_CHANNELS, (String) rpChannelsCombo.getSelectedItem());
-            configuration.saveValue(RP_VISUAL_CHANNEL, config.visualChannel == 2 ? "IN2" : "IN1");
+            configuration.saveValue(RP_VISUAL_CHANNEL, (String) rpVisualChannelCombo.getSelectedItem());
             configuration.saveValue(RP_GAIN1, config.gainCh1);
             configuration.saveValue(RP_GAIN2, config.gainCh2);
             configuration.saveValue(RP_DECIMATION, Integer.toString(config.decimation));
@@ -3242,6 +3673,7 @@ public class PRPDTool extends JFrame {
         if (autoscaleCb != null && autoscaleCb.isSelected()) { applyAutoscale(); } else { center.setImage(histogram.getImage()); }
         center.revalidate();
 
+        interactiveSignalPanel.setShowIn2("IN1 + IN2".equals(rpVisualChannelCombo.getSelectedItem()));
         interactiveSignalPanel.reset(
                 topPlotMode == 2 ? "Base signal" : (topPlotMode == 1 ? "Baseline signal" : "Signal envelope"),
                 topPlotMode == 2 ? passThrough : (topPlotMode == 1 ? lfFilter : abs),
@@ -3539,6 +3971,7 @@ public class PRPDTool extends JFrame {
             if (autoscaleCb != null && autoscaleCb.isSelected()) { applyAutoscale(); } else { center.setImage(histogram.getImage()); }
             center.revalidate();
 
+            interactiveSignalPanel.setShowIn2("IN1 + IN2".equals(rpVisualChannelCombo.getSelectedItem()));
             interactiveSignalPanel.reset(
                     topPlotMode == 2 ? "Base signal" : (topPlotMode == 1 ? "Baseline signal" : "Signal envelope"),
                     topPlotMode == 2 ? passThrough : (topPlotMode == 1 ? lfFilter : abs),

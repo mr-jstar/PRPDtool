@@ -206,6 +206,13 @@ def configure_dma(rp, config: dict) -> tuple[dict, dict[int, int]]:
                 rp.rp_AcqAxiSetTriggerDelay(rch, dma_trigger_delay),
             )
 
+    for ch in (1, 2):
+        if hasattr(rp, f"RP_CH_{ch}"):
+            try:
+                rp.rp_AcqAxiEnable(rp_channel(rp, ch), False)
+            except Exception:
+                pass
+
     buffer_starts: dict[int, int] = {}
     for index, ch in enumerate(channels):
         rch = rp_channel(rp, ch)
@@ -303,21 +310,29 @@ def send_frames(sock: socket.socket, rp, config: dict, buffer_starts: dict[int, 
         dma_trigger_delay = total_samples
     pre_trigger = max(0, total_samples - dma_trigger_delay)
 
-    pointers = {}
-    for ch in channels:
-        rch = rp_channel(rp, ch)
-        if hasattr(rp, "rp_AcqAxiGetWritePointerAtTrig"):
-            res = rp.rp_AcqAxiGetWritePointerAtTrig(rch)
-            check_status(f"rp_AcqAxiGetWritePointerAtTrig CH{ch}", res[0])
-            trig_pos = int(res[1])
-        else:
-            res = rp.rp_AcqAxiGetWritePointer(rch)
-            check_status(f"rp_AcqAxiGetWritePointer CH{ch}", res[0])
-            trig_pos = int(res[1])
+    # In synchronous multi-channel acquisition, both ADCs run in lockstep off the same
+    # 125 MHz clock and decimation. The trigger pointer from the active trigger channel
+    # (or CH1 as default master) serves as the unified reference position for all channels.
+    trig_src = str(config.get("trigger_source", "NOW")).upper()
+    if trig_src.startswith("CH2") and 2 in channels:
+        master_ch = 2
+    elif 1 in channels:
+        master_ch = 1
+    else:
+        master_ch = channels[0]
 
-        # Red Pitaya AXI DMA write pointer is a 0-based sample offset in [0, total_samples).
-        start_sample = (trig_pos - pre_trigger) % total_samples
-        pointers[ch] = start_sample
+    master_rch = rp_channel(rp, master_ch)
+    if hasattr(rp, "rp_AcqAxiGetWritePointerAtTrig"):
+        res = rp.rp_AcqAxiGetWritePointerAtTrig(master_rch)
+        check_status(f"rp_AcqAxiGetWritePointerAtTrig CH{master_ch}", res[0])
+        trig_pos = int(res[1])
+    else:
+        res = rp.rp_AcqAxiGetWritePointer(master_rch)
+        check_status(f"rp_AcqAxiGetWritePointer CH{master_ch}", res[0])
+        trig_pos = int(res[1])
+
+    # Red Pitaya AXI DMA write pointer is a 0-based sample offset in [0, total_samples).
+    start_sample = (trig_pos - pre_trigger) % total_samples
 
     sent = 0
     for seq in range(frame_count):
@@ -325,15 +340,16 @@ def send_frames(sock: socket.socket, rp, config: dict, buffer_starts: dict[int, 
         if n <= 0:
             break
         data = np.empty((n, len(channels)), dtype="<i2")
+        read_pos = (start_sample + sent) % total_samples
+        samples_to_end = total_samples - read_pos
         for index, ch in enumerate(channels):
-            read_pos = (pointers[ch] + sent) % total_samples
-            samples_to_end = total_samples - read_pos
+            rch = rp_channels[index]
             if samples_to_end >= n:
-                arr = read_channel_chunk(rp, rp_channels[index], read_pos, n)
+                arr = read_channel_chunk(rp, rch, read_pos, n)
             else:
                 arr = np.empty(n, dtype=np.int16)
-                arr[:samples_to_end] = read_channel_chunk(rp, rp_channels[index], read_pos, samples_to_end)
-                arr[samples_to_end:] = read_channel_chunk(rp, rp_channels[index], 0, n - samples_to_end)
+                arr[:samples_to_end] = read_channel_chunk(rp, rch, read_pos, samples_to_end)
+                arr[samples_to_end:] = read_channel_chunk(rp, rch, 0, n - samples_to_end)
             data[:, index] = arr.astype("<i2", copy=False)
         payload = data.tobytes(order="C")
         header = FRAME_HEADER.pack(

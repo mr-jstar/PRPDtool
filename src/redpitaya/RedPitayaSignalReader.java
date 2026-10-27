@@ -128,7 +128,7 @@ public class RedPitayaSignalReader implements SignalReader, Closeable {
                     selected = mv;
                 }
                 // Referencja 50Hz to ZAWSZE fizyczny kanał 2 (IN2), niezależnie od wyboru Visual
-                if (ch == ch2Index && ch2Index != visualIndex) {
+                if (ch == ch2Index) {
                     reference = mv;
                 }
             }
