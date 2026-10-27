@@ -224,35 +224,58 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         BufferedImage prpd = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = prpd.createGraphics();
         
-        int[][] prpdHist = new int[w][h];
-        int maxC = 0;
         double minA = data.getMin();
         double maxA = data.getMax();
         double[] phases = data.getPhases();
         double[] amps = data.getAmps();
-        
-        for (int i = 0; i < data.getSize(); i++) {
-            if (!showRawData && Math.abs(amps[i]) < displayThreshold) continue;
-            
-            int x = (int) (phases[i] / 360.0 * w);
-            int y = (int) (h - (amps[i] - minA) / (maxA - minA) * h);
-            if (y == h) y = h - 1;
-            if (x == w) x = w - 1;
-            
-            if (x >= 0 && x < w && y >= 0 && y < h) {
-                prpdHist[x][y]++;
-                if (prpdHist[x][y] > maxC) maxC = prpdHist[x][y];
+        int size = data.getSize();
+
+        if (showRawData) {
+            boolean isDark = prpdtool.PRPDConstants.isDarkTheme();
+            int rawColor = isDark ? 0xFF00FF00 : 0xFF009646;   // Kolor Filtered signal (Color.GREEN / rgb(0, 150, 70))
+            int centerColor = isDark ? 0xFFFFFFFF : 0xFF004D24; // Rdzeń punktu
+            for (int i = 0; i < size; i++) {
+                if (Math.abs(amps[i]) < displayThreshold) continue;
+                int x = (int) (phases[i] / 360.0 * w);
+                int y = (int) (h - (amps[i] - minA) / (maxA - minA) * h);
+                for (int dy = -1; dy <= 1; dy++) {
+                    int py = y + dy;
+                    if (py < 0 || py >= h) continue;
+                    for (int dx = -1; dx <= 1; dx++) {
+                        int px = x + dx;
+                        if (px >= 0 && px < w) {
+                            prpd.setRGB(px, py, (dx == 0 && dy == 0) ? centerColor : rawColor);
+                        }
+                    }
+                }
             }
-        }
-        
-        if (maxC > 0) {
-            double logMaxC = Math.log1p(maxC);
-            for (int x = 0; x < w; x++) {
-                for (int y = 0; y < h; y++) {
-                    int c = prpdHist[x][y];
-                    if (c > 0) {
-                        double v = Math.log1p(c) / logMaxC;
-                        prpd.setRGB(x, y, palette.getColorRGB(v));
+        } else {
+            int[][] prpdHist = new int[w][h];
+            int maxC = 0;
+            
+            for (int i = 0; i < size; i++) {
+                if (Math.abs(amps[i]) < displayThreshold) continue;
+                
+                int x = (int) (phases[i] / 360.0 * w);
+                int y = (int) (h - (amps[i] - minA) / (maxA - minA) * h);
+                if (y == h) y = h - 1;
+                if (x == w) x = w - 1;
+                
+                if (x >= 0 && x < w && y >= 0 && y < h) {
+                    prpdHist[x][y]++;
+                    if (prpdHist[x][y] > maxC) maxC = prpdHist[x][y];
+                }
+            }
+            
+            if (maxC > 0) {
+                double logMaxC = Math.log1p(maxC);
+                for (int x = 0; x < w; x++) {
+                    for (int y = 0; y < h; y++) {
+                        int c = prpdHist[x][y];
+                        if (c > 0) {
+                            double v = Math.log1p(c) / logMaxC;
+                            prpd.setRGB(x, y, palette.getColorRGB(v));
+                        }
                     }
                 }
             }
@@ -375,8 +398,6 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
             }
         }
 
-        java.util.Arrays.fill(screenHist, 0);
-        int maxC = 0;
         double minA = data.getMin();
         double maxA = data.getMax();
         double[] phases = data.getPhases();
@@ -386,62 +407,126 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         double mulX = (plotW / 360.0) * zoomX;
         double mulY = (maxA > minA) ? ((plotH / (maxA - minA)) * zoomY) : 0;
         double offY = plotH + offsetY + minA * mulY;
-        
-        for (int i = 0; i < size; i++) {
-            double amp = amps[i];
-            if (!showRawData && Math.abs(amp) < displayThreshold) continue;
-            
-            int screenX = (int) (phases[i] * mulX + offsetX);
-            if (screenX == plotW) screenX = plotW - 1;
-            if (screenX < 0 || screenX >= plotW) continue;
-            
-            int screenY = (int) (offY - amp * mulY);
-            if (screenY == plotH) screenY = plotH - 1;
-            if (screenY < 0 || screenY >= plotH) continue;
-            
-            for (int dy = -1; dy <= 1; dy++) {
-                for (int dx = -1; dx <= 1; dx++) {
-                    int sx = screenX + dx;
-                    int sy = screenY + dy;
-                    if (sx >= 0 && sx < plotW && sy >= 0 && sy < plotH) {
-                        int idx = sy * plotW + sx;
-                        screenHist[idx]++;
-                        if (screenHist[idx] > maxC) maxC = screenHist[idx];
-                    }
-                }
-            }
-        }
-        
-        if (maxC > 0) {
-            int[] colorMap = new int[maxC + 1];
-            double logMaxC = Math.log1p(maxC);
-            for (int c = 1; c <= maxC; c++) {
-                double v = Math.log1p(c) / logMaxC;
-                colorMap[c] = palette.getColorRGB(v);
-            }
-            
+
+        if (showRawData) {
+            // Tryb klasycznego Scatter Plot w kolorze wykresu "Filtered signal":
+            // Dark mode: Color.GREEN (0xFF00FF00) z jasnym rdzeniem
+            // Light mode: new Color(0, 150, 70) (0xFF009646) z ciemnozielonym rdzeniem
+            int rawColor = isDark ? 0xFF00FF00 : 0xFF009646;   // Kolor identyczny jak "Filtered signal"
+            int centerColor = isDark ? 0xFFFFFFFF : 0xFF004D24; // Rdzeń punktu (kontrastowy)
+
             java.awt.image.DataBuffer db = image.getRaster().getDataBuffer();
             if (db instanceof java.awt.image.DataBufferInt) {
                 int[] pixels = ((java.awt.image.DataBufferInt) db).getData();
-                for (int y = 0; y < plotH; y++) {
-                    int rowOffset = y * plotW;
-                    int imgY = top + y;
-                    int imgRowOffset = imgY * width;
-                    for (int x = 0; x < plotW; x++) {
-                        int c = screenHist[rowOffset + x];
-                        if (c > 0) {
-                            pixels[imgRowOffset + left + x] = colorMap[c];
+                for (int i = 0; i < size; i++) {
+                    if (Math.abs(amps[i]) < displayThreshold) continue;
+                    int screenX = (int) (phases[i] * mulX + offsetX);
+                    if (screenX < 0 || screenX >= plotW) continue;
+                    
+                    int screenY = (int) (offY - amps[i] * mulY);
+                    if (screenY < 0 || screenY >= plotH) continue;
+                    
+                    int cx = left + screenX;
+                    int cy = top + screenY;
+                    
+                    for (int dy = -2; dy <= 2; dy++) {
+                        int py = cy + dy;
+                        if (py < top || py >= top + plotH) continue;
+                        int rowOff = py * width;
+                        for (int dx = -2; dx <= 2; dx++) {
+                            if (dx * dx + dy * dy > 5) continue;
+                            int px = cx + dx;
+                            if (px >= left && px < left + plotW) {
+                                pixels[rowOff + px] = (dx == 0 && dy == 0) ? centerColor : rawColor;
+                            }
                         }
                     }
                 }
             } else {
-                for (int y = 0; y < plotH; y++) {
-                    int rowOffset = y * plotW;
-                    int imgY = top + y;
-                    for (int x = 0; x < plotW; x++) {
-                        int c = screenHist[rowOffset + x];
-                        if (c > 0) {
-                            image.setRGB(left + x, imgY, colorMap[c]);
+                for (int i = 0; i < size; i++) {
+                    if (Math.abs(amps[i]) < displayThreshold) continue;
+                    int screenX = (int) (phases[i] * mulX + offsetX);
+                    if (screenX < 0 || screenX >= plotW) continue;
+                    
+                    int screenY = (int) (offY - amps[i] * mulY);
+                    if (screenY < 0 || screenY >= plotH) continue;
+                    
+                    int cx = left + screenX;
+                    int cy = top + screenY;
+                    
+                    for (int dy = -2; dy <= 2; dy++) {
+                        int py = cy + dy;
+                        if (py < top || py >= top + plotH) continue;
+                        for (int dx = -2; dx <= 2; dx++) {
+                            if (dx * dx + dy * dy > 5) continue;
+                            int px = cx + dx;
+                            if (px >= left && px < left + plotW) {
+                                image.setRGB(px, py, (dx == 0 && dy == 0) ? centerColor : rawColor);
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            java.util.Arrays.fill(screenHist, 0);
+            int maxC = 0;
+
+            for (int i = 0; i < size; i++) {
+                double amp = amps[i];
+                if (Math.abs(amp) < displayThreshold) continue;
+                
+                int screenX = (int) (phases[i] * mulX + offsetX);
+                if (screenX == plotW) screenX = plotW - 1;
+                if (screenX < 0 || screenX >= plotW) continue;
+                
+                int screenY = (int) (offY - amp * mulY);
+                if (screenY == plotH) screenY = plotH - 1;
+                if (screenY < 0 || screenY >= plotH) continue;
+                
+                for (int dy = -1; dy <= 1; dy++) {
+                    for (int dx = -1; dx <= 1; dx++) {
+                        int sx = screenX + dx;
+                        int sy = screenY + dy;
+                        if (sx >= 0 && sx < plotW && sy >= 0 && sy < plotH) {
+                            int idx = sy * plotW + sx;
+                            screenHist[idx]++;
+                            if (screenHist[idx] > maxC) maxC = screenHist[idx];
+                        }
+                    }
+                }
+            }
+            
+            if (maxC > 0) {
+                int[] colorMap = new int[maxC + 1];
+                double logMaxC = Math.log1p(maxC);
+                for (int c = 1; c <= maxC; c++) {
+                    double v = Math.log1p(c) / logMaxC;
+                    colorMap[c] = palette.getColorRGB(v);
+                }
+                
+                java.awt.image.DataBuffer db = image.getRaster().getDataBuffer();
+                if (db instanceof java.awt.image.DataBufferInt) {
+                    int[] pixels = ((java.awt.image.DataBufferInt) db).getData();
+                    for (int y = 0; y < plotH; y++) {
+                        int rowOffset = y * plotW;
+                        int imgY = top + y;
+                        int imgRowOffset = imgY * width;
+                        for (int x = 0; x < plotW; x++) {
+                            int c = screenHist[rowOffset + x];
+                            if (c > 0) {
+                                pixels[imgRowOffset + left + x] = colorMap[c];
+                            }
+                        }
+                    }
+                } else {
+                    for (int y = 0; y < plotH; y++) {
+                        int rowOffset = y * plotW;
+                        int imgY = top + y;
+                        for (int x = 0; x < plotW; x++) {
+                            int c = screenHist[rowOffset + x];
+                            if (c > 0) {
+                                image.setRGB(left + x, imgY, colorMap[c]);
+                            }
                         }
                     }
                 }
@@ -513,7 +598,16 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
 
         // Opis
         g.setFont(bigFont);
-        g.drawString("PRPD", left, 20);
+        double[] amps = data.getAmps();
+        int size = data.getSize();
+        int validPulseCount = 0;
+        for (int i = 0; i < size; i++) {
+            if (Math.abs(amps[i]) >= displayThreshold) validPulseCount++;
+        }
+        String title = showRawData
+                ? String.format(Locale.US, "PRPD - Raw Data [%,d pulses]", validPulseCount)
+                : String.format(Locale.US, "PRPD [%,d pulses]", validPulseCount);
+        g.drawString(title, left, 20);
 
         g.setFont(smallFont);
         g.drawString("Phase [deg]", left + plotW / 2 - 40, height - 13);

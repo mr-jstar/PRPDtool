@@ -148,7 +148,7 @@ public class PRPDTool extends JFrame {
 
     private double ampMin = 0.0; // minimum histogramu
     private double ampMax = 100.0; // maximum histogramu
-    private double deadUs = 0; //martwy czas po wykryciu impulsu [µs]
+    private double deadUs = PRPDConstants.DEFAULT_DEAD_US; //martwy czas po wykryciu impulsu [µs]
     private double filterQ = 0.707; // Q filtra
     private int filterOrder = 4; // rząd filtra
 
@@ -1026,6 +1026,14 @@ public class PRPDTool extends JFrame {
                 help.setToolTipText(htmlTooltip(tooltipText));
                 help.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
                 help.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
+                final String paramName = p.name;
+                final String paramDesc = tooltipText;
+                help.addMouseListener(new java.awt.event.MouseAdapter() {
+                    @Override
+                    public void mouseClicked(java.awt.event.MouseEvent e) {
+                        showHelpDialog(paramName, paramDesc);
+                    }
+                });
                 
                 labelPanel.add(label, BorderLayout.CENTER);
                 labelPanel.add(help, BorderLayout.EAST);
@@ -1103,15 +1111,30 @@ public class PRPDTool extends JFrame {
                 if (histogram instanceof DynamicPRPDHistogram) {
                     ((DynamicPRPDHistogram) histogram).setShowRawData(showRawDataCb.isSelected());
                     center.setImage(histogram.getImage());
+                    center.repaint();
                 }
             });
             JPanel rawPanel = new JPanel(new BorderLayout(4, 0));
             rawPanel.setOpaque(false);
             rawPanel.add(showRawDataCb, BorderLayout.CENTER);
             JLabel rawHelp = new JLabel(new HelpIcon());
-            rawHelp.setToolTipText(htmlTooltip("Toggle PRPD rendering mode.\n\nWhen unchecked (default), the plot uses a heatmap interpolation where colors represent pulse density (e.g. red=many, blue=few).\n\nWhen checked, it bypasses the heatmap and draws the exact, raw individual pulse points as a simple scatter plot."));
+            String rawHelpMsg = "Przełącznik trybu renderowania PRPD:\n\n"
+                    + "• Odznaczony (domyślny - Heatmap):\n"
+                    + "  Wykres 2D gęstości prawdopodobieństwa wyładowań. Kolor każdego piksela zależy od liczby nakładających się "
+                    + "  impulsów (rzadkie/pojedyncze impulsy są ciemnogranatowe, a powtarzalne chmury WNZ świecą na żółto/czerwono/biel).\n\n"
+                    + "• Zaznaczony (Raw Data Scatter Plot):\n"
+                    + "  Klasyczny wykres punktowy w stałym, jaskrawym kolorze. Każdy pojedynczy impuls (nawet unikalna szpilka o zliczeniu 1) "
+                    + "  jest rysowany jako wyraźny punkt o średnicy 5 px z białym rdzeniem, całkowicie bez wygaszania gęstościowego. "
+                    + "  Pozwala to natychmiast zobaczyć 100% wszystkich impulsów, w tym rzadkie anomalie na szczytach.";
+            rawHelp.setToolTipText(htmlTooltip(rawHelpMsg));
             rawHelp.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
             rawHelp.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
+            rawHelp.addMouseListener(new java.awt.event.MouseAdapter() {
+                @Override
+                public void mouseClicked(java.awt.event.MouseEvent e) {
+                    showHelpDialog("Show Raw Data", rawHelpMsg);
+                }
+            });
             rawPanel.add(rawHelp, BorderLayout.EAST);
             paramPanel.add(rawPanel);
 
@@ -1497,9 +1520,7 @@ public class PRPDTool extends JFrame {
         rpFrameTimeField.setColumns(12);
 
         rpEstimatedSizeLabel = new JLabel(" ");
-        rpEstimatedSizeLabel.setForeground(Color.DARK_GRAY);
         rpSettingsEstimatedSizeLabel = new JLabel(" ");
-        rpSettingsEstimatedSizeLabel.setForeground(Color.DARK_GRAY);
 
         setIntegerSpinnerEditor(rpPortSpinner);
         setIntegerSpinnerEditor(rpDecimationSpinner);
@@ -1526,6 +1547,25 @@ public class PRPDTool extends JFrame {
         addFormRow(formPanel, "Frame size", rpFrameSizeCombo, helpText("frameSize"));
         addFormRow(formPanel, "Frame count", rpFrameCountSpinner, helpText("frameCount"));
         addFormRow(formPanel, "Frame time", rpFrameTimeField, helpText("frameTime"));
+
+        int nextRow = formPanel.getComponentCount() / 3;
+        GridBagConstraints gbcEst = new GridBagConstraints();
+        gbcEst.gridx = 0;
+        gbcEst.gridy = nextRow;
+        gbcEst.gridwidth = 3;
+        gbcEst.fill = GridBagConstraints.HORIZONTAL;
+        gbcEst.anchor = GridBagConstraints.WEST;
+        gbcEst.insets = new Insets(4, 2, 2, 2);
+        formPanel.add(rpSettingsEstimatedSizeLabel, gbcEst);
+
+        GridBagConstraints gbcGlue = new GridBagConstraints();
+        gbcGlue.gridx = 0;
+        gbcGlue.gridy = nextRow + 1;
+        gbcGlue.gridwidth = 3;
+        gbcGlue.weighty = 1.0;
+        gbcGlue.fill = GridBagConstraints.VERTICAL;
+        formPanel.add(Box.createVerticalGlue(), gbcGlue);
+
         updateRedPitayaEstimateFont();
 
         // (usunięte zduplikowane pola metadanych z okna ustawień technicznych)
@@ -1822,12 +1862,9 @@ public class PRPDTool extends JFrame {
         updateOutputPreview();
         rpSettingsDialog = new JDialog(this, "Red Pitaya Settings", false);
         rpSettingsDialog.setDefaultCloseOperation(JDialog.HIDE_ON_CLOSE);
-        JPanel dialogPanel = new JPanel(new BorderLayout(4, 4));
-        dialogPanel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        JPanel dialogPanel = new JPanel(new BorderLayout());
+        dialogPanel.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
         dialogPanel.add(formPanel, BorderLayout.CENTER);
-        
-        rpSettingsEstimatedSizeLabel.setBorder(BorderFactory.createEmptyBorder(8, 0, 0, 0));
-        dialogPanel.add(rpSettingsEstimatedSizeLabel, BorderLayout.SOUTH);
         
         rpSettingsDialog.add(dialogPanel);
         rpSettingsDialog.pack();
@@ -1865,13 +1902,19 @@ public class PRPDTool extends JFrame {
         int row = panel.getComponentCount() / 3;
 
         JLabel labelComponent = new JLabel(label);
-        labelComponent.setToolTipText(tooltip);
+        labelComponent.setToolTipText(htmlTooltip(tooltip));
 
         JLabel help = new JLabel(new HelpIcon());
         help.setToolTipText(htmlTooltip(tooltip));
         help.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
         help.setBorder(BorderFactory.createEmptyBorder(0, 2, 0, 2));
-        component.setToolTipText(tooltip);
+        help.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                showHelpDialog(label, tooltip);
+            }
+        });
+        component.setToolTipText(htmlTooltip(tooltip));
 
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridy = row;
@@ -1899,6 +1942,18 @@ public class PRPDTool extends JFrame {
         gbc.weightx = 1.0;
         gbc.insets = new Insets(2, 2, 2, 2);
         panel.add(component, gbc);
+    }
+
+    private void showHelpDialog(String title, String content) {
+        JEditorPane editorPane = new JEditorPane();
+        editorPane.setContentType("text/html");
+        editorPane.setEditable(false);
+        editorPane.putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
+        editorPane.setText(htmlTooltip(content));
+        editorPane.setCaretPosition(0);
+        JScrollPane scrollPane = new JScrollPane(editorPane);
+        scrollPane.setPreferredSize(new Dimension(540, 420));
+        JOptionPane.showMessageDialog(this, scrollPane, "Pomoc: " + title, JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void setDecimalSpinnerEditor(JSpinner spinner) {
@@ -1938,7 +1993,12 @@ public class PRPDTool extends JFrame {
                 + "- IN2: Record only channel 2.\n"
                 + "- IN1+IN2: Record both channels simultaneously. Required if you want to use the 'HW Phase Ref' feature to synchronize the PRPD plot with a reference voltage on IN2.\n"
                 + "\n"
-                + "Note: Recording two channels doubles the memory and network bandwidth requirements compared to a single channel.";
+                + "Hardware Buffer Impact (256 MB AXI DMA DDR RAM):\n"
+                + "Red Pitaya STEMlab 125-14 allocates a dedicated 256 MB block in DDR RAM for hardware AXI DMA streaming (134,215,680 total 16-bit samples).\n"
+                + "- 1 Channel (IN1 or IN2): The entire buffer is dedicated to one channel: 134,215,680 samples (~1.07 s at 125 MS/s, ~68.7 s at Decimation 64).\n"
+                + "- 2 Channels (IN1+IN2): The 256 MB buffer is shared equally: 67,107,840 samples per channel (~0.53 s at 125 MS/s, ~34.3 s at Decimation 64).\n"
+                + "\n"
+                + "Selecting 2 channels halves the maximum allowed acquisition duration.";
             case "visual" ->
                 "Channel forwarded to the existing Java PRPD visualization.\n"
                 + "\n"
@@ -1960,20 +2020,30 @@ public class PRPDTool extends JFrame {
                 + "\n"
                 + "Note: This must physically match the jumper position on the STEMlab 125-14 board.";
             case "decimation" ->
-                "Decimation reduces the effective ADC sampling frequency.\n"
-                + "Only powers of 2 are allowed.\n"
+                "Decimation factor for FPGA ADC downsampling.\n"
+                + "Only powers of 2 are supported (1, 2, 4, 8, 16, 32, 64, 128, ...).\n"
                 + "\n"
                 + "Formula:\n"
-                + "fs = 125 MS/s / decimation\n"
+                + "fs = 125 MS/s / Decimation\n"
                 + "\n"
-                + "Examples:\n"
-                + "- 1 -> 125 MS/s\n"
-                + "- 2 -> 62.5 MS/s\n"
-                + "- 4 -> 31.25 MS/s\n"
-                + "- 8 -> 15.625 MS/s\n"
-                + "- 1024 -> about 122.07 kS/s\n"
-                + "\n"
-                + "Higher decimation gives a longer possible acquisition time and a smaller file, but worsens pulse time resolution.";
+                + "Hardware Buffer Limits (256 MB DDR RAM AXI DMA):\n"
+                + "Because the physical RAM buffer is fixed at 256 MB (134.2 MS for 1 ch / 67.1 MS for 2 ch), "
+                + "increasing decimation directly increases the maximum continuous recording duration:\n"
+                + "<pre>\n"
+                + "+-----+----------------+----------------+----------------+\n"
+                + "| Dec | Sampling (fs)  | Max Time (1ch) | Max Time (2ch) |\n"
+                + "+-----+----------------+----------------+----------------+\n"
+                + "|   1 |   125.000 MS/s |         1.07 s |         0.53 s |\n"
+                + "|   2 |    62.500 MS/s |         2.14 s |         1.07 s |\n"
+                + "|   4 |    31.250 MS/s |         4.29 s |         2.14 s |\n"
+                + "|   8 |    15.625 MS/s |         8.58 s |         4.29 s |\n"
+                + "|  16 |     7.813 MS/s |        17.17 s |         8.58 s |\n"
+                + "|  32 |     3.906 MS/s |        34.35 s |        17.17 s |\n"
+                + "|  64 |     1.953 MS/s |        68.71 s |        34.35 s |\n"
+                + "| 128 |   976.562 kS/s |       137.43 s |        68.71 s |\n"
+                + "+-----+----------------+----------------+----------------+\n"
+                + "</pre>\n"
+                + "Note: Higher decimation enables longer recording times, but reduces pulse time resolution.";
             case "averaging" ->
                 "Red Pitaya hardware decimation averaging.\n"
                 + "\n"
@@ -2036,29 +2106,64 @@ public class PRPDTool extends JFrame {
                 + "- duration: You specify the exact time [s]. The program automatically calculates how many samples and frames are needed to cover this time period.\n"
                 + "- frames: You manually specify the exact number of frames (chunks) to capture. The duration is then calculated based on the Frame size and sampling frequency.";
             case "duration" ->
-                "Total time (in seconds) to record data per single acquisition.\n"
+                "Total time (in seconds) to record per single continuous acquisition.\n"
                 + "\n"
+                + "Origin of Hardware Duration Limits:\n"
+                + "The Red Pitaya FPGA streams continuous samples into a dedicated 256 MB (268,431,360 bytes) "
+                + "circular DDR RAM buffer via AXI DMA. Each sample is 16-bit (2 bytes), allowing up to:\n"
+                + "- 134,215,680 samples for 1 channel (IN1 or IN2)\n"
+                + "- 67,107,840 samples per channel for 2 channels (IN1+IN2)\n"
+                + "\n"
+                + "Why Duration is bounded:\n"
+                + "If an acquisition exceeds the buffer capacity before data is transferred, the circular DMA pointer "
+                + "overwrites earlier unread samples, causing dropped samples, buffer wrap-around, and phase discontinuities. "
+                + "To guarantee zero data loss, the software strictly clamps Duration to the physical buffer limit:\n"
+                + "<pre>\n"
+                + "+-----+----------------+----------------+----------------+\n"
+                + "| Dec | Sampling (fs)  | Max Time (1ch) | Max Time (2ch) |\n"
+                + "+-----+----------------+----------------+----------------+\n"
+                + "|   1 |   125.000 MS/s |         1.07 s |         0.53 s |\n"
+                + "|   2 |    62.500 MS/s |         2.14 s |         1.07 s |\n"
+                + "|   4 |    31.250 MS/s |         4.29 s |         2.14 s |\n"
+                + "|   8 |    15.625 MS/s |         8.58 s |         4.29 s |\n"
+                + "|  16 |     7.813 MS/s |        17.17 s |         8.58 s |\n"
+                + "|  32 |     3.906 MS/s |        34.35 s |        17.17 s |\n"
+                + "|  64 |     1.953 MS/s |        68.71 s |        34.35 s |\n"
+                + "| 128 |   976.562 kS/s |       137.43 s |        68.71 s |\n"
+                + "+-----+----------------+----------------+----------------+\n"
+                + "</pre>\n"
                 + "Behavior depends on Mode:\n"
-                + "- 'duration' mode: You specify the time [s]. The required number of frames is auto-calculated.\n"
-                + "- 'frames' mode: This field is read-only / calculated automatically based on Frame size, Frame count, and sampling frequency.";
+                + "- 'duration' mode: You set Duration [s], and the program auto-calculates the required number of 4 MS frames.\n"
+                + "- 'frames' mode: Duration is calculated from Frame count * Frame size / fs.";
             case "frameSize" ->
                 "Number of samples per channel transmitted in a single DMA chunk (TCP packet).\n"
                 + "\n"
+                + "Streaming & Memory Architecture:\n"
+                + "Red Pitaya user Linux space has limited free RAM (~150 MB). To ensure stability and prevent Out-Of-Memory (OOM) crashes, "
+                + "data is read from the 256 MB FPGA DMA buffer and streamed to the PC in manageable chunks (default 4 MS = 4,194,304 samples).\n"
+                + "\n"
                 + "Available tested sizes (selectable in 'frames' mode):\n"
-                + "- 4 194 304 (4 MS)\n"
+                + "- 4 194 304 (4 MS - default & recommended for continuous streaming)\n"
                 + "- 2 097 152 (2 MS)\n"
                 + "- 1 048 576 (1 MS)\n"
                 + "- 524 288 (512 kS)\n"
                 + "- 65 536 (64 kS)\n"
                 + "\n"
-                + "In 'duration' mode, frame size is locked to the full 4 MS buffer (4 194 304 samples).\n"
-                + "In 'frames' mode, you can select one of the tested sizes above.";
+                + "In 'duration' mode, frame size is locked to 4 MS for optimal network throughput and continuous buffer synchronization.";
             case "frameCount" ->
                 "Number of frames (data chunks) to collect per acquisition.\n"
                 + "\n"
-                + "Behavior depends on the selected Mode:\n"
-                + "- 'frames' mode: You set this value manually. The total number of recorded samples will exactly equal (Frame count * Frame size).\n"
-                + "- 'duration' mode: This value is auto-calculated. It shows the number of 4 MS frames required to cover the requested Duration.";
+                + "Behavior depends on Mode:\n"
+                + "- 'duration' mode: Auto-calculated based on Duration and 4 MS frame size (4,194,304 samples).\n"
+                + "- 'frames' mode: You set this manually. Total samples = Frame count * Frame size.\n"
+                + "\n"
+                + "Hardware Buffer Limit:\n"
+                + "The total recorded samples cannot exceed the 256 MB DDR RAM DMA buffer (134,215,680 samples for 1 ch, 67,107,840 for 2 ch). "
+                + "For example, with standard 4 MS frames (4,194,304 samples):\n"
+                + "- 1 Channel: maximum 32 frames (32 * 4 MS = 134.2 MS)\n"
+                + "- 2 Channels: maximum 16 frames (16 * 4 MS = 67.1 MS)\n"
+                + "\n"
+                + "Setting a higher frame count is prevented by the software to avoid circular DMA buffer overwriting and lost packets.";
             case "frameTime" ->
                 "Duration of a single acquisition frame in seconds (and milliseconds).\n"
                 + "\n"
@@ -2154,17 +2259,48 @@ public class PRPDTool extends JFrame {
         public int getIconHeight() { return 16; }
     }
     public static String htmlTooltip(String text) {
-        StringBuilder html = new StringBuilder("<html><div style='width: 340px; white-space: normal;'>");
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        if (text.startsWith("<html>")) {
+            return text;
+        }
+        StringBuilder html = new StringBuilder("<html><div style='width: 480px; font-family: sans-serif;'>");
+        boolean inPre = false;
         String separator = "";
         for (String line : text.split("\\R", -1)) {
-            String escaped = line.replace("&", "&amp;")
-                    .replace("<", "&lt;")
-                    .replace(">", "&gt;");
-            if (escaped.startsWith("- ")) {
-                escaped = "&bull; " + escaped.substring(2);
+            String trimmed = line.trim();
+            if (trimmed.equalsIgnoreCase("<pre>")) {
+                html.append("<pre style='font-family: monospace; font-size: 11px; margin: 4px 0;'>");
+                inPre = true;
+                separator = "";
+                continue;
+            } else if (trimmed.equalsIgnoreCase("</pre>")) {
+                html.append("</pre>");
+                inPre = false;
+                separator = "";
+                continue;
             }
-            html.append(separator).append(escaped);
-            separator = "<br>";
+
+            if (inPre) {
+                String escaped = line.replace("&", "&amp;")
+                        .replace("<", "&lt;")
+                        .replace(">", "&gt;");
+                html.append(separator).append(escaped);
+                separator = "\n";
+            } else {
+                String escaped = line.replace("&", "&amp;")
+                        .replace("<", "&lt;")
+                        .replace(">", "&gt;");
+                if (escaped.startsWith("- ")) {
+                    escaped = "&bull; " + escaped.substring(2);
+                }
+                html.append(separator).append(escaped);
+                separator = "<br>";
+            }
+        }
+        if (inPre) {
+            html.append("</pre>");
         }
         html.append("</div></html>");
         return html.toString();
@@ -2283,22 +2419,52 @@ public class PRPDTool extends JFrame {
             long totalSamples;
             double durationS;
 
+            int channelCount = redPitayaChannelCount();
+            long maxSamplesPerChannel = RedPitayaConfig.AXI_USABLE_BYTES / ((long) channelCount * RedPitayaConfig.BYTES_PER_SAMPLE);
+            maxSamplesPerChannel -= maxSamplesPerChannel % 4096;
+            double maxDurationS = (double) maxSamplesPerChannel / sampleRate;
+            long maxFrameCount = Math.max(1L, maxSamplesPerChannel / frameSize);
+
+            // Dynamic clamping of spinner models to prevent buffer overflow
+            if (rpDurationSpinner.getModel() instanceof SpinnerNumberModel durationModel) {
+                durationModel.setMaximum(maxDurationS);
+            }
+            if (rpFrameCountSpinner.getModel() instanceof SpinnerNumberModel frameCountModel) {
+                frameCountModel.setMaximum((int) Math.min((long) Integer.MAX_VALUE, maxFrameCount));
+            }
+
             if (durationMode) {
                 durationS = Math.max(0.0, currentSpinnerDoubleValue(rpDurationSpinner));
+                if (durationS > maxDurationS) {
+                    durationS = maxDurationS;
+                    setSpinnerDoubleValue(rpDurationSpinner, durationS);
+                }
                 long reqSamples = Math.max(1L, Math.round(durationS * sampleRate));
                 long remainder = reqSamples % 4096;
                 if (remainder != 0) {
                     reqSamples += 4096 - remainder;
+                }
+                if (reqSamples > maxSamplesPerChannel) {
+                    reqSamples = maxSamplesPerChannel;
                 }
                 totalSamples = reqSamples;
                 frameCount = ceilDiv(totalSamples, frameSize);
                 setSpinnerLongValue(rpFrameCountSpinner, frameCount);
             } else {
                 frameCount = Math.max(1L, currentSpinnerIntValue(rpFrameCountSpinner));
+                if (frameCount > maxFrameCount) {
+                    frameCount = maxFrameCount;
+                    setSpinnerLongValue(rpFrameCountSpinner, frameCount);
+                }
                 totalSamples = (long) frameSize * frameCount;
                 long remainder = totalSamples % 4096;
                 if (remainder != 0) {
                     totalSamples += 4096 - remainder;
+                }
+                if (totalSamples > maxSamplesPerChannel) {
+                    totalSamples = maxSamplesPerChannel;
+                    frameCount = totalSamples / frameSize;
+                    setSpinnerLongValue(rpFrameCountSpinner, frameCount);
                 }
                 durationS = totalSamples / sampleRate;
                 setSpinnerDoubleValue(rpDurationSpinner, durationS);
@@ -2317,7 +2483,6 @@ public class PRPDTool extends JFrame {
                 rpFrameTimeField.setText(frameTimeText);
             }
 
-            int channelCount = redPitayaChannelCount();
             long payloadBytes = multiplySaturating(multiplySaturating(totalSamples, channelCount), 2L);
             long frameHeaderBytes = multiplySaturating(frameCount, 34L);
             long approximateFileBytes = addSaturating(addSaturating(payloadBytes, frameHeaderBytes), 4096L);
@@ -2331,23 +2496,36 @@ public class PRPDTool extends JFrame {
                 fsStr = String.format(Locale.US, "%.3f Hz", sampleRate);
             }
 
+            String maxDurText = (maxDurationS >= 10.0)
+                    ? String.format(Locale.US, "%.1f s", maxDurationS)
+                    : String.format(Locale.US, "%.3f s", maxDurationS);
+
             rpEstimatedSizeLabel.setText(String.format(
                     Locale.US,
-                    "<html>Approx. file/data: %s<br>Samples: %s | Frames: %s | %d ch | fs=%s</html>",
+                    "<html>Approx. file/data: %s<br>Samples: %s | %d ch | fs=%s<br><font color='#FF8C00'><b>Max buffer duration: %s (%s MS)</b></font></html>",
                     formatBytes(approximateFileBytes),
                     formatInteger(totalSamples),
-                    formatInteger(frameCount),
                     channelCount,
-                    fsStr
+                    fsStr,
+                    maxDurText,
+                    formatInteger(maxSamplesPerChannel / 1_000_000)
             ));
             if (rpSettingsEstimatedSizeLabel != null) {
-                rpSettingsEstimatedSizeLabel.setText(rpEstimatedSizeLabel.getText());
+                rpSettingsEstimatedSizeLabel.setText(String.format(
+                        Locale.US,
+                        "<html><div style='margin-top: 2px;'><font color='#FF8C00'><b>Max buffer duration: %s (%s MS)</b></font><br><font color='#9E9E9E'>Approx: %s | Samples: %s | fs=%s</font></div></html>",
+                        maxDurText,
+                        formatInteger(maxSamplesPerChannel / 1_000_000),
+                        formatBytes(approximateFileBytes),
+                        formatInteger(totalSamples),
+                        fsStr
+                ));
             }
             updateRedPitayaEstimateFont();
         } catch (Exception ex) {
             rpEstimatedSizeLabel.setText("Approx. file/data size: unavailable");
             if (rpSettingsEstimatedSizeLabel != null) {
-                rpSettingsEstimatedSizeLabel.setText(rpEstimatedSizeLabel.getText());
+                rpSettingsEstimatedSizeLabel.setText("<html><font color='#FF8C00'><b>Max buffer duration: unavailable</b></font></html>");
             }
             if (rpFrameTimeField != null) {
                 rpFrameTimeField.setText("-");
@@ -2533,11 +2711,12 @@ public class PRPDTool extends JFrame {
 
     private void updateRedPitayaEstimateFont() {
         if (rpEstimatedSizeLabel != null) {
-            float size = Math.max(9.0f, currentFont.getSize2D() - 2.0f);
+            float size = Math.max(9.0f, currentFont.getSize2D() - 1.5f);
             rpEstimatedSizeLabel.setFont(currentFont.deriveFont(size));
-            if (rpSettingsEstimatedSizeLabel != null) {
-                rpSettingsEstimatedSizeLabel.setFont(currentFont.deriveFont(size));
-            }
+        }
+        if (rpSettingsEstimatedSizeLabel != null) {
+            float size = Math.max(10.0f, currentFont.getSize2D() - 1.0f);
+            rpSettingsEstimatedSizeLabel.setFont(currentFont.deriveFont(Font.PLAIN, size));
         }
     }
 
@@ -2767,22 +2946,26 @@ public class PRPDTool extends JFrame {
         PRPDExtractorCore refreshExtractor = new PRPDExtractorCore(
                 f0,
                 t0,
-                0.0,
+                threshold,
                 deadUs,
                 new HighPassFilter(fs, cutF, filterQ, filterOrder)
         );
         boolean useHwRef = useHwPhaseRefCb != null && useHwPhaseRefCb.isSelected();
-        for (CachedBuffer cached : snapshot) {
+        for (int i = 0; i < snapshot.size(); i++) {
+            CachedBuffer cached = snapshot.get(i);
             Buffer buffer = new Buffer(cached.t, cached.u, cached.u2, cached.used, false);
             buffer.resetForUse(1);
             buffer.setUsed(cached.used);
-            double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0, useHwRef);
-            if (!Double.isNaN(ph0)) {
-                double estt0 = ph0 / (2 * Math.PI * f0);
-                if (estt0 < 0.5 / fs) {
-                    estt0 = 0.0;
+            if (i == 0) {
+                double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0, useHwRef);
+                if (!Double.isNaN(ph0)) {
+                    double estt0 = ph0 / (2 * Math.PI * f0);
+                    if (estt0 < 0.5 / fs) {
+                        estt0 = 0.0;
+                    }
+                    t0 = estt0;
+                    refreshExtractor.setT0(t0);
                 }
-                refreshExtractor.setT0(estt0);
             }
             Pulses pulses = refreshExtractor.extract(buffer);
             if (pulses.n > 0) {
@@ -2947,7 +3130,7 @@ public class PRPDTool extends JFrame {
         }
         try {
             if (pipeline != null) {
-                pipeline.setThreshold(0.0);
+                pipeline.setThreshold(threshold);
             }
         } catch (Exception ex) {
             setParamField("Pulse ampl. threshold [mV]", "" + PRPDConstants.DEFAULT_THRESHOLD);
@@ -3073,7 +3256,7 @@ public class PRPDTool extends JFrame {
         extractor = new PRPDExtractorCore(
                 f0,
                 t0,
-                0.0,
+                threshold,
                 deadUs,
                 hfFilter
         );
@@ -3139,16 +3322,16 @@ public class PRPDTool extends JFrame {
             private long lastPaintTime = 0;
             @Override
             public void preExtract(Buffer buffer) {
-                double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0, useHwRef);
-                if (!Double.isNaN(ph0)) {
-                    double estt0 = ph0 / (2 * Math.PI * f0);
-                    if (estt0 < 0.5 / fs) {
-                        estt0 = 0.0;
-                    }
-                    t0 = estt0;
-                    extractor.setT0(t0);
-                }
                 if (signalStart.compareAndSet(true, false) || buffer.newWindow) {
+                    double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0, useHwRef);
+                    if (!Double.isNaN(ph0)) {
+                        double estt0 = ph0 / (2 * Math.PI * f0);
+                        if (estt0 < 0.5 / fs) {
+                            estt0 = 0.0;
+                        }
+                        t0 = estt0;
+                        extractor.setT0(t0);
+                    }
                     SwingUtilities.invokeLater(() -> {
                         setParamField("Zero-crossing instant [s]", "" + t0);
                         classifyButton.setEnabled(true);
@@ -3199,6 +3382,9 @@ public class PRPDTool extends JFrame {
                         center.setImage(histogram.getImage());
                     }
                     center.repaint();
+                    if (histogram instanceof pipeline.DynamicPRPDHistogram) {
+                        status.setText(String.format(Locale.US, "Streaming Red Pitaya... [Pulses: %,d]", ((pipeline.DynamicPRPDHistogram) histogram).getSize()));
+                    }
                     lastPaintTime = System.currentTimeMillis();
                 }
             }
@@ -3215,6 +3401,9 @@ public class PRPDTool extends JFrame {
                     center.setImage(histogram.getImage());
                 }
                 center.repaint();
+                if (histogram instanceof pipeline.DynamicPRPDHistogram) {
+                    status.setText(String.format(Locale.US, "Acquisition finished [%s] | Total pulses: %,d", displayName, ((pipeline.DynamicPRPDHistogram) histogram).getSize()));
+                }
 
                 if (inBatchMode) {
                     exportPRPD4YOLO(exportName);
@@ -3365,7 +3554,7 @@ public class PRPDTool extends JFrame {
         extractor = new PRPDExtractorCore(
                 f0,
                 t0,
-                0.0,
+                threshold,
                 deadUs,
                 hfFilter
         );
@@ -3384,16 +3573,16 @@ public class PRPDTool extends JFrame {
             private long lastPaintTime = 0;
             @Override
             public void preExtract(Buffer buffer) {
-                double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0, useHwRefSnapshot);
-                if (!Double.isNaN(ph0)) {
-                    double estt0 = ph0 / (2 * Math.PI * f0);
-                    if (estt0 < 0.5 / fs) {
-                        estt0 = 0.0;
-                    }
-                    t0 = estt0;
-                    extractor.setT0(t0);
-                }
                 if (signalStart.compareAndSet(true, false) || buffer.newWindow) {
+                    double ph0 = PhaseEstimator.estimateIntialPhase(buffer, f0, useHwRefSnapshot);
+                    if (!Double.isNaN(ph0)) {
+                        double estt0 = ph0 / (2 * Math.PI * f0);
+                        if (estt0 < 0.5 / fs) {
+                            estt0 = 0.0;
+                        }
+                        t0 = estt0;
+                        extractor.setT0(t0);
+                    }
                     SwingUtilities.invokeLater(() -> {
                         setParamField("Zero-crossing instant [s]", "" + t0);
                         classifyButton.setEnabled(true);
@@ -3444,6 +3633,9 @@ public class PRPDTool extends JFrame {
                         center.setImage(histogram.getImage());
                     }
                     center.repaint();
+                    if (histogram instanceof pipeline.DynamicPRPDHistogram) {
+                        status.setText(String.format(Locale.US, "Streaming data... [Pulses: %,d]", ((pipeline.DynamicPRPDHistogram) histogram).getSize()));
+                    }
                     lastPaintTime = System.currentTimeMillis();
                 }
             }
@@ -3460,6 +3652,9 @@ public class PRPDTool extends JFrame {
                     center.setImage(histogram.getImage());
                 }
                 center.repaint();
+                if (histogram instanceof pipeline.DynamicPRPDHistogram) {
+                    status.setText(String.format(Locale.US, "Playback finished [%s] | Total pulses: %,d", filename, ((pipeline.DynamicPRPDHistogram) histogram).getSize()));
+                }
 
                 if (inBatchMode) {
                     exportPRPD4YOLO(filename);

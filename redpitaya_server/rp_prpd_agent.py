@@ -218,6 +218,7 @@ def configure_dma(rp, config: dict) -> tuple[dict, dict[int, int]]:
     metadata.update(
         {
             "agent": "redpitaya-python-api",
+            "agent_version": "2.1-continuous-dma",
             "agent_board_default": BOARD_MODEL,
             "rp_timestamp": datetime.now().isoformat(timespec="seconds"),
             "axi_start": axi_start,
@@ -292,12 +293,31 @@ def read_channel_chunk(rp, rp_ch, pos: int, size: int) -> np.ndarray:
 def send_frames(sock: socket.socket, rp, config: dict, buffer_starts: dict[int, int]) -> None:
     channels = list(config["channels"])
     rp_channels = [rp_channel(rp, ch) for ch in channels]
-    pointers = {ch: int(rp.rp_AcqAxiGetWritePointer(rp_channel(rp, ch))[1]) for ch in channels}
     total_samples = int(config["total_samples"])
     frame_size = int(config["frame_size"])
     frame_count = int(config["frame_count"])
     fs = float(config["sample_rate"])
-    buf_size_bytes = total_samples * 2
+
+    dma_trigger_delay = int(config.get("trigger_delay", 0))
+    if dma_trigger_delay == 0:
+        dma_trigger_delay = total_samples
+    pre_trigger = max(0, total_samples - dma_trigger_delay)
+
+    pointers = {}
+    for ch in channels:
+        rch = rp_channel(rp, ch)
+        if hasattr(rp, "rp_AcqAxiGetWritePointerAtTrig"):
+            res = rp.rp_AcqAxiGetWritePointerAtTrig(rch)
+            check_status(f"rp_AcqAxiGetWritePointerAtTrig CH{ch}", res[0])
+            trig_pos = int(res[1])
+        else:
+            res = rp.rp_AcqAxiGetWritePointer(rch)
+            check_status(f"rp_AcqAxiGetWritePointer CH{ch}", res[0])
+            trig_pos = int(res[1])
+
+        # Red Pitaya AXI DMA write pointer is a 0-based sample offset in [0, total_samples).
+        start_sample = (trig_pos - pre_trigger) % total_samples
+        pointers[ch] = start_sample
 
     sent = 0
     for seq in range(frame_count):
@@ -306,22 +326,14 @@ def send_frames(sock: socket.socket, rp, config: dict, buffer_starts: dict[int, 
             break
         data = np.empty((n, len(channels)), dtype="<i2")
         for index, ch in enumerate(channels):
-            start_addr = buffer_starts[ch]
-            read_addr = pointers[ch] + sent * 2
-            
-            if read_addr >= start_addr + buf_size_bytes:
-                read_addr -= buf_size_bytes
-                
-            bytes_to_end = start_addr + buf_size_bytes - read_addr
-            samples_to_end = bytes_to_end // 2
-            
+            read_pos = (pointers[ch] + sent) % total_samples
+            samples_to_end = total_samples - read_pos
             if samples_to_end >= n:
-                arr = read_channel_chunk(rp, rp_channels[index], read_addr, n)
+                arr = read_channel_chunk(rp, rp_channels[index], read_pos, n)
             else:
                 arr = np.empty(n, dtype=np.int16)
-                arr[:samples_to_end] = read_channel_chunk(rp, rp_channels[index], read_addr, samples_to_end)
-                arr[samples_to_end:] = read_channel_chunk(rp, rp_channels[index], start_addr, n - samples_to_end)
-                
+                arr[:samples_to_end] = read_channel_chunk(rp, rp_channels[index], read_pos, samples_to_end)
+                arr[samples_to_end:] = read_channel_chunk(rp, rp_channels[index], 0, n - samples_to_end)
             data[:, index] = arr.astype("<i2", copy=False)
         payload = data.tobytes(order="C")
         header = FRAME_HEADER.pack(

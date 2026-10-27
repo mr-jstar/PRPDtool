@@ -43,7 +43,7 @@ public class DynamicPRPDHistogramData {
         return ampMax;
     }
 
-    private static final int MAX_PULSES = 10_000_000;
+    private static final int MAX_PULSES = 20_000_000;
 
     public void addPulses(Pulses p) {
         if (p == null || p.n == 0) return;
@@ -58,6 +58,7 @@ public class DynamicPRPDHistogramData {
 
         if (size + added > MAX_PULSES) {
             int shift = (size + added) - MAX_PULSES;
+            System.err.println("[PRPD WARNING] MAX_PULSES (" + MAX_PULSES + ") exceeded! Dropping " + shift + " oldest pulses.");
             int keep = size - shift;
             if (keep > 0) {
                 System.arraycopy(phases, shift, phases, 0, keep);

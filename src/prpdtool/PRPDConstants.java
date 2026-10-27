@@ -7,7 +7,8 @@ import java.util.Map;
 public class PRPDConstants {
 
     // PRPD defaults
-    public static final double DEFAULT_THRESHOLD = 0.0;
+    public static final double DEFAULT_THRESHOLD = 0.0; // [mV] domyślny próg (regulowany w GUI w filtrach)
+    public static final double DEFAULT_DEAD_US = 2.0;   // [us] domyślny czas martwy detekcji
     public static final double DEFAULT_FS = 1e6;
     public static final double DEFAULT_CUTOFF = 1e5;
 

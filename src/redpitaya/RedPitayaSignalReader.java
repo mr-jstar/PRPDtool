@@ -12,7 +12,7 @@ import pipeline.SignalReader;
 
 public class RedPitayaSignalReader implements SignalReader, Closeable {
 
-    private static final long DEFAULT_AXI_USABLE_BYTES = 0x6400000L;
+    private static final long DEFAULT_AXI_USABLE_BYTES = RedPitayaConfig.AXI_USABLE_BYTES;
     private static final String AXI_BYTES_PROPERTY = "prpd.axiDmaBytes";
     private static final String AXI_BYTES_ENV = "PRPD_AXI_DMA_BYTES";
     private static final int BYTES_PER_SAMPLE = 2;

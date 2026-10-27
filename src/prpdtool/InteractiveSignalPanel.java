@@ -292,18 +292,29 @@ public class InteractiveSignalPanel extends JPanel {
                 return;
             }
 
+            // Wstawienie znacznika przerwy (Double.NaN) TYLKO przed rozpoczęciem nowego okna pomiarowego (np. w trybie Live)
+            if (buffer.newWindow && size > 0 && !Double.isNaN(t[size - 1])) {
+                ensureCapacity(size + 1);
+                t[size] = Double.NaN;
+                upper[size] = 0;
+                lower[size] = 0;
+                size++;
+            }
+
             double[] upperValues = upperFilter == null ? copy(buffer.u, buffer.used) : upperFilter.filter(buffer.u, buffer.used);
             double[] lowerValues = lowerFilter == null ? copy(buffer.u, buffer.used) : lowerFilter.filter(buffer.u, buffer.used);
             
-            // Wyciszenie stanów nieustalonych (szpilek) na krawędziach po przejściu przez filtry (micro-blanking na UI)
+            // Wyciszenie stanów nieustalonych (szpilek) na początku nowego okna pomiarowego po filtracji cyfrowej (micro-blanking na UI).
+            // Stosowane TYLKO na początku nowego okna pomiarowego (nigdy między ciągłymi ramkami) i NIGDY dla Base signal.
             int blankSamples = 300;
-            if (upperFilter != null && buffer.used > blankSamples * 2) {
-                for (int i = 0; i < blankSamples; i++) upperValues[i] = 0.0;
-                for (int i = buffer.used - blankSamples; i < buffer.used; i++) upperValues[i] = 0.0;
-            }
-            if (lowerFilter != null && buffer.used > blankSamples * 2) {
-                for (int i = 0; i < blankSamples; i++) lowerValues[i] = 0.0;
-                for (int i = buffer.used - blankSamples; i < buffer.used; i++) lowerValues[i] = 0.0;
+            boolean isBaseSignal = "Base signal".equalsIgnoreCase(upperTitle);
+            if (buffer.newWindow && buffer.used > blankSamples * 2) {
+                if (!isBaseSignal && upperFilter != null) {
+                    for (int i = 0; i < blankSamples; i++) upperValues[i] = 0.0;
+                }
+                if (lowerFilter != null) {
+                    for (int i = 0; i < blankSamples; i++) lowerValues[i] = 0.0;
+                }
             }
             int stride = Math.max(1, buffer.used / TARGET_POINTS_PER_BUFFER);
             int add = (stride == 1) ? buffer.used : ((buffer.used + stride - 1) / stride) * 2;
@@ -349,13 +360,6 @@ public class InteractiveSignalPanel extends JPanel {
                     }
                 }
             }
-            
-            // Wstawienie znacznika przerwy (Double.NaN) na końcu każdego bufora / ramki
-            ensureCapacity(size + 1);
-            t[size] = Double.NaN;
-            upper[size] = 0;
-            lower[size] = 0;
-            size++;
             
             trimIfNeeded();
             updateAutoRanges();

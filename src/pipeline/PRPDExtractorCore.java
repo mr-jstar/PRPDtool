@@ -61,7 +61,10 @@ public class PRPDExtractorCore {
         double fs = estimateFs(b.t, n);
         filter.setFs(fs);
 
-        int deadN = Math.max(1, (int) Math.round(deadUs * 1e-6 * fs));
+        // Zabezpieczenie: przy wysokim próbkowaniu (np. 125 MSps) martwe okno musi wynosić co najmniej
+        // ułamek mikrosekundy (np. 0.5 us), aby zapobiec traktowaniu każdego pojedynczego taktu ADC jako osobnego impulsu
+        int minDeadN = (fs > 1e6) ? Math.max(1, (int) Math.round(0.5e-6 * fs)) : 1;
+        int deadN = Math.max(minDeadN, (int) Math.round(deadUs * 1e-6 * fs));
 
         if (tmpT.length < n) {
             tmpT = new double[n];
@@ -85,18 +88,18 @@ public class PRPDExtractorCore {
                 continue;
             }
 
-            double x = b.u[i] - filtered[i];
             double y = filtered[i];
+            double absY = Math.abs(y);
 
-            if (Math.abs(y) >= threshold) { // x <->y
+            if (absY >= threshold) {
                 int j0 = i;
-                int j1 = Math.min(n, i + deadN);
+                int j1 = Math.min(maxI, i + deadN);
 
                 int best = j0;
-                double bestAbs = Math.abs(filtered[j0]); //Math.abs(b.u[j0] - filtered[j0]);
+                double bestAbs = absY;
 
                 for (int j = j0 + 1; j < j1; j++) {
-                    double a = Math.abs(filtered[j]); //Math.abs(b.u[j] - filtered[j]);
+                    double a = Math.abs(filtered[j]);
 
                     if (a > bestAbs) {
                         bestAbs = a;
@@ -105,7 +108,6 @@ public class PRPDExtractorCore {
                 }
 
                 double tp = b.t[best];
-                //double amp = b.u[best] - filtered[best];
                 double amp = filtered[best];
 
                 tmpT[count] = tp;
@@ -114,7 +116,7 @@ public class PRPDExtractorCore {
                 count++;
 
                 lastT = tp;
-                i = j1;
+                i = Math.max(j1, best + 1);
             } else {
                 lastT = ti;
                 i++;

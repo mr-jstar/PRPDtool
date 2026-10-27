@@ -8,6 +8,8 @@ public class RedPitayaConfig {
 
     public static final double ADC_BASE_RATE = 125_000_000.0;
     public static final String BOARD_MODEL = "STEMlab 125-14 Pro Z7020 Gen 2";
+    public static final long AXI_USABLE_BYTES = 268_431_360L; // 256 MB buffer in DDR RAM
+    public static final int BYTES_PER_SAMPLE = 2;
     private static final double TRIGGER_CALIBRATION_DURATION_S = 0.02;
     private static final long TRIGGER_CALIBRATION_MAX_SAMPLES = 5_000_000L;
 
@@ -89,6 +91,16 @@ public class RedPitayaConfig {
 
     public double sampleRate() {
         return ADC_BASE_RATE / decimation;
+    }
+
+    public long maxSamplesPerChannel() {
+        int channelCount = Math.max(1, channels.length);
+        long maxSamples = AXI_USABLE_BYTES / ((long) channelCount * BYTES_PER_SAMPLE);
+        return maxSamples - (maxSamples % 4096);
+    }
+
+    public double maxDurationS() {
+        return (double) maxSamplesPerChannel() / sampleRate();
     }
 
     public int normalizedFrameSize() {
@@ -185,6 +197,19 @@ public class RedPitayaConfig {
         }
         if (triggerTimeoutS <= 0.0) {
             throw new IllegalArgumentException("Timeout triggera musi byc dodatni");
+        }
+        long maxAllowed = maxSamplesPerChannel();
+        if (totalSamples() > maxAllowed) {
+            throw new IllegalArgumentException(String.format(
+                    java.util.Locale.US,
+                    "Akwizycja przekracza pamięć bufora AXI DMA Red Pitaya (%d MB): zadano %,d próbek/kanał, limit sprzętowy wynosi %,d próbek (max %.4f s dla Dec=%d, %d kan.).",
+                    AXI_USABLE_BYTES / (1024 * 1024),
+                    totalSamples(),
+                    maxAllowed,
+                    maxDurationS(),
+                    decimation,
+                    channels.length
+            ));
         }
     }
 
