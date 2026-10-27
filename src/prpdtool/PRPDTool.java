@@ -195,6 +195,7 @@ public class PRPDTool extends JFrame {
     private JButton applyButton;
     private JCheckBox autoscaleCb;
     private JCheckBox showRawDataCb;
+    private JCheckBox showImpulseBarsCb;
     private JCheckBox useHwPhaseRefCb;
 
     private JTextField rpHostField;
@@ -734,18 +735,25 @@ public class PRPDTool extends JFrame {
         rpMenu.add(rpSettingsMI);
         mb.add(rpMenu);
 
-        JMenu aboutMenu = new JMenu("About");
-        aboutMenu.addMenuListener(new javax.swing.event.MenuListener() {
+        JMenu aboutMenu = new JMenu("About") {
             @Override
-            public void menuSelected(javax.swing.event.MenuEvent e) {
-                javax.swing.SwingUtilities.invokeLater(() -> {
-                    aboutMenu.setSelected(false);
-                    aboutMenu.getPopupMenu().setVisible(false);
-                    showAboutDialog();
-                });
+            public void setPopupMenuVisible(boolean b) {
+                // Zapobiega wyskakiwaniu pustego okienka popup
             }
-            @Override public void menuDeselected(javax.swing.event.MenuEvent e) {}
-            @Override public void menuCanceled(javax.swing.event.MenuEvent e) {}
+            @Override
+            public void doClick(int pressTime) {
+                javax.swing.MenuSelectionManager.defaultManager().clearSelectedPath();
+                showAboutDialog();
+            }
+        };
+        aboutMenu.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mousePressed(java.awt.event.MouseEvent e) {
+                if (javax.swing.SwingUtilities.isLeftMouseButton(e)) {
+                    javax.swing.MenuSelectionManager.defaultManager().clearSelectedPath();
+                    showAboutDialog();
+                }
+            }
         });
         mb.add(aboutMenu);
 
@@ -777,24 +785,30 @@ public class PRPDTool extends JFrame {
             String quoteBorder = dark ? "#666666" : "#aaaaaa";
             String bgColor = dark ? "#2b2d30" : "#ffffff";
 
-            String html = String.format(Locale.US, """
-                <html>
-                <head>
-                <style>
-                body { font-family: Segoe UI, Arial, sans-serif; font-size: 11px; color: %s; background-color: %s; margin: 10px; }
-                h2 { font-size: 15px; font-weight: bold; color: %s; margin-top: 4px; margin-bottom: 8px; }
-                h3 { font-size: 13px; font-weight: bold; color: %s; margin-top: 14px; margin-bottom: 5px; }
-                p, li { font-size: 11px; color: %s; line-height: 1.4; margin-bottom: 4px; }
-                b, strong { color: %s; font-weight: bold; }
-                code { font-family: Consolas, monospace; font-size: 11px; background-color: %s; padding: 1px 4px; }
-                hr { border: 0; border-top: 1px solid %s; margin: 10px 0; }
-                blockquote { margin: 6px 0; padding: 4px 8px; background-color: %s; border-left: 3px solid %s; }
-                ol { margin-top: 4px; margin-bottom: 6px; padding-left: 20px; }
-                ul { margin-top: 4px; margin-bottom: 6px; padding-left: 20px; }
-                li { margin-bottom: 4px; }
-                </style>
-                </head>
-                <body>
+            String style = String.format(Locale.US,
+                "body { font-family: Segoe UI, Arial, sans-serif; font-size: 11px; color: %s; background-color: %s; margin: 10px; }\n"
+                + "h2 { font-size: 15px; font-weight: bold; color: %s; margin-top: 4px; margin-bottom: 8px; }\n"
+                + "h3 { font-size: 13px; font-weight: bold; color: %s; margin-top: 14px; margin-bottom: 5px; }\n"
+                + "p, li { font-size: 11px; color: %s; line-height: 1.4; margin-bottom: 4px; }\n"
+                + "b, strong { color: %s; font-weight: bold; }\n"
+                + "code { font-family: Consolas, monospace; font-size: 11px; background-color: %s; padding: 1px 4px; }\n"
+                + "hr { border: 0; border-top: 1px solid %s; margin: 10px 0; }\n"
+                + "blockquote { margin: 6px 0; padding: 4px 8px; background-color: %s; border-left: 3px solid %s; }\n"
+                + "ol { margin-top: 4px; margin-bottom: 6px; padding-left: 20px; }\n"
+                + "ul { margin-top: 4px; margin-bottom: 6px; padding-left: 20px; }\n"
+                + "li { margin-bottom: 4px; }\n",
+                bodyColor, bgColor,
+                titleColor,
+                titleColor,
+                bodyColor,
+                boldColor,
+                codeBg,
+                hrColor,
+                quoteBg, quoteBorder
+            );
+
+            String html = "<html><head><style>" + style + "</style></head><body>"
+                + """
                 <h2>PRPD Tool &ndash; jak działa program?</h2>
                 <p>Program służy do rejestracji i analizy <b>wyładowań niezupełnych (WNZ / PD &ndash; Partial Discharge)</b>
                 w urządzeniach elektroenergetycznych (np. rozdzielnicach SN, transformatorach, kablach).
@@ -898,6 +912,13 @@ public class PRPDTool extends JFrame {
                   <li><b>Start once (Pojedynczy pomiar):</b> Każde kliknięcie <i>Start once</i> czyści poprzedni wykres oraz bufor oscylogramów i wykonuje nowy pomiar dla zadanego czasu trwania (<i>Duration</i>). Wykres PRPD prezentuje impulsy zebrane w tym jednym oknie pomiarowym.</li>
                   <li><b>Start sequence (Pomiar sekwencyjny):</b> Program zbiera wykres PRPD dla zadanego czasu <i>Duration</i>, zapisuje plik, a następnie automatycznie czyści wykres PRPD i rozpoczyna tworzenie kolejnego nowego wykresu dla następnego okna czasowego. Cykl powtarza się w pętli aż do kliknięcia <b>Stop RP</b>.</li>
                 </ul>
+                <p><b>Tryby prezentacji wykresu PRPD:</b></p>
+                <ul>
+                  <li><b>Heatmap (domyślny):</b> Dwuwymiarowa mapa ciepła gęstości prawdopodobieństwa &ndash; skupiska powtarzających się wyładowań tworzą świecące chmury WNZ w wybranej palecie barw (<i>PRPD color palette</i>).</li>
+                  <li><b>Show Raw Data:</b> Wykres punktowy w stałym, jaskrawym kolorze surowym &ndash; 100% impulsów jest widoczne z pełnym kontrastem bez wygaszania gęstościowego.</li>
+                  <li><b>Show Impulse Bars:</b> Wykres igłowy / słupkowy (<i>Stem Plot</i>), w którym każdy impuls jest rysowany jako pionowa linia od 0&nbsp;mV do wierzchołka amplitudy. Gdy <i>Show Raw Data</i> jest odznaczone, słupki przyjmują kolory Heatmapy na podstawie gęstości skupiska wierzchołków; w połączeniu z <i>Show Raw Data</i> słupki są jednolicie zielone. Ułatwia to obserwację dynamiki pojedynczych wystrzałów oraz ekstrakcję cech w sieciach neuronowych (CNN/YOLO).</li>
+                </ul>
+
                 <p><b>Licznik "Pulses":</b> wskazuje łączną liczbę zarejestrowanych impulsów o amplitudzie &ge; <i>Pulse ampl. threshold</i> w bieżącym oknie. Jeśli zmienisz próg po pomiarze, program natychmiast zaktualizuje liczbę zliczonych impulsów oraz widok wykresu.</p>
 
                 <h3>8. Zapisywanie plików (.rppr.bin) i ich późniejsze odczytywanie</h3>
@@ -948,16 +969,7 @@ public class PRPDTool extends JFrame {
                 <br>
                 </body>
                 </html>
-                """,
-                bodyColor, bgColor,
-                titleColor,
-                titleColor,
-                bodyColor,
-                boldColor,
-                codeBg,
-                hrColor,
-                quoteBg, quoteBorder
-            );
+                """;
 
             JEditorPane editorPane = new JEditorPane("text/html", html);
             editorPane.setEditable(false);
@@ -977,6 +989,9 @@ public class PRPDTool extends JFrame {
                 "About – jak działa program PRPD Tool",
                 JOptionPane.PLAIN_MESSAGE
             );
+        } catch (Throwable t) {
+            t.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Błąd okna About: " + t.getMessage(), "Błąd", JOptionPane.ERROR_MESSAGE);
         } finally {
             aboutDialogShowing = false;
         }
@@ -1228,6 +1243,9 @@ public class PRPDTool extends JFrame {
             if (showRawDataCb != null) {
                 ((DynamicPRPDHistogram) histogram).setShowRawData(showRawDataCb.isSelected());
             }
+            if (showImpulseBarsCb != null) {
+                ((DynamicPRPDHistogram) histogram).setShowImpulseBars(showImpulseBarsCb.isSelected());
+            }
             ((DynamicPRPDHistogram) histogram).setPalette(currentPalette);
             center.setHistogram((DynamicPRPDHistogram) histogram);
             if (autoscaleCb != null && autoscaleCb.isSelected()) { applyAutoscale(); } else { center.setImage(histogram.getImage()); }
@@ -1377,7 +1395,9 @@ public class PRPDTool extends JFrame {
                     + "• Zaznaczony (Raw Data Scatter Plot):\n"
                     + "  Klasyczny wykres punktowy w stałym, jaskrawym kolorze. Każdy pojedynczy impuls (nawet unikalna szpilka o zliczeniu 1) "
                     + "  jest rysowany jako wyraźny punkt o średnicy 5 px z białym rdzeniem, całkowicie bez wygaszania gęstościowego. "
-                    + "  Pozwala to natychmiast zobaczyć 100% wszystkich impulsów, w tym rzadkie anomalie na szczytach.";
+                    + "  Pozwala to natychmiast zobaczyć 100% wszystkich impulsów, w tym rzadkie anomalie na szczytach.\n\n"
+                    + "• W połączeniu z 'Show Impulse Bars':\n"
+                    + "  Wymusza jednolicie zielony kolor wszystkich pionowych słupków (odpowiadający kolorowi sygnału przefiltrowanego).";
             rawHelp.setToolTipText(htmlTooltip(rawHelpMsg));
             rawHelp.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
             rawHelp.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
@@ -1426,6 +1446,47 @@ public class PRPDTool extends JFrame {
             hwHelp.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
             hwPanel.add(hwHelp, BorderLayout.EAST);
             paramPanel.add(hwPanel);
+
+            showImpulseBarsCb = new JCheckBox("Show Impulse Bars", false);
+            showImpulseBarsCb.addActionListener(e -> {
+                if (histogram instanceof DynamicPRPDHistogram) {
+                    ((DynamicPRPDHistogram) histogram).setShowImpulseBars(showImpulseBarsCb.isSelected());
+                    center.setImage(histogram.getImage());
+                    center.repaint();
+                }
+            });
+            JPanel barsPanel = new JPanel(new BorderLayout(4, 0));
+            barsPanel.setOpaque(false);
+            barsPanel.add(showImpulseBarsCb, BorderLayout.CENTER);
+            JLabel barsHelp = new JLabel(new HelpIcon());
+            String barsHelpMsg = "Wykres igłowy / słupkowy impulsów (Stem Plot):\n\n"
+                    + "• Zamiast pojedynczych kropek, każdy zarejestrowany impuls jest rysowany jako pionowa kreska "
+                    + "  biegnąca od osi zerowej (0 mV) aż do wierzchołka amplitudy danego wyładowania, zwieńczona punktem szczytowym.\n\n"
+                    + "• Kolorystyka i tryby pracy:\n"
+                    + "  - Samo Show Impulse Bars (Show Raw Data odznaczone):\n"
+                    + "    Słupki są barwione zgodnie z wybraną paletą Heatmapy (PRPD color palette) na podstawie gęstości skupiska wierzchołków. "
+                    + "    Rzadkie szpilki mają barwy chłodne (np. błękit/granat), natomiast powtarzalne chmury WNZ świecą w gorących barwach (żółć/czerwień/biel).\n"
+                    + "  - Show Impulse Bars + zaznaczone Show Raw Data:\n"
+                    + "    Wszystkie słupki są rysowane w jednolitym, jaskrawym kolorze surowym (zielony Filtered signal) bez wygaszania gęstościowego.\n\n"
+                    + "• Zastosowanie i zalety:\n"
+                    + "  - Wizualizacja wystrzałów: doskonale obrazuje energię i 'wysokość' każdego impulsu względem fazy sinusoidy.\n"
+                    + "  - Uczenie maszynowe i sieci neuronowe: w sieciach splotowych (np. CNN / YOLO) pojedyncze piksele (kropki) "
+                    + "    mogą zanikać przy operacjach zmniejszania rozdzielczości (downsampling / pooling). Ciągłe pionowe kreski "
+                    + "    tworzą wyraźne krawędzie, które filtry splotowe wykrywają ze znacznie wyższą stabilnością.\n\n"
+                    + "• Wskazówka:\n"
+                    + "  W przypadku gęstych chmur wyładowań zaleca się zwiększyć próg 'Pulse ampl. threshold', aby odciąć drobny szum przy zerze "
+                    + "  i wyeksponować tylko wiodące wystrzały.";
+            barsHelp.setToolTipText(htmlTooltip(barsHelpMsg));
+            barsHelp.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+            barsHelp.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
+            barsHelp.addMouseListener(new java.awt.event.MouseAdapter() {
+                @Override
+                public void mouseClicked(java.awt.event.MouseEvent e) {
+                    showHelpDialog("Show Impulse Bars", barsHelpMsg);
+                }
+            });
+            barsPanel.add(barsHelp, BorderLayout.EAST);
+            paramPanel.add(barsPanel);
 
             center.setResetAction(() -> {
                 applyAutoscale();
@@ -3358,6 +3419,9 @@ public class PRPDTool extends JFrame {
         if (showRawDataCb != null) {
             ((DynamicPRPDHistogram) histogram).setShowRawData(showRawDataCb.isSelected());
         }
+        if (showImpulseBarsCb != null) {
+            ((DynamicPRPDHistogram) histogram).setShowImpulseBars(showImpulseBarsCb.isSelected());
+        }
         ((DynamicPRPDHistogram) histogram).setPalette(currentPalette);
         center.setHistogram((DynamicPRPDHistogram) histogram);
         if (autoscaleCb != null && autoscaleCb.isSelected()) { applyAutoscale(); } else { center.setImage(histogram.getImage()); }
@@ -3668,6 +3732,9 @@ public class PRPDTool extends JFrame {
         if (showRawDataCb != null) {
             ((DynamicPRPDHistogram) histogram).setShowRawData(showRawDataCb.isSelected());
         }
+        if (showImpulseBarsCb != null) {
+            ((DynamicPRPDHistogram) histogram).setShowImpulseBars(showImpulseBarsCb.isSelected());
+        }
         ((DynamicPRPDHistogram) histogram).setPalette(currentPalette);
         center.setHistogram((DynamicPRPDHistogram) histogram);
         if (autoscaleCb != null && autoscaleCb.isSelected()) { applyAutoscale(); } else { center.setImage(histogram.getImage()); }
@@ -3964,6 +4031,9 @@ public class PRPDTool extends JFrame {
         ((DynamicPRPDHistogram) histogram).setFastRendering(fastRendering);
         if (showRawDataCb != null) {
             ((DynamicPRPDHistogram) histogram).setShowRawData(showRawDataCb.isSelected());
+        }
+        if (showImpulseBarsCb != null) {
+            ((DynamicPRPDHistogram) histogram).setShowImpulseBars(showImpulseBarsCb.isSelected());
         }
         ((DynamicPRPDHistogram) histogram).setPalette(currentPalette);
         SwingUtilities.invokeLater(() -> {

@@ -30,6 +30,7 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
     
     private double displayThreshold = 0.0;
     private boolean showRawData = false;
+    private boolean showImpulseBars = false;
     
     private int[] screenHist;
 
@@ -67,6 +68,8 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
             this.offsetX = other.offsetX;
             this.offsetY = other.offsetY;
             this.palette = other.palette;
+            this.showRawData = other.showRawData;
+            this.showImpulseBars = other.showImpulseBars;
             redraw();
         }
     }
@@ -77,6 +80,9 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
     
     public void setDisplayThreshold(double displayThreshold) { this.displayThreshold = displayThreshold; redraw(); }
     public void setShowRawData(boolean showRawData) { this.showRawData = showRawData; redraw(); }
+    public boolean isShowRawData() { return showRawData; }
+    public void setShowImpulseBars(boolean showImpulseBars) { this.showImpulseBars = showImpulseBars; redraw(); }
+    public boolean isShowImpulseBars() { return showImpulseBars; }
 
     private boolean addF0;
 
@@ -230,7 +236,145 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         double[] amps = data.getAmps();
         int size = data.getSize();
 
-        if (showRawData) {
+        if (showImpulseBars) {
+            boolean isDark = prpdtool.PRPDConstants.isDarkTheme();
+            int zeroY = (int) (h - (0.0 - minA) / (maxA - minA) * h);
+            if (zeroY < 0) zeroY = 0;
+            if (zeroY >= h) zeroY = h - 1;
+
+            if (showRawData) {
+                // Show Impulse Bars + Show Raw Data: jednolicie zielone słupki
+                int rawColor = isDark ? 0xFF00FF00 : 0xFF009646;   // Kolor Filtered signal (Color.GREEN / rgb(0, 150, 70))
+                int centerColor = isDark ? 0xFFFFFFFF : 0xFF004D24; // Rdzeń punktu
+
+                // Pass 1: Stems
+                for (int i = 0; i < size; i++) {
+                    if (Math.abs(amps[i]) < displayThreshold) continue;
+                    int x = (int) (phases[i] / 360.0 * w);
+                    if (x < 0) x = 0;
+                    if (x >= w) x = w - 1;
+
+                    int y = (int) (h - (amps[i] - minA) / (maxA - minA) * h);
+                    if (y < 0) y = 0;
+                    if (y >= h) y = h - 1;
+
+                    int yMin = Math.min(zeroY, y);
+                    int yMax = Math.max(zeroY, y);
+                    for (int py = yMin; py <= yMax; py++) {
+                        prpd.setRGB(x, py, rawColor);
+                    }
+                }
+
+                // Pass 2: Caps
+                for (int i = 0; i < size; i++) {
+                    if (Math.abs(amps[i]) < displayThreshold) continue;
+                    int x = (int) (phases[i] / 360.0 * w);
+                    if (x < 0) x = 0;
+                    if (x >= w) x = w - 1;
+
+                    int y = (int) (h - (amps[i] - minA) / (maxA - minA) * h);
+                    if (y < 0) y = 0;
+                    if (y >= h) y = h - 1;
+
+                    for (int dy = -1; dy <= 1; dy++) {
+                        int py = y + dy;
+                        if (py < 0 || py >= h) continue;
+                        for (int dx = -1; dx <= 1; dx++) {
+                            int px = x + dx;
+                            if (px >= 0 && px < w) {
+                                prpd.setRGB(px, py, (dx == 0 && dy == 0) ? centerColor : rawColor);
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Samo Show Impulse Bars: kolory Heatmapy (Wariant 1 - Peak Cluster Density)
+                int[][] prpdHist = new int[w][h];
+                int maxC = 0;
+
+                for (int i = 0; i < size; i++) {
+                    if (Math.abs(amps[i]) < displayThreshold) continue;
+                    int x = (int) (phases[i] / 360.0 * w);
+                    if (x < 0) x = 0;
+                    if (x >= w) x = w - 1;
+
+                    int y = (int) (h - (amps[i] - minA) / (maxA - minA) * h);
+                    if (y < 0) y = 0;
+                    if (y >= h) y = h - 1;
+
+                    for (int dy = -1; dy <= 1; dy++) {
+                        int sy = y + dy;
+                        if (sy < 0 || sy >= h) continue;
+                        for (int dx = -1; dx <= 1; dx++) {
+                            int sx = x + dx;
+                            if (sx >= 0 && sx < w) {
+                                prpdHist[sx][sy]++;
+                                if (prpdHist[sx][sy] > maxC) maxC = prpdHist[sx][sy];
+                            }
+                        }
+                    }
+                }
+
+                if (maxC > 0) {
+                    double logMaxC = Math.log1p(maxC);
+                    int[] colorMap = new int[maxC + 1];
+                    for (int c = 1; c <= maxC; c++) {
+                        double v = Math.log1p(c) / logMaxC;
+                        colorMap[c] = palette.getColorRGB(v);
+                    }
+                    int centerColor = isDark ? 0xFFFFFFFF : 0xFF000000;
+
+                    // Pass 1: Stems
+                    for (int i = 0; i < size; i++) {
+                        if (Math.abs(amps[i]) < displayThreshold) continue;
+                        int x = (int) (phases[i] / 360.0 * w);
+                        if (x < 0) x = 0;
+                        if (x >= w) x = w - 1;
+
+                        int y = (int) (h - (amps[i] - minA) / (maxA - minA) * h);
+                        if (y < 0) y = 0;
+                        if (y >= h) y = h - 1;
+
+                        int c = prpdHist[x][y];
+                        if (c <= 0) continue;
+                        int barColor = colorMap[c];
+
+                        int yMin = Math.min(zeroY, y);
+                        int yMax = Math.max(zeroY, y);
+                        for (int py = yMin; py <= yMax; py++) {
+                            prpd.setRGB(x, py, barColor);
+                        }
+                    }
+
+                    // Pass 2: Caps
+                    for (int i = 0; i < size; i++) {
+                        if (Math.abs(amps[i]) < displayThreshold) continue;
+                        int x = (int) (phases[i] / 360.0 * w);
+                        if (x < 0) x = 0;
+                        if (x >= w) x = w - 1;
+
+                        int y = (int) (h - (amps[i] - minA) / (maxA - minA) * h);
+                        if (y < 0) y = 0;
+                        if (y >= h) y = h - 1;
+
+                        int c = prpdHist[x][y];
+                        if (c <= 0) continue;
+                        int barColor = colorMap[c];
+
+                        for (int dy = -1; dy <= 1; dy++) {
+                            int py = y + dy;
+                            if (py < 0 || py >= h) continue;
+                            for (int dx = -1; dx <= 1; dx++) {
+                                int px = x + dx;
+                                if (px >= 0 && px < w) {
+                                    prpd.setRGB(px, py, (dx == 0 && dy == 0) ? centerColor : barColor);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (showRawData) {
             boolean isDark = prpdtool.PRPDConstants.isDarkTheme();
             int rawColor = isDark ? 0xFF00FF00 : 0xFF009646;   // Kolor Filtered signal (Color.GREEN / rgb(0, 150, 70))
             int centerColor = isDark ? 0xFFFFFFFF : 0xFF004D24; // Rdzeń punktu
@@ -408,7 +552,258 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         double mulY = (maxA > minA) ? ((plotH / (maxA - minA)) * zoomY) : 0;
         double offY = plotH + offsetY + minA * mulY;
 
-        if (showRawData) {
+        if (showImpulseBars) {
+            int zeroY = (int) (offY - 0.0 * mulY);
+            if (zeroY < 0) zeroY = 0;
+            if (zeroY >= plotH) zeroY = plotH - 1;
+
+            if (showRawData) {
+                // Tryb Stem Plot w jednolitym kolorze Filtered signal (Color.GREEN / rgb(0, 150, 70))
+                int rawColor = isDark ? 0xFF00FF00 : 0xFF009646;   // Kolor identyczny jak "Filtered signal"
+                int centerColor = isDark ? 0xFFFFFFFF : 0xFF004D24; // Rdzeń punktu (kontrastowy)
+
+                java.awt.image.DataBuffer db = image.getRaster().getDataBuffer();
+                if (db instanceof java.awt.image.DataBufferInt) {
+                    int[] pixels = ((java.awt.image.DataBufferInt) db).getData();
+
+                    // Pass 1: Stems
+                    for (int i = 0; i < size; i++) {
+                        if (Math.abs(amps[i]) < displayThreshold) continue;
+                        int screenX = (int) (phases[i] * mulX + offsetX);
+                        if (screenX < 0 || screenX >= plotW) continue;
+                        
+                        int screenY = (int) (offY - amps[i] * mulY);
+                        if (screenY < 0) screenY = 0;
+                        if (screenY >= plotH) screenY = plotH - 1;
+                        
+                        int cx = left + screenX;
+                        int yMin = Math.min(zeroY, screenY);
+                        int yMax = Math.max(zeroY, screenY);
+
+                        for (int y = yMin; y <= yMax; y++) {
+                            pixels[(top + y) * width + cx] = rawColor;
+                        }
+                    }
+
+                    // Pass 2: Peak caps with contrast core
+                    for (int i = 0; i < size; i++) {
+                        if (Math.abs(amps[i]) < displayThreshold) continue;
+                        int screenX = (int) (phases[i] * mulX + offsetX);
+                        if (screenX < 0 || screenX >= plotW) continue;
+                        
+                        int screenY = (int) (offY - amps[i] * mulY);
+                        if (screenY < 0) screenY = 0;
+                        if (screenY >= plotH) screenY = plotH - 1;
+                        
+                        int cx = left + screenX;
+                        int cy = top + screenY;
+                        for (int dy = -1; dy <= 1; dy++) {
+                            int py = cy + dy;
+                            if (py < top || py >= top + plotH) continue;
+                            int rowOff = py * width;
+                            for (int dx = -1; dx <= 1; dx++) {
+                                int px = cx + dx;
+                                if (px >= left && px < left + plotW) {
+                                    pixels[rowOff + px] = (dx == 0 && dy == 0) ? centerColor : rawColor;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Pass 1: Stems
+                    for (int i = 0; i < size; i++) {
+                        if (Math.abs(amps[i]) < displayThreshold) continue;
+                        int screenX = (int) (phases[i] * mulX + offsetX);
+                        if (screenX < 0 || screenX >= plotW) continue;
+                        
+                        int screenY = (int) (offY - amps[i] * mulY);
+                        if (screenY < 0) screenY = 0;
+                        if (screenY >= plotH) screenY = plotH - 1;
+                        
+                        int cx = left + screenX;
+                        int yMin = Math.min(zeroY, screenY);
+                        int yMax = Math.max(zeroY, screenY);
+
+                        for (int y = yMin; y <= yMax; y++) {
+                            image.setRGB(cx, top + y, rawColor);
+                        }
+                    }
+
+                    // Pass 2: Peak caps
+                    for (int i = 0; i < size; i++) {
+                        if (Math.abs(amps[i]) < displayThreshold) continue;
+                        int screenX = (int) (phases[i] * mulX + offsetX);
+                        if (screenX < 0 || screenX >= plotW) continue;
+                        
+                        int screenY = (int) (offY - amps[i] * mulY);
+                        if (screenY < 0) screenY = 0;
+                        if (screenY >= plotH) screenY = plotH - 1;
+                        
+                        int cx = left + screenX;
+                        int cy = top + screenY;
+                        for (int dy = -1; dy <= 1; dy++) {
+                            int py = cy + dy;
+                            if (py < top || py >= top + plotH) continue;
+                            for (int dx = -1; dx <= 1; dx++) {
+                                int px = cx + dx;
+                                if (px >= left && px < left + plotW) {
+                                    image.setRGB(px, py, (dx == 0 && dy == 0) ? centerColor : rawColor);
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Tryb Stem Plot w kolorach Heatmapy (Wariant 1: Peak Cluster Density)
+                if (screenHist == null || screenHist.length != plotW * plotH) {
+                    screenHist = new int[plotW * plotH];
+                }
+                java.util.Arrays.fill(screenHist, 0);
+                int maxC = 0;
+
+                for (int i = 0; i < size; i++) {
+                    double amp = amps[i];
+                    if (Math.abs(amp) < displayThreshold) continue;
+                    
+                    int screenX = (int) (phases[i] * mulX + offsetX);
+                    if (screenX < 0 || screenX >= plotW) continue;
+                    
+                    int screenY = (int) (offY - amp * mulY);
+                    if (screenY < 0) screenY = 0;
+                    if (screenY >= plotH) screenY = plotH - 1;
+                    
+                    for (int dy = -1; dy <= 1; dy++) {
+                        for (int dx = -1; dx <= 1; dx++) {
+                            int sx = screenX + dx;
+                            int sy = screenY + dy;
+                            if (sx >= 0 && sx < plotW && sy >= 0 && sy < plotH) {
+                                int idx = sy * plotW + sx;
+                                screenHist[idx]++;
+                                if (screenHist[idx] > maxC) maxC = screenHist[idx];
+                            }
+                        }
+                    }
+                }
+
+                if (maxC > 0) {
+                    int[] colorMap = new int[maxC + 1];
+                    double logMaxC = Math.log1p(maxC);
+                    for (int c = 1; c <= maxC; c++) {
+                        double v = Math.log1p(c) / logMaxC;
+                        colorMap[c] = palette.getColorRGB(v);
+                    }
+                    int centerColor = isDark ? 0xFFFFFFFF : 0xFF000000;
+
+                    java.awt.image.DataBuffer db = image.getRaster().getDataBuffer();
+                    if (db instanceof java.awt.image.DataBufferInt) {
+                        int[] pixels = ((java.awt.image.DataBufferInt) db).getData();
+
+                        // Pass 1: Stems
+                        for (int i = 0; i < size; i++) {
+                            if (Math.abs(amps[i]) < displayThreshold) continue;
+                            int screenX = (int) (phases[i] * mulX + offsetX);
+                            if (screenX < 0 || screenX >= plotW) continue;
+                            
+                            int screenY = (int) (offY - amps[i] * mulY);
+                            if (screenY < 0) screenY = 0;
+                            if (screenY >= plotH) screenY = plotH - 1;
+                            
+                            int c = screenHist[screenY * plotW + screenX];
+                            if (c <= 0) continue;
+                            int barColor = colorMap[c];
+
+                            int cx = left + screenX;
+                            int yMin = Math.min(zeroY, screenY);
+                            int yMax = Math.max(zeroY, screenY);
+
+                            for (int y = yMin; y <= yMax; y++) {
+                                pixels[(top + y) * width + cx] = barColor;
+                            }
+                        }
+
+                        // Pass 2: Peak caps with contrast core
+                        for (int i = 0; i < size; i++) {
+                            if (Math.abs(amps[i]) < displayThreshold) continue;
+                            int screenX = (int) (phases[i] * mulX + offsetX);
+                            if (screenX < 0 || screenX >= plotW) continue;
+                            
+                            int screenY = (int) (offY - amps[i] * mulY);
+                            if (screenY < 0) screenY = 0;
+                            if (screenY >= plotH) screenY = plotH - 1;
+                            
+                            int c = screenHist[screenY * plotW + screenX];
+                            if (c <= 0) continue;
+                            int barColor = colorMap[c];
+
+                            int cx = left + screenX;
+                            int cy = top + screenY;
+                            for (int dy = -1; dy <= 1; dy++) {
+                                int py = cy + dy;
+                                if (py < top || py >= top + plotH) continue;
+                                int rowOff = py * width;
+                                for (int dx = -1; dx <= 1; dx++) {
+                                    int px = cx + dx;
+                                    if (px >= left && px < left + plotW) {
+                                        pixels[rowOff + px] = (dx == 0 && dy == 0) ? centerColor : barColor;
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Pass 1: Stems
+                        for (int i = 0; i < size; i++) {
+                            if (Math.abs(amps[i]) < displayThreshold) continue;
+                            int screenX = (int) (phases[i] * mulX + offsetX);
+                            if (screenX < 0 || screenX >= plotW) continue;
+                            
+                            int screenY = (int) (offY - amps[i] * mulY);
+                            if (screenY < 0) screenY = 0;
+                            if (screenY >= plotH) screenY = plotH - 1;
+                            
+                            int c = screenHist[screenY * plotW + screenX];
+                            if (c <= 0) continue;
+                            int barColor = colorMap[c];
+
+                            int cx = left + screenX;
+                            int yMin = Math.min(zeroY, screenY);
+                            int yMax = Math.max(zeroY, screenY);
+
+                            for (int y = yMin; y <= yMax; y++) {
+                                image.setRGB(cx, top + y, barColor);
+                            }
+                        }
+
+                        // Pass 2: Peak caps
+                        for (int i = 0; i < size; i++) {
+                            if (Math.abs(amps[i]) < displayThreshold) continue;
+                            int screenX = (int) (phases[i] * mulX + offsetX);
+                            if (screenX < 0 || screenX >= plotW) continue;
+                            
+                            int screenY = (int) (offY - amps[i] * mulY);
+                            if (screenY < 0) screenY = 0;
+                            if (screenY >= plotH) screenY = plotH - 1;
+                            
+                            int c = screenHist[screenY * plotW + screenX];
+                            if (c <= 0) continue;
+                            int barColor = colorMap[c];
+
+                            int cx = left + screenX;
+                            int cy = top + screenY;
+                            for (int dy = -1; dy <= 1; dy++) {
+                                int py = cy + dy;
+                                if (py < top || py >= top + plotH) continue;
+                                for (int dx = -1; dx <= 1; dx++) {
+                                    int px = cx + dx;
+                                    if (px >= left && px < left + plotW) {
+                                        image.setRGB(px, py, (dx == 0 && dy == 0) ? centerColor : barColor);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (showRawData) {
             // Tryb klasycznego Scatter Plot w kolorze wykresu "Filtered signal":
             // Dark mode: Color.GREEN (0xFF00FF00) z jasnym rdzeniem
             // Light mode: new Color(0, 150, 70) (0xFF009646) z ciemnozielonym rdzeniem
@@ -604,9 +999,18 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         for (int i = 0; i < size; i++) {
             if (Math.abs(amps[i]) >= displayThreshold) validPulseCount++;
         }
-        String title = showRawData
-                ? String.format(Locale.US, "PRPD - Raw Data [%,d pulses]", validPulseCount)
-                : String.format(Locale.US, "PRPD [%,d pulses]", validPulseCount);
+        String title;
+        if (showImpulseBars) {
+            if (showRawData) {
+                title = String.format(Locale.US, "PRPD - Raw Impulse Bars [%,d pulses]", validPulseCount);
+            } else {
+                title = String.format(Locale.US, "PRPD - Impulse Bars [%,d pulses]", validPulseCount);
+            }
+        } else if (showRawData) {
+            title = String.format(Locale.US, "PRPD - Raw Data [%,d pulses]", validPulseCount);
+        } else {
+            title = String.format(Locale.US, "PRPD [%,d pulses]", validPulseCount);
+        }
         g.drawString(title, left, 20);
 
         g.setFont(smallFont);
