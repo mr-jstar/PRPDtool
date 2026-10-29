@@ -66,6 +66,7 @@ import redpitaya.RpprFileSignalReader;
 public class PRPDTool extends JFrame {
 
     private JDialog classifyDialog;
+    private StatisticalProfilesDialog statisticalProfilesDialog;
     private volatile boolean inBatchMode;
     private volatile boolean realTimeData;
     private String serverPort = "127.0.0.1:7777";
@@ -550,6 +551,21 @@ public class PRPDTool extends JFrame {
         
         mb.add(scriptsM);
 
+        JMenu analysisM = new JMenu("Analysis");
+        JMenuItem statsProfilesMI = new JMenuItem("Phase Profiles & Statistical Fingerprint (Hn, Hqn, Sk, Ku)...");
+        statsProfilesMI.addActionListener(e -> {
+            if (statisticalProfilesDialog != null) {
+                statisticalProfilesDialog.updateData();
+                statisticalProfilesDialog.setVisible(true);
+            }
+        });
+        analysisM.add(statsProfilesMI);
+        analysisM.addSeparator();
+        JMenuItem pulseScopeMI = new JMenuItem("Single Pulse Waveform & FFT Scope (Coming Soon)");
+        pulseScopeMI.setEnabled(false);
+        analysisM.add(pulseScopeMI);
+        mb.add(analysisM);
+
         JMenu profilesM = new JMenu("Profiles");
         buildProfilesMenu(profilesM);
         mb.add(profilesM);
@@ -724,17 +740,6 @@ public class PRPDTool extends JFrame {
 
         mb.add(optM);
 
-        JMenu rpMenu = new JMenu("Red Pitaya");
-        JMenuItem rpSettingsMI = new JMenuItem("Settings");
-        rpSettingsMI.addActionListener(e -> {
-            if (rpSettingsDialog != null) {
-                updateRedPitayaDerivedControls();
-                rpSettingsDialog.setVisible(true);
-            }
-        });
-        rpMenu.add(rpSettingsMI);
-        mb.add(rpMenu);
-
         JMenu aboutMenu = new JMenu("About") {
             @Override
             public void setPopupMenuVisible(boolean b) {
@@ -757,16 +762,35 @@ public class PRPDTool extends JFrame {
         });
         mb.add(aboutMenu);
 
+        JMenu rpMenu = new JMenu("Red Pitaya");
+        JMenuItem rpSettingsMI = new JMenuItem("Settings");
+        rpSettingsMI.addActionListener(e -> {
+            if (rpSettingsDialog != null) {
+                updateRedPitayaDerivedControls();
+                rpSettingsDialog.setVisible(true);
+            }
+        });
+        rpMenu.add(rpSettingsMI);
+        mb.add(rpMenu);
+
         setJMenuBar(mb);
     }
 
-    private boolean isDarkMode() {
+    public boolean isDarkMode() {
         try {
             String darkStr = configuration.getValue(PRPDConstants.DARK_MODE);
             return darkStr != null && Boolean.parseBoolean(darkStr);
         } catch (Exception e) {
             return false;
         }
+    }
+
+    public PRPDHistogram getHistogram() {
+        return histogram;
+    }
+
+    public double getF0() {
+        return f0;
     }
 
     private boolean aboutDialogShowing = false;
@@ -1524,6 +1548,8 @@ public class PRPDTool extends JFrame {
             classifyDialog.add(classifyPanel);
             classifyDialog.setSize(500, 400);
             classifyDialog.setLocationRelativeTo(PRPDTool.this);
+
+            statisticalProfilesDialog = new StatisticalProfilesDialog(PRPDTool.this);
 
             left.add(paramPanel);
             left.add(rpPanel);
@@ -3609,6 +3635,9 @@ public class PRPDTool extends JFrame {
                         dataSource.setText("file (" + file.getName() + ")");
                         setLastDataFile(file.getAbsolutePath());
                         status.setText("Loaded " + file.getName());
+                        if (statisticalProfilesDialog != null && statisticalProfilesDialog.isVisible()) {
+                            statisticalProfilesDialog.updateData();
+                        }
                     } catch (Exception ex) {
                         System.err.println("Bad file: " + file.getName() + " : " + ex.getMessage());
                         setLastDataFile(null);
