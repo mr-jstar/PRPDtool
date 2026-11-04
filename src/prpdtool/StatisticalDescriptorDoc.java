@@ -97,6 +97,8 @@ public class StatisticalDescriptorDoc {
                     + "<b style='color: #ff9966; font-size: 12px;'>3. Interpretacja rodzaju defektu w izolacji:</b><br>"
                     + "<p style='margin-top: 5px; line-height: 1.45;'>" + defectDiagnosis + "</p>"
                     + "</div>"
+                    + "<div style='margin-top: 16px; padding-top: 8px; border-top: 1px solid " + (dark ? "#333842" : "#e2e8f0") + "; font-size: 10px; color: #888888; text-align: right;'>"
+                    + "PRPD Diagnostic Tool &bull; Standard PN-EN 60270 / CIGRE TB 226 / Buczko 2018 / Kluge 2024</div>"
                     + "</body></html>";
         }
     }

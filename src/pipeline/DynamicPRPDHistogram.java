@@ -5,6 +5,7 @@ import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Locale;
+import prpdtool.ChargeCalibrationManager;
 
 public class DynamicPRPDHistogram implements PRPDHistogram {
 
@@ -981,14 +982,23 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
 
         double delta = data.getMax() - data.getMin();
         double min = data.getMin();
+        ChargeCalibrationManager cal = ChargeCalibrationManager.getInstance();
+
         for (int i = 0; i <= 4; i++) {
             int y = top + plotH - (int) Math.round(i / 4.0 * plotH);
             
             double y_old = (top + plotH) + (y - (top + plotH) - offsetY) / zoomY;
             double val = min + ((top + plotH) - y_old) / (double)plotH * delta;
+            double dispVal = cal.toDisplay(val);
 
             g.drawLine(left - 5, y, left, y);
-            g.drawString(String.format(Locale.US, "%.3f", val), 25, y + 5);
+            if (Math.abs(dispVal) >= 100.0) {
+                g.drawString(String.format(Locale.US, "%.1f", dispVal), 22, y + 5);
+            } else if (Math.abs(dispVal) >= 10.0) {
+                g.drawString(String.format(Locale.US, "%.2f", dispVal), 22, y + 5);
+            } else {
+                g.drawString(String.format(Locale.US, "%.3f", dispVal), 22, y + 5);
+            }
         }
 
         // Opis
@@ -1017,7 +1027,7 @@ public class DynamicPRPDHistogram implements PRPDHistogram {
         g.drawString("Phase [deg]", left + plotW / 2 - 40, height - 13);
 
         g.rotate(-Math.PI / 2);
-        g.drawString("|Amplitude| [mV]", -top - plotH / 2 - 55, 18);
+        g.drawString("|Amplitude| [" + cal.getUnitLabel() + "]", -top - plotH / 2 - 55, 18);
         g.rotate(Math.PI / 2);
 
         g.dispose();

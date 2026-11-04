@@ -66,7 +66,9 @@ import redpitaya.RpprFileSignalReader;
 public class PRPDTool extends JFrame {
 
     private JDialog classifyDialog;
+    private HybridClassificationDialog hybridClassificationDialog;
     private StatisticalProfilesDialog statisticalProfilesDialog;
+    private SinglePulseScopeDialog singlePulseScopeDialog;
     private volatile boolean inBatchMode;
     private volatile boolean realTimeData;
     private String serverPort = "127.0.0.1:7777";
@@ -541,9 +543,11 @@ public class PRPDTool extends JFrame {
         batchMI.addActionListener(e -> dir2prpd());
         scriptsM.add(batchMI);
         
-        JMenuItem classifyMI = new JMenuItem("Real-time Classification");
+        JMenuItem classifyMI = new JMenuItem("Real-time Hybrid Classification (YOLO + CIGRE)");
         classifyMI.addActionListener(e -> {
-            if (classifyDialog != null) {
+            if (hybridClassificationDialog != null) {
+                hybridClassificationDialog.updateAndShow();
+            } else if (classifyDialog != null) {
                 classifyDialog.setVisible(true);
             }
         });
@@ -552,7 +556,7 @@ public class PRPDTool extends JFrame {
         mb.add(scriptsM);
 
         JMenu analysisM = new JMenu("Analysis");
-        JMenuItem statsProfilesMI = new JMenuItem("Phase Profiles & Statistical Fingerprint (Hn, Hqn, Sk, Ku)...");
+        JMenuItem statsProfilesMI = new JMenuItem("Phase Profiles & Statistical Fingerprint (Hn, Hqn, Sk, Ku)");
         statsProfilesMI.addActionListener(e -> {
             if (statisticalProfilesDialog != null) {
                 statisticalProfilesDialog.updateData();
@@ -561,9 +565,93 @@ public class PRPDTool extends JFrame {
         });
         analysisM.add(statsProfilesMI);
         analysisM.addSeparator();
-        JMenuItem pulseScopeMI = new JMenuItem("Single Pulse Waveform & FFT Scope (Coming Soon)");
-        pulseScopeMI.setEnabled(false);
+        JMenuItem pulseScopeMI = new JMenuItem("Single Pulse Waveform & FFT Scope");
+        pulseScopeMI.addActionListener(e -> {
+            if (singlePulseScopeDialog != null) {
+                singlePulseScopeDialog.updateFromCurrentData();
+                singlePulseScopeDialog.setVisible(true);
+            }
+        });
         analysisM.add(pulseScopeMI);
+        analysisM.addSeparator();
+
+        JMenuItem calWizardMI = new JMenuItem("Apparent Charge Calibration (IEC 60270)");
+        calWizardMI.addActionListener(e -> {
+            ApparentChargeCalibrationDialog dlg = new ApparentChargeCalibrationDialog(PRPDTool.this, configuration, isDarkMode());
+            dlg.setVisible(true);
+        });
+        analysisM.add(calWizardMI);
+
+        JMenu unitSubM = new JMenu("Jednostka ładunku (Charge Unit)");
+        ButtonGroup unitGroup = new ButtonGroup();
+        ChargeCalibrationManager calMgr = ChargeCalibrationManager.getInstance();
+
+        JRadioButtonMenuItem mvItem = new JRadioButtonMenuItem("mV (Nieskalibrowany / Raw ADC)", calMgr.getUnit() == ChargeCalibrationManager.ChargeUnit.MV);
+        JRadioButtonMenuItem pcItem = new JRadioButtonMenuItem("pC (Pikokulomby - IEC 60270)", calMgr.getUnit() == ChargeCalibrationManager.ChargeUnit.PC);
+        JRadioButtonMenuItem ncItem = new JRadioButtonMenuItem("nC (Nanokulomby - 1 nC = 1000 pC)", calMgr.getUnit() == ChargeCalibrationManager.ChargeUnit.NC);
+
+        mvItem.addActionListener(e -> {
+            calMgr.setUnit(ChargeCalibrationManager.ChargeUnit.MV);
+            calMgr.saveToConfig(configuration);
+        });
+        pcItem.addActionListener(e -> {
+            if (!calMgr.isCalibrated()) {
+                JOptionPane.showMessageDialog(PRPDTool.this,
+                        "Brak kalibracji ładunku pozornego!\n"
+                        + "Uruchom najpierw 'Apparent Charge Calibration (IEC 60270)' aby wyznaczyć współczynnik k_cal.",
+                        "Wymagana kalibracja", JOptionPane.WARNING_MESSAGE);
+                mvItem.setSelected(true);
+                return;
+            }
+            calMgr.setUnit(ChargeCalibrationManager.ChargeUnit.PC);
+            calMgr.saveToConfig(configuration);
+        });
+        ncItem.addActionListener(e -> {
+            if (!calMgr.isCalibrated()) {
+                JOptionPane.showMessageDialog(PRPDTool.this,
+                        "Brak kalibracji ładunku pozornego!\n"
+                        + "Uruchom najpierw 'Apparent Charge Calibration (IEC 60270)' aby wyznaczyć współczynnik k_cal.",
+                        "Wymagana kalibracja", JOptionPane.WARNING_MESSAGE);
+                mvItem.setSelected(true);
+                return;
+            }
+            calMgr.setUnit(ChargeCalibrationManager.ChargeUnit.NC);
+            calMgr.saveToConfig(configuration);
+        });
+
+        calMgr.addChangeListener(() -> {
+            switch (calMgr.getUnit()) {
+                case MV -> mvItem.setSelected(true);
+                case PC -> pcItem.setSelected(true);
+                case NC -> ncItem.setSelected(true);
+            }
+        });
+
+        unitGroup.add(mvItem);
+        unitGroup.add(pcItem);
+        unitGroup.add(ncItem);
+        unitSubM.add(mvItem);
+        unitSubM.add(pcItem);
+        unitSubM.add(ncItem);
+
+        analysisM.add(unitSubM);
+        analysisM.addSeparator();
+
+        JMenuItem reportMI = new JMenuItem("Generuj Raport Diagnostyczny (IEC 60270 / CIGRE)");
+        reportMI.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_R, java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        reportMI.addActionListener(e -> {
+            reports.DiagnosticReportDialog dlg = new reports.DiagnosticReportDialog(PRPDTool.this, configuration, isDarkMode());
+            dlg.setVisible(true);
+        });
+        analysisM.add(reportMI);
+        analysisM.addSeparator();
+
+        JMenuItem denoisingMI = new JMenuItem("Zaawansowane Odszumianie DSP & Filtry Notch (IEC 62478)");
+        denoisingMI.addActionListener(e -> {
+            new AdvancedDenoisingDialog(PRPDTool.this, configuration, isDarkMode()).setVisible(true);
+        });
+        analysisM.add(denoisingMI);
+
         mb.add(analysisM);
 
         JMenu profilesM = new JMenu("Profiles");
@@ -785,12 +873,57 @@ public class PRPDTool extends JFrame {
         }
     }
 
+    public ArrayList<Classifier> getClassifiers() {
+        return classifiers;
+    }
+
+    public HybridClassificationDialog getHybridClassificationDialog() {
+        return hybridClassificationDialog;
+    }
+
     public PRPDHistogram getHistogram() {
         return histogram;
     }
 
     public double getF0() {
         return f0;
+    }
+
+    public java.util.Map<String, String> getClassificationResults() {
+        java.util.Map<String, String> map = new java.util.LinkedHashMap<>();
+        if (cResults != null) {
+            for (java.util.Map.Entry<Classifier, JLabel> entry : cResults.entrySet()) {
+                String cName = entry.getKey() != null ? entry.getKey().name() : "Model";
+                String res = entry.getValue() != null ? entry.getValue().getText().trim() : "";
+                if (!res.isEmpty() && !res.contains("working")) {
+                    map.put(cName, res);
+                }
+            }
+        }
+        return map;
+    }
+
+    public void runAiClassificationSync() {
+        if (histogram != null && !classifiers.isEmpty()) {
+            java.awt.image.BufferedImage img4YOLO = histogram.getPRPD(448, 448);
+            for (Classifier c : classifiers) {
+                if (c != null && c.ok()) {
+                    try {
+                        Prediction[] preds = c.classify(img4YOLO);
+                        StringBuilder sb = new StringBuilder();
+                        for (int i = 0; i < preds.length; i++) {
+                            if (i > 0) sb.append(", ");
+                            sb.append(preds[i].toString());
+                        }
+                        if (cResults != null && cResults.containsKey(c)) {
+                            cResults.get(c).setText(sb.toString());
+                        }
+                    } catch (Exception ex) {
+                        System.err.println("Error running classifier " + c.name() + ": " + ex.getMessage());
+                    }
+                }
+            }
+        }
     }
 
     private boolean aboutDialogShowing = false;
@@ -1024,7 +1157,7 @@ public class PRPDTool extends JFrame {
     private void buildProfilesMenu(JMenu profilesM) {
         profilesM.removeAll();
         
-        JMenuItem saveProfileMI = new JMenuItem("Save current profile...");
+        JMenuItem saveProfileMI = new JMenuItem("Save current profile");
         saveProfileMI.addActionListener(e -> {
             createNewProfile(profilesM);
         });
@@ -1544,12 +1677,31 @@ public class PRPDTool extends JFrame {
 
             setFontRecursively(classifyPanel, currentFont, 0);
             
-            classifyDialog = new JDialog(PRPDTool.this, "AI Classification", false);
-            classifyDialog.add(classifyPanel);
-            classifyDialog.setSize(500, 400);
-            classifyDialog.setLocationRelativeTo(PRPDTool.this);
+            hybridClassificationDialog = new HybridClassificationDialog(PRPDTool.this, isDarkMode());
+            classifyDialog = hybridClassificationDialog;
 
             statisticalProfilesDialog = new StatisticalProfilesDialog(PRPDTool.this);
+            singlePulseScopeDialog = new SinglePulseScopeDialog(PRPDTool.this, isDarkMode());
+
+            ChargeCalibrationManager.getInstance().loadFromConfig(configuration);
+            ChargeCalibrationManager.getInstance().addChangeListener(() -> {
+                if (histogram != null && center != null) {
+                    if (histogram instanceof pipeline.DynamicPRPDHistogram) {
+                        ((pipeline.DynamicPRPDHistogram) histogram).forceRedraw();
+                    }
+                    center.setImage(histogram.getImage());
+                    center.repaint();
+                }
+            });
+
+            dsp.DenoisingConfigurationManager.getInstance().loadFromConfig(configuration);
+            dsp.DenoisingConfigurationManager.getInstance().addChangeListener(() -> {
+                if (lastDataFile != null) {
+                    try {
+                        getData(lastDataFile);
+                    } catch (Exception ignored) {}
+                }
+            });
 
             left.add(paramPanel);
             left.add(rpPanel);
@@ -3638,6 +3790,9 @@ public class PRPDTool extends JFrame {
                         if (statisticalProfilesDialog != null && statisticalProfilesDialog.isVisible()) {
                             statisticalProfilesDialog.updateData();
                         }
+                        if (singlePulseScopeDialog != null && singlePulseScopeDialog.isVisible()) {
+                            singlePulseScopeDialog.updateFromCurrentData();
+                        }
                     } catch (Exception ex) {
                         System.err.println("Bad file: " + file.getName() + " : " + ex.getMessage());
                         setLastDataFile(null);
@@ -3704,8 +3859,8 @@ public class PRPDTool extends JFrame {
         setParamField("Sampling frequency [Hz]", String.format(Locale.US, "%.12g", fs));
         double tEnd = live ? Math.max(10.0, config.normalizedDurationS()) : config.normalizedDurationS();
 
-        Filter hfFilter = new HighPassFilter(fs, cutF, filterQ, filterOrder);
-        Filter signalPlotFilter = new HighPassFilter(fs, cutF, filterQ, filterOrder);
+        Filter hfFilter = new dsp.AdvancedDenoisingPipelineFilter(fs, cutF, filterQ, filterOrder);
+        Filter signalPlotFilter = new dsp.AdvancedDenoisingPipelineFilter(fs, cutF, filterQ, filterOrder);
         Filter lfFilter = new LowPassFilter(fs, 10 * f0, filterQ, filterOrder);
         Filter passThrough = new Filter() {
             @Override
@@ -4003,8 +4158,8 @@ public class PRPDTool extends JFrame {
             SwingUtilities.invokeLater(() -> setParamField("Sampling frequency [Hz]", String.format(Locale.US, "%.12g", fs)));
         }
         dfs = fs;
-        Filter hfFilter = new HighPassFilter(fs, cutF, filterQ, filterOrder); //???
-        Filter signalPlotFilter = new HighPassFilter(fs, cutF, filterQ, filterOrder);
+        Filter hfFilter = new dsp.AdvancedDenoisingPipelineFilter(fs, cutF, filterQ, filterOrder);
+        Filter signalPlotFilter = new dsp.AdvancedDenoisingPipelineFilter(fs, cutF, filterQ, filterOrder);
         Filter lfFilter = new LowPassFilter(fs, 10 * f0, filterQ, filterOrder);
         Filter passThrough = new Filter() {
             @Override

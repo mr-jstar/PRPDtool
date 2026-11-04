@@ -224,6 +224,12 @@ public class StatisticalProfilesDialog extends JDialog {
                 liveTimer.stop();
             }
         });
+
+        ChargeCalibrationManager.getInstance().addChangeListener(() -> {
+            if (isVisible()) {
+                updateData();
+            }
+        });
     }
 
     private void setupTableStyle(JTable table) {
@@ -361,19 +367,22 @@ public class StatisticalProfilesDialog extends JDialog {
                 String.format(Locale.US, "%d (%.1f%%)", r.neg.pulseCount, r.neg.pulsePercentage),
                 String.format(Locale.US, "N+/N- = %.3f", r.countAsymmetryN));
 
-        addRow("Peak Magnitude (Qmax) [mV]",
-                String.format(Locale.US, "%.2f mV", r.pos.qMax),
-                String.format(Locale.US, "%.2f mV", r.neg.qMax),
+        ChargeCalibrationManager cal = ChargeCalibrationManager.getInstance();
+        String u = cal.getUnitLabel();
+
+        addRow("Peak Magnitude (Qmax) [" + u + "]",
+                String.format(Locale.US, "%.2f %s", cal.toDisplay(r.pos.qMax), u),
+                String.format(Locale.US, "%.2f %s", cal.toDisplay(r.neg.qMax), u),
                 String.format(Locale.US, "Q+/Q- = %.3f", r.chargeAsymmetryQ));
 
-        addRow("Mean Magnitude (μ_Q) [mV]",
-                String.format(Locale.US, "%.2f mV", r.pos.qMean),
-                String.format(Locale.US, "%.2f mV", r.neg.qMean),
+        addRow("Mean Magnitude (μ_Q) [" + u + "]",
+                String.format(Locale.US, "%.2f %s", cal.toDisplay(r.pos.qMean), u),
+                String.format(Locale.US, "%.2f %s", cal.toDisplay(r.neg.qMean), u),
                 String.format(Locale.US, "μ+/μ- = %.3f", r.meanChargeAsymmetry));
 
-        addRow("Std Deviation (σ_Q) [mV]",
-                String.format(Locale.US, "%.2f mV", r.pos.qStd),
-                String.format(Locale.US, "%.2f mV", r.neg.qStd),
+        addRow("Std Deviation (σ_Q) [" + u + "]",
+                String.format(Locale.US, "%.2f %s", cal.toDisplay(r.pos.qStd), u),
+                String.format(Locale.US, "%.2f %s", cal.toDisplay(r.neg.qStd), u),
                 "-");
 
         addRow("Inception Phase (φ_inc) [°]",
@@ -419,7 +428,7 @@ public class StatisticalProfilesDialog extends JDialog {
         addRow("Total Apparent Charge",
                 "-",
                 "-",
-                String.format(Locale.US, "%.1f mV*pts", r.totalApparentEnergy));
+                String.format(Locale.US, "%.1f %s*pts", cal.toDisplay(r.totalApparentEnergy), u));
 
         addRow("Total Pulses (N_total)",
                 "-",
@@ -619,9 +628,11 @@ public class StatisticalProfilesDialog extends JDialog {
                 double hqmaxVal = result.profiles.Hqmax[binIdx];
                 String cycle = hoverPhaseDeg < 180 ? "Positive (+)" : "Negative (-)";
 
+                ChargeCalibrationManager cal = ChargeCalibrationManager.getInstance();
+                String u = cal.getUnitLabel();
                 String hud = String.format(Locale.US,
-                        "φ: %d° | Hn: %d counts | Hqn: %.2f mV | Hqmax: %.2f mV | Cycle: %s",
-                        hoverPhaseDeg, hnVal, hqnVal, hqmaxVal, cycle);
+                        "φ: %d° | Hn: %d counts | Hqn: %.2f %s | Hqmax: %.2f %s | Cycle: %s",
+                        hoverPhaseDeg, hnVal, cal.toDisplay(hqnVal), u, cal.toDisplay(hqmaxVal), u, cycle);
 
                 g.setFont(new Font("Segoe UI", Font.BOLD, 11));
                 FontMetrics fm = g.getFontMetrics();
@@ -676,8 +687,10 @@ public class StatisticalProfilesDialog extends JDialog {
 
         private void drawProfileHqn(Graphics2D g, int x0, int slotY, int w, int boxH, int headerH) {
             int boxY = slotY + headerH;
-            drawTitleHeader(g, x0, slotY, "Hqn(φ) — Mean Pulse Magnitude [mV]", new Color(45, 230, 140));
-            drawChartBox(g, x0, boxY, w, boxH, result.profiles.maxHqn, false);
+            ChargeCalibrationManager cal = ChargeCalibrationManager.getInstance();
+            String u = cal.getUnitLabel();
+            drawTitleHeader(g, x0, slotY, "Hqn(φ) — Mean Pulse Magnitude [" + u + "]", new Color(45, 230, 140));
+            drawChartBox(g, x0, boxY, w, boxH, cal.toDisplay(result.profiles.maxHqn), false);
 
             int bins = result.profiles.binsCount;
             double maxHqn = Math.max(1e-3, result.profiles.maxHqn);
@@ -714,8 +727,10 @@ public class StatisticalProfilesDialog extends JDialog {
 
         private void drawProfileHqmax(Graphics2D g, int x0, int slotY, int w, int boxH, int headerH) {
             int boxY = slotY + headerH;
-            drawTitleHeader(g, x0, slotY, "Hqmax(φ) — Peak Magnitude Envelope [mV]", new Color(255, 100, 75));
-            drawChartBox(g, x0, boxY, w, boxH, result.profiles.maxHqmax, true);
+            ChargeCalibrationManager cal = ChargeCalibrationManager.getInstance();
+            String u = cal.getUnitLabel();
+            drawTitleHeader(g, x0, slotY, "Hqmax(φ) — Peak Magnitude Envelope [" + u + "]", new Color(255, 100, 75));
+            drawChartBox(g, x0, boxY, w, boxH, cal.toDisplay(result.profiles.maxHqmax), true);
 
             int bins = result.profiles.binsCount;
             double maxHqmax = Math.max(1e-3, result.profiles.maxHqmax);

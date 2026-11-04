@@ -39,6 +39,14 @@ public final class DigitalFilters {
         return filtfiltCascade(x, order, () -> Biquad.bandpass(fs, fc, q));
     }
 
+    public static double[] notchIIR(double[] x, double fs, double fc, double q, int order) {
+        return cascade(x, order, () -> Biquad.notch(fs, fc, q));
+    }
+
+    public static double[] notchIIRZeroPhase(double[] x, double fs, double fc, double q, int order) {
+        return filtfiltCascade(x, order, () -> Biquad.notch(fs, fc, q));
+    }
+
     private interface BiquadFactory {
         Biquad create();
     }
@@ -243,6 +251,24 @@ public final class DigitalFilters {
             double b0 = alpha;
             double b1 = 0.0;
             double b2 = -alpha;
+            double a0 = 1.0 + alpha;
+            double a1 = -2.0 * cos;
+            double a2 = 1.0 - alpha;
+
+            return normalize(b0, b1, b2, a0, a1, a2);
+        }
+
+        public static Biquad notch(double fs, double fc, double q) {
+            validate(fs, fc, q);
+
+            double w0 = 2.0 * Math.PI * fc / fs;
+            double cos = Math.cos(w0);
+            double sin = Math.sin(w0);
+            double alpha = sin / (2.0 * q);
+
+            double b0 = 1.0;
+            double b1 = -2.0 * cos;
+            double b2 = 1.0;
             double a0 = 1.0 + alpha;
             double a1 = -2.0 * cos;
             double a2 = 1.0 - alpha;

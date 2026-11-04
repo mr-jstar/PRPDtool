@@ -56,6 +56,9 @@ public class PRPDExtractorCore {
 
         if (b.newWindow || Double.isNaN(lastT) || (b.used > 0 && b.t[0] < lastT)) {
             lastT = Double.NaN;
+            if (b.newWindow) {
+                PulseWaveformRepository.getInstance().clear();
+            }
         }
 
         double fs = estimateFs(b.t, n);
@@ -109,11 +112,15 @@ public class PRPDExtractorCore {
 
                 double tp = b.t[best];
                 double amp = filtered[best];
+                double ph = phase(tp);
 
                 tmpT[count] = tp;
-                tmpPhase[count] = phase(tp);
+                tmpPhase[count] = ph;
                 tmpAmp[count] = amp;
                 count++;
+
+                // Capture high-resolution pulse waveform for Single Pulse & FFT Scope
+                capturePulseWaveform(b, filtered, best, tp, ph, amp, fs, count);
 
                 lastT = tp;
                 i = Math.max(j1, best + 1);
@@ -138,6 +145,35 @@ public class PRPDExtractorCore {
         b.release();
 
         return p;
+    }
+
+    private void capturePulseWaveform(Buffer b, double[] filtered, int best, double tp, double phase, double amp, double fs, int count) {
+        PulseWaveformRepository repo = PulseWaveformRepository.getInstance();
+        boolean shouldCapture = repo.shouldCapture(amp, count);
+
+        if (!shouldCapture) {
+            return;
+        }
+
+        int sliceLen = 1024;
+        int pre = 256;
+        int start = best - pre;
+        double[] rawSlice = new double[sliceLen];
+        double[] filtSlice = new double[sliceLen];
+
+        int srcStart = Math.max(0, start);
+        int srcEnd = Math.min(b.used, start + sliceLen);
+        int dstStart = Math.max(0, -start);
+        int copyLen = Math.max(0, srcEnd - srcStart);
+
+        if (copyLen > 0 && b.u != null && srcStart < b.u.length) {
+            System.arraycopy(b.u, srcStart, rawSlice, dstStart, Math.min(copyLen, rawSlice.length - dstStart));
+        }
+        if (copyLen > 0 && filtered != null && srcStart < filtered.length) {
+            System.arraycopy(filtered, srcStart, filtSlice, dstStart, Math.min(copyLen, filtSlice.length - dstStart));
+        }
+
+        repo.addPulse(tp, phase, amp, fs, rawSlice, filtSlice, pre);
     }
 
     private double phase(double t) {

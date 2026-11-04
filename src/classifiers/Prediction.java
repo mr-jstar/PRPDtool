@@ -8,14 +8,14 @@ import java.util.Locale;
  */
 public class Prediction {
 
-    int classId;            // -1 jeśli brak detekcji
-    String className;
-    float confidence;
-    float objectness;
-    float classProbability;
-    int gx;
-    int gy;
-    int anchor;
+    public int classId;            // -1 jeśli brak detekcji
+    public String className;
+    public float confidence;
+    public float objectness;
+    public float classProbability;
+    public int gx;
+    public int gy;
+    public int anchor;
     public float[] box;
 
     public Prediction(

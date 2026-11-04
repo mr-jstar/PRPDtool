@@ -41,10 +41,10 @@ public interface PRPDHistogram {
     
     BufferedImage getImage();
 
-    double getPhaseAt(int x, int panelWidth);
-    double getAmpAt(int y, int panelHeight);
-    int getXForPhase(double phase, int panelWidth);
-    int getYForAmp(double amp, int panelHeight);
+    default double getPhaseAt(int x, int panelWidth) { return 0.0; }
+    default double getAmpAt(int y, int panelHeight) { return 0.0; }
+    default int getXForPhase(double phase, int panelWidth) { return 0; }
+    default int getYForAmp(double amp, int panelHeight) { return 0; }
 
     default void setPalette(PRPDPalette palette) {}
     default PRPDPalette getPalette() { return PRPDPalette.HIGH_CONTRAST; }
