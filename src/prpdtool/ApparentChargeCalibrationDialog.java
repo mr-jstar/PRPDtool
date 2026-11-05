@@ -35,8 +35,8 @@ public class ApparentChargeCalibrationDialog extends JDialog {
         this.configuration = config;
         this.isDarkMode = isDarkMode;
 
-        setSize(720, 600);
-        setMinimumSize(new Dimension(640, 520));
+        setSize(940, 640);
+        setMinimumSize(new Dimension(880, 560));
         setLocationRelativeTo(owner);
 
         initUI();
@@ -82,14 +82,18 @@ public class ApparentChargeCalibrationDialog extends JDialog {
         JPanel step1Panel = createStepPanel("1. Wstrzyknięty ładunek wzorcowy (q_cal wg kalibratora)", panelBg, borderCol, accentCol);
         step1Panel.setLayout(new BorderLayout(8, 8));
 
-        JPanel qPresetsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
+        JPanel qPresetsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 2));
         qPresetsPanel.setOpaque(false);
-        qPresetsPanel.add(new JLabel("Standardowe wzorce:"));
+        JLabel presetsLbl = new JLabel("Standardowe wzorce:");
+        presetsLbl.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        qPresetsPanel.add(presetsLbl);
 
         double[] presets = {5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0};
         for (double p : presets) {
             JButton b = new JButton(String.format(Locale.US, "%.0f pC", p));
             b.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+            b.setMargin(new Insets(2, 6, 2, 6));
+            b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             b.addActionListener(e -> {
                 targetChargeField.setText(String.format(Locale.US, "%.1f", p));
                 updateCalculatedFactor();
@@ -112,7 +116,11 @@ public class ApparentChargeCalibrationDialog extends JDialog {
         gbc.gridx = 2;
         qInputsPanel.add(new JLabel("Oznaczenie / model kalibratora:"), gbc);
         gbc.gridx = 3;
-        calibratorNameField = new JTextField(calManager.getCalibratorName(), 14);
+        String initialCalName = calManager.getCalibratorName();
+        if (initialCalName == null || initialCalName.isBlank() || initialCalName.contains("Wzorzec IEC 60270")) {
+            initialCalName = "Omicron CAL 542";
+        }
+        calibratorNameField = new JTextField(initialCalName, 14);
         qInputsPanel.add(calibratorNameField, gbc);
 
         step1Panel.add(qPresetsPanel, BorderLayout.NORTH);

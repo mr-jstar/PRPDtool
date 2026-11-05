@@ -25,8 +25,8 @@ public class SinglePulseScopeHelpDialog extends JDialog {
         super(owner, "Przewodnik i interpretacja parametrów impulsu WNZ (IEC 60270 / CIGRE)", ModalityType.MODELESS);
         this.isDarkMode = isDarkMode;
 
-        setSize(960, 680);
-        setMinimumSize(new Dimension(780, 520));
+        setSize(880, 640);
+        setMinimumSize(new Dimension(720, 480));
         setLocationRelativeTo(owner);
 
         allEntries = SinglePulseScopeDoc.getAll();
@@ -45,14 +45,15 @@ public class SinglePulseScopeHelpDialog extends JDialog {
         // LEFT PANEL (SEARCH + LIST)
         JPanel leftPanel = new JPanel(new BorderLayout(0, 6));
         leftPanel.setOpaque(false);
-        leftPanel.setPreferredSize(new Dimension(320, 600));
+        leftPanel.setPreferredSize(new Dimension(280, 500));
 
         // Search Bar
         JPanel searchBox = new JPanel(new BorderLayout(6, 0));
         searchBox.setOpaque(false);
         searchBox.setBorder(new EmptyBorder(8, 8, 4, 8));
 
-        JLabel searchIcon = new JLabel("🔍");
+        JLabel searchIcon = new JLabel("Szukaj: ");
+        searchIcon.setFont(new Font("Segoe UI", Font.BOLD, 11));
         searchIcon.setForeground(isDarkMode ? Color.LIGHT_GRAY : Color.DARK_GRAY);
         searchField = new JTextField();
         searchField.putClientProperty("JTextField.placeholderText", "Szukaj parametru, wykresu, normy...");
@@ -90,14 +91,10 @@ public class SinglePulseScopeHelpDialog extends JDialog {
                     String titleCol = isSelected ? (isDarkMode ? "#ffffff" : "#003366") : (isDarkMode ? "#00e1ff" : "#0284c7");
                     String catCol = isSelected ? (isDarkMode ? "#e0e0e0" : "#555555") : (isDarkMode ? "#94a3b8" : "#64748b");
 
-                    lbl.setText("<html><div style='padding: 3px 2px;'>"
-                            + "<b style='color:" + titleCol + "; font-size: 11px;'>" + e.icon + " " + e.titlePl + "</b><br>"
-                            + "<span style='font-size: 9px; color:" + catCol + ";'>" + e.category + " &bull; " + e.subtitleEn + "</span>"
-                            + "</div></html>");
-                    lbl.setBorder(BorderFactory.createCompoundBorder(
-                            BorderFactory.createMatteBorder(0, 0, 1, 0, isDarkMode ? new Color(42, 46, 54) : new Color(235, 240, 245)),
-                            new EmptyBorder(4, 6, 4, 6)
-                    ));
+                    lbl.setText("<html><b style='color:" + titleCol + "; font-size: 11px;'>[?] "
+                            + e.titlePl + "</b><br><span style='font-size: 10px; color:" + catCol + ";'>"
+                            + e.category + " &bull; " + e.subtitleEn + "</span></html>");
+                    lbl.setBorder(new EmptyBorder(6, 8, 6, 8));
                 }
                 return lbl;
             }
@@ -130,7 +127,7 @@ public class SinglePulseScopeHelpDialog extends JDialog {
 
         // Split Pane
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftPanel, htmlScroll);
-        splitPane.setDividerLocation(330);
+        splitPane.setDividerLocation(280);
         splitPane.setDividerSize(6);
         splitPane.setBorder(new EmptyBorder(8, 8, 8, 8));
 

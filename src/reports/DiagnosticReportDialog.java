@@ -13,6 +13,7 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -35,7 +36,6 @@ public class DiagnosticReportDialog extends JDialog {
     private JTextField locationField;
     private JTextField voltageField;
     private JTextField frequencyField;
-    private JTextField operatorField;
     private JTextArea notesArea;
 
     // Section checkboxes
@@ -116,19 +116,20 @@ public class DiagnosticReportDialog extends JDialog {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(3, 4, 3, 4);
 
-        objectNameField = new JTextField("Transformator Mocy 110/15 kV TR-1");
-        bayPhaseField = new JTextField("Pole 1 / Faza L1");
-        locationField = new JTextField("Rozdzielnia Główna GPZ");
-        voltageField = new JTextField("110.0");
+        objectNameField = new JTextField("Rozdzielnica SN w izolacji powietrznej (AIS) 15 kV");
+        bayPhaseField = new JTextField("Pole probiercze / Faza L1");
+        locationField = new JTextField("Hala Wysokich Napięć WE PW, Warszawa");
+        voltageField = new JTextField("12.0");
         frequencyField = new JTextField("50.0");
-        operatorField = new JTextField("Diagnosta WNZ");
-        notesArea = new JTextArea("Badanie okresowe układu izolacyjnego. Poziom zakłóceń tła pomiarowego niski.", 2, 20);
+        notesArea = new JTextArea("Stanowisko badawcze WNZ na Hali Wysokich Napięć WE PW. Transformator probierczy 100 kV z regulatorem indukcyjnym i rezystorem wodnym Ro = 40 kΩ. Akwizycja sygnału kartą Red Pitaya STEMlab 125-14.", 2, 20);
         notesArea.setLineWrap(true);
         notesArea.setWrapStyleWord(true);
 
         addMetaRow(metaPanel, gbc, 0, "Obiekt badany:", objectNameField, "Pole / Faza:", bayPhaseField);
-        addMetaRow(metaPanel, gbc, 1, "Lokalizacja:", locationField, "Diagnosta:", operatorField);
-        addMetaRow(metaPanel, gbc, 2, "Napięcie U_test [kV]:", voltageField, "Częstotliwość [Hz]:", frequencyField);
+        addMetaRow(metaPanel, gbc, 1, "Lokalizacja:", locationField, "Napięcie U_test [kV]:", voltageField);
+        JLabel sensorInfoLbl = new JLabel("TEV / HFCT (Red Pitaya)");
+        sensorInfoLbl.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        addMetaRow(metaPanel, gbc, 2, "Częstotliwość [Hz]:", frequencyField, "Sensory WNZ:", sensorInfoLbl);
 
         gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 1;
         metaPanel.add(new JLabel("Uwagi / Notatki:"), gbc);
@@ -280,7 +281,7 @@ public class DiagnosticReportDialog extends JDialog {
                 d.location = locationField.getText().trim();
                 d.testVoltageKv = voltageField.getText().trim();
                 d.lineFrequencyHz = frequencyField.getText().trim();
-                d.operatorName = operatorField.getText().trim();
+                d.operatorName = "";
                 d.notes = notesArea.getText().trim();
 
                 // Calibration details
@@ -316,14 +317,26 @@ public class DiagnosticReportDialog extends JDialog {
                 d.aiClassifications = parent.getClassificationResults();
 
                 // Render Chart Images
+                // Compute natural proportional dimensions for PRPD based on live display
+                int prpdW = 1112;
+                int prpdH = 620; // Default generous tall height
+                if (hist != null) {
+                    BufferedImage baseImg = hist.getImage();
+                    if (baseImg != null && baseImg.getWidth() > 0 && baseImg.getHeight() > 0) {
+                        double aspect = (double) baseImg.getHeight() / baseImg.getWidth();
+                        prpdH = (int) Math.round(prpdW * aspect);
+                        prpdH = Math.max(540, Math.min(780, prpdH));
+                    }
+                }
+
                 if (d.includePrpd) {
-                    d.prpdImage = ReportChartRenderer.renderPRPD(hist, 900, 480);
+                    d.prpdImage = ReportChartRenderer.renderPRPD(hist, prpdW, prpdH);
                 }
                 if (d.includeProfiles && d.statisticalResult != null) {
-                    d.profilesImage = ReportChartRenderer.renderProfiles(d.statisticalResult, 900, 520, false);
+                    d.profilesImage = ReportChartRenderer.renderProfiles(d.statisticalResult, 1112, 680, isDarkMode);
                 }
                 if (d.includePulseScope && d.qmaxPulse != null) {
-                    d.pulseScopeImage = ReportChartRenderer.renderPulseAndSpectrum(d.qmaxPulse, 900, 360, false);
+                    d.pulseScopeImage = ReportChartRenderer.renderPulseAndSpectrum(d.qmaxPulse, 1112, 440, isDarkMode);
                 }
 
                 File outDir = new File(outputDirField.getText().trim());

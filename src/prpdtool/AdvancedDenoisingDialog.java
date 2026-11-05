@@ -11,6 +11,8 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.geom.Path2D;
 import java.awt.image.BufferedImage;
 import java.util.List;
@@ -25,6 +27,7 @@ import java.util.Locale;
  * - 5-Slot Multi-Notch IIR Filter Bank with Q-factor adjustment
  * - Soft-Knee Adaptive Noise Gate with RMS background noise meter
  * - Time-Domain Waveform Before/After Scope with delta-SNR readout
+ * - Integrated Comprehensive Guide and Documentation Dialog [?]
  */
 public class AdvancedDenoisingDialog extends JDialog {
 
@@ -32,6 +35,7 @@ public class AdvancedDenoisingDialog extends JDialog {
     private final Configuration configuration;
     private final boolean isDarkMode;
     private final DenoisingConfigurationManager denoisingMgr = DenoisingConfigurationManager.getInstance();
+    private final AdvancedDenoisingHelpDialog helpDialog;
 
     private JCheckBox globalEnableCb;
     private JLabel statusBannerLbl;
@@ -49,6 +53,8 @@ public class AdvancedDenoisingDialog extends JDialog {
     private JLabel gateThreshLbl;
     private JComboBox<String> gateAttenCombo;
     private JLabel measuredNoiseRmsLbl;
+    private JButton autoRmsBtn;
+    private double lastMeasuredRms = 2.5;
 
     // Charts
     private DenoisingSpectrumPanel spectrumPanel;
@@ -61,9 +67,10 @@ public class AdvancedDenoisingDialog extends JDialog {
         this.parent = owner;
         this.configuration = config;
         this.isDarkMode = isDarkMode;
+        this.helpDialog = new AdvancedDenoisingHelpDialog(this, isDarkMode);
 
-        setSize(1100, 780);
-        setMinimumSize(new Dimension(960, 680));
+        setSize(1320, 840);
+        setMinimumSize(new Dimension(1080, 700));
         setLocationRelativeTo(owner);
 
         initUI();
@@ -80,7 +87,7 @@ public class AdvancedDenoisingDialog extends JDialog {
         getContentPane().setBackground(bg);
         getContentPane().setLayout(new BorderLayout());
 
-        // 1. TOP BANNER & GLOBAL SWITCH
+        // 1. TOP BANNER & GLOBAL SWITCH & HELP BUTTON
         JPanel topBanner = new JPanel(new BorderLayout(12, 0));
         topBanner.setBackground(panelBg);
         topBanner.setBorder(BorderFactory.createCompoundBorder(
@@ -108,12 +115,25 @@ public class AdvancedDenoisingDialog extends JDialog {
 
         topBanner.add(leftBanner, BorderLayout.WEST);
 
-        JButton autoScanBtn = new JButton("🔍 Automatycznie skanuj i wykryj zakłócenia NBI");
+        JPanel rightBanner = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        rightBanner.setOpaque(false);
+
+        JButton autoScanBtn = new JButton("Skanuj NBI (Auto-Scan)");
         autoScanBtn.setFont(new Font("Segoe UI", Font.BOLD, 11));
         autoScanBtn.setBackground(new Color(245, 158, 11));
         autoScanBtn.setForeground(Color.BLACK);
+        autoScanBtn.setToolTipText("Skanuje widmo FFT surowego sygnału i automatycznie wstawia filtry Notch na wykryte szpilki NBI");
         autoScanBtn.addActionListener(e -> runAutoNotchDetection());
-        topBanner.add(autoScanBtn, BorderLayout.EAST);
+        rightBanner.add(autoScanBtn);
+
+        JButton helpBtn = new JButton("Przewodnik i pomoc [?]");
+        helpBtn.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        helpBtn.setForeground(new Color(0, 190, 245));
+        helpBtn.setToolTipText("Otwórz przewodnik po filtracji DSP, doborze parametrów i ich wpływie na PRPD");
+        helpBtn.addActionListener(e -> helpDialog.showTopic("OVERVIEW"));
+        rightBanner.add(helpBtn);
+
+        topBanner.add(rightBanner, BorderLayout.EAST);
 
         add(topBanner, BorderLayout.NORTH);
 
@@ -137,14 +157,30 @@ public class AdvancedDenoisingDialog extends JDialog {
         JPanel controlsPanel = new JPanel(new GridLayout(1, 2, 8, 0));
         controlsPanel.setOpaque(false);
 
-        // NOTCH BANK PANEL
+        // --- NOTCH BANK PANEL ---
         JPanel notchPanel = new JPanel(new BorderLayout(0, 6));
         notchPanel.setBackground(panelBg);
         notchPanel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createTitledBorder(BorderFactory.createLineBorder(borderCol), "Bank Filtrów Wycinających Notch (NBI Suppression Bank)",
-                        TitledBorder.LEFT, TitledBorder.TOP, new Font("Segoe UI", Font.BOLD, 12), accentCol),
-                new EmptyBorder(6, 10, 8, 10)
+                BorderFactory.createLineBorder(borderCol),
+                new EmptyBorder(8, 10, 8, 10)
         ));
+
+        JPanel notchHeaderBar = new JPanel(new BorderLayout());
+        notchHeaderBar.setOpaque(false);
+        JLabel notchTitleLbl = new JLabel("Bank Filtrów Wycinających Notch (NBI Suppression Bank)");
+        notchTitleLbl.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        notchTitleLbl.setForeground(accentCol);
+
+        JButton helpNotchBtn = new JButton("Objaśnienia Notch [?]");
+        helpNotchBtn.setFont(new Font("Segoe UI", Font.BOLD, 10));
+        helpNotchBtn.setForeground(new Color(0, 190, 245));
+        helpNotchBtn.setMargin(new Insets(2, 6, 2, 6));
+        helpNotchBtn.setToolTipText("Szczegółowe wyjaśnienie działania filtrów wycinających, dobroci Q i NBI");
+        helpNotchBtn.addActionListener(e -> helpDialog.showTopic("NOTCH"));
+
+        notchHeaderBar.add(notchTitleLbl, BorderLayout.WEST);
+        notchHeaderBar.add(helpNotchBtn, BorderLayout.EAST);
+        notchPanel.add(notchHeaderBar, BorderLayout.NORTH);
 
         JPanel slotsGrid = new JPanel(new GridLayout(5, 1, 0, 4));
         slotsGrid.setOpaque(false);
@@ -164,26 +200,29 @@ public class AdvancedDenoisingDialog extends JDialog {
 
             notchEnCbs[i] = new JCheckBox("Notch " + (i + 1), slot.enabled);
             notchEnCbs[i].setFont(new Font("Segoe UI", Font.BOLD, 11));
+            notchEnCbs[i].setPreferredSize(new Dimension(84, 22));
             final int slotIdx = i;
             notchEnCbs[i].addActionListener(e -> applyNotchSlotChange(slotIdx));
 
             double fKhz = slot.freqHz / 1e3;
             notchFreqFields[i] = new JTextField(String.format(Locale.US, "%.1f", fKhz), 6);
+            notchFreqFields[i].setPreferredSize(new Dimension(58, 22));
             notchFreqFields[i].setToolTipText("Częstotliwość środkowa wycięcia [kHz]");
             notchFreqFields[i].addActionListener(e -> applyNotchSlotChange(slotIdx));
 
             notchQSliders[i] = new JSlider(5, 50, (int) Math.round(slot.q));
-            notchQSliders[i].setPreferredSize(new Dimension(80, 20));
+            notchQSliders[i].setPreferredSize(new Dimension(75, 20));
             notchQSliders[i].setBackground(panelBg);
             notchQLabels[i] = new JLabel("Q=" + (int) slot.q);
-            notchQLabels[i].setPreferredSize(new Dimension(36, 18));
+            notchQLabels[i].setPreferredSize(new Dimension(38, 18));
             notchQSliders[i].addChangeListener(e -> {
                 notchQLabels[slotIdx].setText("Q=" + notchQSliders[slotIdx].getValue());
                 applyNotchSlotChange(slotIdx);
             });
 
             notchDescFields[i] = new JTextField(slot.description, 14);
-            notchDescFields[i].setToolTipText("Opis źródła zakłócenia");
+            notchDescFields[i].setPreferredSize(new Dimension(145, 22));
+            notchDescFields[i].setToolTipText("Opis źródła zakłócenia (np. Falownik, Radio AM)");
             notchDescFields[i].addActionListener(e -> applyNotchSlotChange(slotIdx));
 
             row.add(notchEnCbs[i]);
@@ -198,7 +237,10 @@ public class AdvancedDenoisingDialog extends JDialog {
         }
         notchPanel.add(slotsGrid, BorderLayout.CENTER);
 
-        // Presets buttons
+        // Presets & Status
+        JPanel notchSouth = new JPanel(new BorderLayout(0, 4));
+        notchSouth.setOpaque(false);
+
         JPanel presetBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         presetBar.setOpaque(false);
         JButton p1Btn = new JButton("Preset: Falowniki (100k, 500k)");
@@ -216,22 +258,28 @@ public class AdvancedDenoisingDialog extends JDialog {
         presetBar.add(p1Btn);
         presetBar.add(p2Btn);
         presetBar.add(clearNotchBtn);
-        notchPanel.add(presetBar, BorderLayout.SOUTH);
+        notchSouth.add(presetBar, BorderLayout.NORTH);
 
+        autoDetectStatusLbl = new JLabel("Gotowy do analizy zakłóceń NBI.");
+        autoDetectStatusLbl.setFont(new Font("Segoe UI", Font.ITALIC, 10));
+        autoDetectStatusLbl.setForeground(isDarkMode ? new Color(140, 150, 165) : new Color(110, 120, 130));
+        autoDetectStatusLbl.setBorder(new EmptyBorder(3, 4, 0, 0));
+        notchSouth.add(autoDetectStatusLbl, BorderLayout.SOUTH);
+
+        notchPanel.add(notchSouth, BorderLayout.SOUTH);
         controlsPanel.add(notchPanel);
 
-        // NOISE GATE PANEL
-        JPanel gatePanel = new JPanel(new BorderLayout(0, 6));
+        // --- NOISE GATE PANEL (CLEAN STRICT ALIGNMENT) ---
+        JPanel gatePanel = new JPanel(new BorderLayout(0, 8));
         gatePanel.setBackground(panelBg);
         gatePanel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createTitledBorder(BorderFactory.createLineBorder(borderCol), "Bramka Szumowa i Tłumienie Tła (Noise Gate)",
-                        TitledBorder.LEFT, TitledBorder.TOP, new Font("Segoe UI", Font.BOLD, 12), accentCol),
-                new EmptyBorder(6, 12, 8, 12)
+                BorderFactory.createLineBorder(borderCol),
+                new EmptyBorder(8, 12, 8, 12)
         ));
 
-        JPanel gateControls = new JPanel();
-        gateControls.setLayout(new BoxLayout(gateControls, BoxLayout.Y_AXIS));
-        gateControls.setOpaque(false);
+        // Header bar with checkbox and help button
+        JPanel gateHeaderBar = new JPanel(new BorderLayout());
+        gateHeaderBar.setOpaque(false);
 
         gateEnCb = new JCheckBox("Aktywuj Bramkę Szumową (Noise Gating)", denoisingMgr.getNoiseGate().isEnabled());
         gateEnCb.setFont(new Font("Segoe UI", Font.BOLD, 12));
@@ -240,37 +288,88 @@ public class AdvancedDenoisingDialog extends JDialog {
             denoisingMgr.getNoiseGate().setEnabled(gateEnCb.isSelected());
             refreshDisplaysFromParentData();
         });
-        gateControls.add(gateEnCb);
-        gateControls.add(Box.createVerticalStrut(8));
 
-        JPanel threshRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        threshRow.setOpaque(false);
-        threshRow.add(new JLabel("Próg odcięcia szumu T_gate:"));
+        JButton helpGateBtn = new JButton("Objaśnienia Bramki [?]");
+        helpGateBtn.setFont(new Font("Segoe UI", Font.BOLD, 10));
+        helpGateBtn.setForeground(new Color(0, 190, 245));
+        helpGateBtn.setMargin(new Insets(2, 6, 2, 6));
+        helpGateBtn.setToolTipText("Wyjaśnienie zasady działania bramki szumowej, progu T_gate i tłumienia w dB");
+        helpGateBtn.addActionListener(e -> helpDialog.showTopic("GATE"));
+
+        gateHeaderBar.add(gateEnCb, BorderLayout.WEST);
+        gateHeaderBar.add(helpGateBtn, BorderLayout.EAST);
+        gatePanel.add(gateHeaderBar, BorderLayout.NORTH);
+
+        // Strict 2-column GridBagLayout for aligned controls
+        JPanel formGrid = new JPanel(new GridBagLayout());
+        formGrid.setOpaque(false);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(3, 0, 3, 6);
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.fill = GridBagConstraints.NONE;
+
+        // Row 0: Threshold
+        gbc.gridx = 0; gbc.gridy = 0;
+        JLabel lblThresh = new JLabel("Próg odcięcia szumu (T_gate):");
+        lblThresh.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        lblThresh.setPreferredSize(new Dimension(175, 24));
+        formGrid.add(lblThresh, gbc);
+
+        gbc.gridx = 1; gbc.gridy = 0;
+        JPanel threshCtrlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        threshCtrlPanel.setOpaque(false);
 
         gateThreshSlider = new JSlider(5, 500, (int) Math.round(denoisingMgr.getNoiseGate().getThresholdMv() * 10.0));
-        gateThreshSlider.setPreferredSize(new Dimension(140, 22));
+        gateThreshSlider.setPreferredSize(new Dimension(135, 22));
         gateThreshSlider.setBackground(panelBg);
+
         gateThreshLbl = new JLabel(String.format(Locale.US, "%.1f mV", denoisingMgr.getNoiseGate().getThresholdMv()));
+        gateThreshLbl.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        gateThreshLbl.setForeground(accentCol);
+        gateThreshLbl.setPreferredSize(new Dimension(52, 20));
+
         gateThreshSlider.addChangeListener(e -> {
             double mv = gateThreshSlider.getValue() / 10.0;
             gateThreshLbl.setText(String.format(Locale.US, "%.1f mV", mv));
             denoisingMgr.getNoiseGate().setThresholdMv(mv);
             refreshDisplaysFromParentData();
         });
-        threshRow.add(gateThreshSlider);
-        threshRow.add(gateThreshLbl);
-        gateControls.add(threshRow);
-        gateControls.add(Box.createVerticalStrut(8));
 
-        JPanel attenRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        attenRow.setOpaque(false);
-        attenRow.add(new JLabel("Poziom tłumienia tła:"));
+        autoRmsBtn = new JButton("Ustaw z RMS (x2.0)");
+        autoRmsBtn.setFont(new Font("Segoe UI", Font.BOLD, 10));
+        autoRmsBtn.setMargin(new Insets(2, 6, 2, 6));
+        autoRmsBtn.setToolTipText("Automatycznie ustawia próg bramki na dwukrotność zmierzonego szumu tła RMS");
+        autoRmsBtn.addActionListener(e -> {
+            double target = Math.max(0.5, Math.min(50.0, lastMeasuredRms * 2.0));
+            gateThreshSlider.setValue((int) Math.round(target * 10.0));
+            gateThreshLbl.setText(String.format(Locale.US, "%.1f mV", target));
+            denoisingMgr.getNoiseGate().setThresholdMv(target);
+            refreshDisplaysFromParentData();
+        });
+
+        threshCtrlPanel.add(gateThreshSlider);
+        threshCtrlPanel.add(gateThreshLbl);
+        threshCtrlPanel.add(autoRmsBtn);
+        formGrid.add(threshCtrlPanel, gbc);
+
+        // Row 1: Attenuation
+        gbc.gridx = 0; gbc.gridy = 1;
+        JLabel lblAtten = new JLabel("Poziom tłumienia tła:");
+        lblAtten.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        lblAtten.setPreferredSize(new Dimension(175, 24));
+        formGrid.add(lblAtten, gbc);
+
+        gbc.gridx = 1; gbc.gridy = 1;
+        JPanel attenCtrlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        attenCtrlPanel.setOpaque(false);
+
         gateAttenCombo = new JComboBox<>(new String[]{
                 "-12 dB (Umiarkowane tłumienie tła x0.25)",
                 "-18 dB (Zalecane standardowe x0.125)",
                 "-24 dB (Głębokie tłumienie szumu x0.06)",
                 "Pełne wyciszenie tła (0 mV - Hard Gating)"
         });
+        gateAttenCombo.setPreferredSize(new Dimension(280, 24));
         gateAttenCombo.setSelectedIndex(1);
         gateAttenCombo.addActionListener(e -> {
             int idx = gateAttenCombo.getSelectedIndex();
@@ -283,21 +382,88 @@ public class AdvancedDenoisingDialog extends JDialog {
             denoisingMgr.getNoiseGate().setAttenuationFactor(factor);
             refreshDisplaysFromParentData();
         });
-        attenRow.add(gateAttenCombo);
-        gateControls.add(attenRow);
-        gateControls.add(Box.createVerticalStrut(10));
+        attenCtrlPanel.add(gateAttenCombo);
+        formGrid.add(attenCtrlPanel, gbc);
 
+        // Row 2: Presets
+        gbc.gridx = 0; gbc.gridy = 2;
+        JLabel lblPresets = new JLabel("Szybkie presety progu:");
+        lblPresets.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        lblPresets.setPreferredSize(new Dimension(175, 24));
+        formGrid.add(lblPresets, gbc);
+
+        gbc.gridx = 1; gbc.gridy = 2;
+        JPanel presetBtnsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        presetBtnsPanel.setOpaque(false);
+
+        JButton labPresetBtn = new JButton("Lab (1.5 mV)");
+        labPresetBtn.setMargin(new Insets(2, 6, 2, 6));
+        labPresetBtn.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+        labPresetBtn.addActionListener(e -> {
+            gateThreshSlider.setValue(15);
+            gateThreshLbl.setText("1.5 mV");
+            denoisingMgr.getNoiseGate().setThresholdMv(1.5);
+            refreshDisplaysFromParentData();
+        });
+
+        JButton stdPresetBtn = new JButton("Standard (5.0 mV)");
+        stdPresetBtn.setMargin(new Insets(2, 6, 2, 6));
+        stdPresetBtn.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+        stdPresetBtn.addActionListener(e -> {
+            gateThreshSlider.setValue(50);
+            gateThreshLbl.setText("5.0 mV");
+            denoisingMgr.getNoiseGate().setThresholdMv(5.0);
+            refreshDisplaysFromParentData();
+        });
+
+        JButton fieldPresetBtn = new JButton("Obiekt SN (15.0 mV)");
+        fieldPresetBtn.setMargin(new Insets(2, 6, 2, 6));
+        fieldPresetBtn.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+        fieldPresetBtn.addActionListener(e -> {
+            gateThreshSlider.setValue(150);
+            gateThreshLbl.setText("15.0 mV");
+            denoisingMgr.getNoiseGate().setThresholdMv(15.0);
+            refreshDisplaysFromParentData();
+        });
+
+        presetBtnsPanel.add(labPresetBtn);
+        presetBtnsPanel.add(stdPresetBtn);
+        presetBtnsPanel.add(fieldPresetBtn);
+        formGrid.add(presetBtnsPanel, gbc);
+
+        // Row 3: Measured RMS
+        gbc.gridx = 0; gbc.gridy = 3;
+        JLabel lblRms = new JLabel("Szacowany szum tła RMS:");
+        lblRms.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        lblRms.setPreferredSize(new Dimension(175, 24));
+        formGrid.add(lblRms, gbc);
+
+        gbc.gridx = 1; gbc.gridy = 3;
+        JPanel rmsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        rmsPanel.setOpaque(false);
         measuredNoiseRmsLbl = new JLabel("Szacowany szum tła RMS: -- mV");
         measuredNoiseRmsLbl.setFont(new Font("Segoe UI", Font.BOLD, 11));
-        measuredNoiseRmsLbl.setForeground(isDarkMode ? new Color(160, 175, 195) : new Color(80, 95, 110));
-        gateControls.add(measuredNoiseRmsLbl);
+        measuredNoiseRmsLbl.setForeground(isDarkMode ? new Color(160, 175, 195) : new Color(60, 75, 90));
+        rmsPanel.add(measuredNoiseRmsLbl);
+        formGrid.add(rmsPanel, gbc);
 
-        gatePanel.add(gateControls, BorderLayout.CENTER);
+        JPanel formWrapper = new JPanel(new BorderLayout());
+        formWrapper.setOpaque(false);
+        formWrapper.add(formGrid, BorderLayout.WEST);
+        gatePanel.add(formWrapper, BorderLayout.CENTER);
 
-        autoDetectStatusLbl = new JLabel("Gotowy do analizy zakłóceń NBI.");
-        autoDetectStatusLbl.setFont(new Font("Segoe UI", Font.ITALIC, 10));
-        autoDetectStatusLbl.setForeground(isDarkMode ? new Color(140, 150, 165) : new Color(110, 120, 130));
-        gatePanel.add(autoDetectStatusLbl, BorderLayout.SOUTH);
+        // Bottom informational tip box
+        JPanel tipBox = new JPanel(new BorderLayout());
+        tipBox.setBackground(isDarkMode ? new Color(24, 27, 32) : new Color(240, 244, 250));
+        tipBox.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(isDarkMode ? new Color(48, 54, 64) : new Color(210, 220, 235)),
+                new EmptyBorder(6, 10, 6, 10)
+        ));
+        JLabel tipLbl = new JLabel("<html><b style='color:#00d4ff;'>Wskazówka:</b> Bramka dynamicznie tłumi szum tła w przerwach między impulsami o wybrany poziom dB, zachowując 100% kształtu i energii właściwych impulsów WNZ.</html>");
+        tipLbl.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+        tipLbl.setForeground(isDarkMode ? new Color(180, 190, 205) : new Color(70, 80, 95));
+        tipBox.add(tipLbl, BorderLayout.CENTER);
+        gatePanel.add(tipBox, BorderLayout.SOUTH);
 
         controlsPanel.add(gatePanel);
         mainContent.add(controlsPanel);
@@ -349,11 +515,13 @@ public class AdvancedDenoisingDialog extends JDialog {
 
     private void updateStatusBanner() {
         if (denoisingMgr.isGlobalEnabled()) {
-            statusBannerLbl.setText("STATUS: AKTYWNY (Wycinanie NBI + Bramka Szumowa WŁĄCZONE)");
+            statusBannerLbl.setText("● AKTYWNY (Notch + Bramka)");
             statusBannerLbl.setForeground(new Color(16, 185, 129));
+            statusBannerLbl.setToolTipText("Wycinanie NBI oraz Bramka Szumowa są aktywne w torze pomiarowym");
         } else {
-            statusBannerLbl.setText("STATUS: WYŁĄCZONY (Standardowy tor HPF)");
+            statusBannerLbl.setText("○ WYŁĄCZONY (Standardowy tor HPF)");
             statusBannerLbl.setForeground(new Color(156, 163, 175));
+            statusBannerLbl.setToolTipText("Odszumianie wyłączone (aktywny standardowy filtr górnoprzepustowy HPF)");
         }
     }
 
@@ -447,7 +615,6 @@ public class AdvancedDenoisingDialog extends JDialog {
     }
 
     private double[] getSampleSignalFromParent() {
-        // Look for representative buffer or pulse from repository
         pipeline.PulseWaveform pw = pipeline.PulseWaveformRepository.getInstance().getMaxPulse();
         if (pw != null && pw.filtered != null) {
             return pw.filtered;
@@ -458,7 +625,6 @@ public class AdvancedDenoisingDialog extends JDialog {
     public void refreshDisplaysFromParentData() {
         double[] sig = getSampleSignalFromParent();
         if (sig == null || sig.length < 128) {
-            // Synthesize noisy demonstration pulse if no live data loaded yet
             sig = generateDemoSignal();
         }
 
@@ -479,7 +645,11 @@ public class AdvancedDenoisingDialog extends JDialog {
         // Estimate SNR improvement
         double rawRms = calcRms(sig);
         double denRms = calcRms(denoised);
-        measuredNoiseRmsLbl.setText(String.format(Locale.US, "Szacowany szum tła RMS: %.2f mV", denRms));
+        lastMeasuredRms = (denRms > 0 && denoisingMgr.isGlobalEnabled()) ? denRms : rawRms;
+
+        measuredNoiseRmsLbl.setText(String.format(Locale.US,
+                "<html><b>%.2f mV</b> &nbsp;<span style='color:#8892b0; font-size:10px;'>(zalecany próg: %.1f &ndash; %.1f mV)</span></html>",
+                lastMeasuredRms, lastMeasuredRms * 1.5, lastMeasuredRms * 2.5));
 
         double deltaSnr = 20.0 * Math.log10(Math.max(1e-3, rawRms / Math.max(1e-3, denRms)));
         if (denoisingMgr.isGlobalEnabled()) {
@@ -527,6 +697,13 @@ public class AdvancedDenoisingDialog extends JDialog {
 
         public DenoisingSpectrumPanel() {
             setBackground(isDarkMode ? new Color(18, 20, 24) : new Color(250, 252, 255));
+            setToolTipText("Kliknij wykres widma lub [?], aby otworzyć objaśnienia filtrów Notch i NBI");
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    helpDialog.showTopic("NOTCH");
+                }
+            });
         }
 
         public void setData(SpectrumResult raw, SpectrumResult den, List<AdaptiveNotchFilter.NotchSlot> notches) {
@@ -552,10 +729,16 @@ public class AdvancedDenoisingDialog extends JDialog {
             int plotW = w - padL - padR;
             int plotH = h - padT - padB;
 
-            // Title
+            // Title with clickable [?]
             g2.setFont(new Font("Segoe UI", Font.BOLD, 11));
             g2.setColor(new Color(0, 210, 255));
-            g2.drawString("WIDMO CZĘSTOTLIWOŚCIOWE FFT (SUROWE vs ODSZUMIONE)", padL, padT - 8);
+            String title = "WIDMO CZĘSTOTLIWOŚCIOWE FFT (SUROWE vs ODSZUMIONE)";
+            g2.drawString(title, padL, padT - 8);
+
+            FontMetrics fm = g2.getFontMetrics();
+            int tw = fm.stringWidth(title);
+            g2.setColor(new Color(245, 158, 11));
+            g2.drawString("[?]", padL + tw + 8, padT - 8);
 
             if (plotW <= 20 || plotH <= 20 || rawSpec == null) {
                 g2.dispose();
@@ -584,12 +767,21 @@ public class AdvancedDenoisingDialog extends JDialog {
             if (notchSlots != null) {
                 g2.setColor(Color.RED);
                 g2.setStroke(new BasicStroke(1.2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{3, 3}, 0));
+                int labelYOffset = 0;
+                int prevNx = -999;
                 for (AdaptiveNotchFilter.NotchSlot slot : notchSlots) {
                     if (slot.enabled && slot.freqHz > 0 && slot.freqHz < maxFreq) {
                         int nx = padL + (int) Math.round((slot.freqHz / maxFreq) * plotW);
                         g2.drawLine(nx, padT, nx, padT + plotH);
+                        if (Math.abs(nx - prevNx) < 42) {
+                            labelYOffset = (labelYOffset + 11) % 33;
+                        } else {
+                            labelYOffset = 0;
+                        }
+                        prevNx = nx;
                         g2.setFont(new Font("Segoe UI", Font.BOLD, 9));
-                        g2.drawString(String.format(Locale.US, "%.1fk", slot.freqHz / 1e3), nx - 12, padT + 12);
+                        String notchLbl = String.format(Locale.US, "%.1fk", slot.freqHz / 1e3);
+                        g2.drawString(notchLbl, Math.max(padL, nx - 12), padT + 12 + labelYOffset);
                     }
                 }
             }
@@ -631,6 +823,13 @@ public class AdvancedDenoisingDialog extends JDialog {
 
         public DenoisingWaveformPanel() {
             setBackground(isDarkMode ? new Color(18, 20, 24) : new Color(250, 252, 255));
+            setToolTipText("Kliknij wykres czasowy lub [?], aby otworzyć objaśnienia Bramki Szumowej");
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    helpDialog.showTopic("GATE");
+                }
+            });
         }
 
         public void setData(double[] raw, double[] den) {
@@ -657,7 +856,13 @@ public class AdvancedDenoisingDialog extends JDialog {
 
             g2.setFont(new Font("Segoe UI", Font.BOLD, 11));
             g2.setColor(new Color(16, 185, 129));
-            g2.drawString("PRZEBIEG CZASOWY (POMARAŃCZOWY=SUROWY, BŁĘKITNY=ODSZUMIONY)", padL, padT - 8);
+            String title = "PRZEBIEG CZASOWY (POMARAŃCZOWY=SUROWY, BŁĘKITNY=ODSZUMIONY)";
+            g2.drawString(title, padL, padT - 8);
+
+            FontMetrics fm = g2.getFontMetrics();
+            int tw = fm.stringWidth(title);
+            g2.setColor(new Color(0, 210, 255));
+            g2.drawString("[?]", padL + tw + 8, padT - 8);
 
             if (plotW <= 20 || plotH <= 20 || rawSignal == null) {
                 g2.dispose();

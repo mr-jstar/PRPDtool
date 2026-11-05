@@ -442,45 +442,45 @@ public class StatisticalAnalyzer {
     }
 
     /**
-     * Generates a diagnostic advisory based on CIGRE Working Group 21.03 rules.
+     * Generates a diagnostic advisory based on CIGRE Working Group 21.03 / TB 226 rules.
      */
     private static String generateDiagnosticHint(int size, double cc, double qAsym, double nAsym,
                                                  HalfCycleStats pos, HalfCycleStats neg) {
         if (size < 15) {
-            return "Insufficient discharge pulse count (<15) for robust statistical classification.";
+            return "Zbyt mała liczba impulsów (<15) do wiarygodnej klasyfikacji statystycznej.";
         }
 
         // High symmetry -> typical for internal void/cavity discharges
         if (cc >= 0.70 && qAsym >= 0.75 && qAsym <= 1.35 && nAsym >= 0.65 && nAsym <= 1.50) {
             return String.format(Locale.US,
-                "Strong half-cycle symmetry (CC = %.2f, Q = %.2f). Characteristic of INTERNAL / VOID (Cavity) discharges.",
-                cc, qAsym);
+                "Silna symetria obu półokresów (CC = %.2f, Q+/Q- = %.2f, N+/N- = %.2f). Obraz charakterystyczny dla wyładowań wtrętowych w dielektryku stałym (Internal Void / Cavity).",
+                cc, qAsym, nAsym);
         }
 
         // Strong polarity asymmetry -> typical for Corona (ulot)
         if (qAsym > 2.2 || qAsym < 0.45 || nAsym > 3.0 || nAsym < 0.33) {
-            String dominant = (pos.pulseCount > neg.pulseCount) ? "Positive (+)" : "Negative (-)";
+            String dominant = (pos.pulseCount > neg.pulseCount) ? "dodatni (+)" : "ujemny (-)";
             return String.format(Locale.US,
-                "Severe polarity asymmetry (Q = %.2f, N-ratio = %.2f, dominant: %s). Characteristic of CORONA (Point-to-plane) discharges.",
+                "Bardzo silna asymetria polaryzacji (Q+/Q- = %.2f, N+/N- = %.2f, dominuje półokres: %s). Obraz charakterystyczny dla wyładowań ulotowych w gazie (Corona / ostrze-płaszczyzna).",
                 qAsym, nAsym, dominant);
         }
 
         // Concentrated phase distribution with moderate symmetry -> Surface / Creeping discharges
         if ((pos.phaseKurtosis > 1.5 || neg.phaseKurtosis > 1.5) && cc >= 0.25) {
             return String.format(Locale.US,
-                "High phase concentration (Ku_pos = %.2f, Ku_neg = %.2f, CC = %.2f). Characteristic of SURFACE / CREEPING discharges.",
+                "Wysoka koncentracja fazowa i spiczastość impulsów (Ku+ = %.2f, Ku- = %.2f, CC = %.2f). Obraz charakterystyczny dla wyładowań powierzchniowych (Surface / Creeping).",
                 pos.phaseKurtosis, neg.phaseKurtosis, cc);
         }
 
         // Periodic floating / loose contact
         if (cc >= 0.50 && Math.abs(pos.phaseSkewness) < 0.6 && Math.abs(neg.phaseSkewness) < 0.6) {
             return String.format(Locale.US,
-                "Regular symmetrical phase bands (CC = %.2f, Sk_pos = %.2f). Characteristic of FLOATING POTENTIAL or regular internal discharges.",
+                "Symetryczne, regularne pasma fazowe (CC = %.2f, Sk+ = %.2f). Obraz charakterystyczny dla elementów o potencjale pływającym (Floating Potential / wady montażowe).",
                 cc, pos.phaseSkewness);
         }
 
         return String.format(Locale.US,
-            "Mixed / Complex pattern (CC = %.2f, Q = %.2f, N-ratio = %.2f). Inspect single pulse waveforms and PRPD clusters.",
+            "Wzorzec mieszany / złożony (CC = %.2f, Q+/Q- = %.2f, N+/N- = %.2f). Zalecana weryfikacja w oknie pojedynczego impulsu (Single Pulse Scope) oraz klastrów CIGRE T-F.",
             cc, qAsym, nAsym);
     }
 

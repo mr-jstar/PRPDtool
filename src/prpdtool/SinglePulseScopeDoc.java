@@ -242,7 +242,7 @@ public class SinglePulseScopeDoc {
                 "Wprowadzenie i obsługa",
                 "Przegląd okna i cel analizy pojedynczych impulsów WNZ",
                 "Single Pulse Waveform & FFT Scope Overview (IEC 60270 / CIGRE)",
-                "[📈]",
+                "[Wykres]",
                 "Cel badania pojedynczego impulsu, różnice względem zbiorczego wykresu PRPD.",
                 dark -> page(
                         "Wprowadzenie: Analiza pojedynczego impulsu WNZ w czasie i częstotliwości",
@@ -283,7 +283,7 @@ public class SinglePulseScopeDoc {
                 "Wprowadzenie i obsługa",
                 "Wybór impulsu, priorytetyzacja sygnałów i ochrona Qmax",
                 "Pulse Selection, Significant Discharges Retention & Qmax Persistence",
-                "[📦]",
+                "[Bufor]",
                 "Zasada inteligentnego bufora, eliminacja zalewania szumem i sortowanie od najwyższych wyładowań.",
                 dark -> page(
                         "Mechanizm rejestracji impulsów i inteligentna priorytetyzacja",
@@ -374,7 +374,7 @@ public class SinglePulseScopeDoc {
                 "Wykresy i osie współrzędnych",
                 "Widmo częstotliwościowe FFT (Frequency Domain) – osie i skale",
                 "FFT Frequency Domain Spectrum Chart, Nyquist Limit & dBmV Scale",
-                "[📊]",
+                "[Widmo]",
                 "Uzasadnienie osi X [MHz] (limit Nyquista 62.5 MHz), skali decybelowej [dBmV] vs liniowej [mV] oraz doboru okna czasowego.",
                 dark -> page(
                         "Widmo częstotliwościowe FFT: Budowa wykresu i analiza pasma",
@@ -425,7 +425,7 @@ public class SinglePulseScopeDoc {
                 "Przetwarzanie sygnału i FFT",
                 "Ustawienia analizy: Sygnał czasowy, skale FFT i okna czasowe",
                 "Signal Conditioning, FFT Scaling & Windowing Functions (IEC 62478 / DSP)",
-                "[🎛]",
+                "[Filtry]",
                 "Szczegółowe omówienie opcji: sygnał surowy vs filtrowany, skala dBmV vs liniowa oraz funkcje okienkowania FFT.",
                 dark -> page(
                         "Ustawienia analizy: Sygnał czasowy, skale FFT i okna czasowe",
@@ -541,7 +541,7 @@ public class SinglePulseScopeDoc {
                 "Parametry czasowe",
                 "Czas narastania tr (10-90%) [ns]",
                 "Pulse Rise Time (10% to 90% Leading Edge)",
-                "[📈]",
+                "[Wykres]",
                 "Szybkość rozwoju lawiny elektronowej, stromość czoła i odróżnienie wyładowań gazowych od dielektryka stałego.",
                 dark -> page(
                         "Czas narastania impulsu tr (10-90%)",
@@ -599,7 +599,7 @@ public class SinglePulseScopeDoc {
                 "Parametry czasowe",
                 "Czas opadania tf (90-10%) [ns]",
                 "Pulse Fall Time (90% to 10% Trailing Edge)",
-                "[📉]",
+                "[Widmo FFT]",
                 "Czas zaniku impulsu, rekombinacja nośników i tłumienie w obwodzie sprzęgającym.",
                 dark -> page(
                         "Czas opadania impulsu tf (90-10%)",
@@ -625,7 +625,7 @@ public class SinglePulseScopeDoc {
                 "Parametry czasowe",
                 "Energia całkowa impulsu E [mV²·µs]",
                 "Total Pulse Energy Integral (Square of Voltage over Time)",
-                "[🔋]",
+                "[Energia]",
                 "Całka kwadratu napięcia chwilowego po czasie – odróżnienie szumu od potężnych pakietów energii.",
                 dark -> page(
                         "Energia całkowa impulsu E",
@@ -653,7 +653,7 @@ public class SinglePulseScopeDoc {
                 "Parametry czasowe",
                 "Czas równoważny CIGRE Teq [ns]",
                 "CIGRE Equivalent Time Duration (Second Spectral Moment in Time)",
-                "[📐]",
+                "[Parametry]",
                 "Efektywna szerokość czasowa impulsu wg zaleceń CIGRE WG D1.33 / TF 15/33.03.05.",
                 dark -> page(
                         "Czas równoważny CIGRE Teq",
@@ -689,7 +689,7 @@ public class SinglePulseScopeDoc {
                 "Parametry widmowe (FFT)",
                 "Parametry widmowe FFT – przegląd i definicje",
                 "Frequency Domain FFT Metrics Overview & Spectral Moments",
-                "[📊]",
+                "[Widmo]",
                 "Zestawienie parametrów widmowych (f_peak, f_cent, BW, Feq, fs) wraz ze wzorami i interpretacją.",
                 dark -> page(
                         "Parametry widmowe FFT: Definicje i znaczenie diagnostyczne",
@@ -716,7 +716,7 @@ public class SinglePulseScopeDoc {
                 "Parametry widmowe (FFT)",
                 "Częstotliwość piku f_peak [MHz]",
                 "Dominant Peak Frequency in Pulse Spectrum",
-                "[🎯]",
+                "[Klasyfikacja]",
                 "Częstotliwość dominującej harmonicznej w widmie fourierowskim.",
                 dark -> page(
                         "Częstotliwość piku f_peak",
@@ -802,7 +802,7 @@ public class SinglePulseScopeDoc {
                 "Parametry widmowe (FFT)",
                 "Częstotliwość równoważna CIGRE Feq [MHz]",
                 "CIGRE Equivalent Frequency (RMS Spectral Moment)",
-                "[📐]",
+                "[Parametry]",
                 "Częstotliwość równoważna wg CIGRE WG D1.33 – oś pionowa mapy klasyfikacyjnej T-F.",
                 dark -> page(
                         "Częstotliwość równoważna CIGRE Feq",
@@ -838,7 +838,7 @@ public class SinglePulseScopeDoc {
                 "Diagnostyka i klasyfikacja",
                 "Klasyfikacja CIGRE T-F – analiza klastrów czas-częstotliwość",
                 "CIGRE WG D1.33 Time-Frequency Cluster Map Classification",
-                "[🔬]",
+                "[Pomiary]",
                 "Zasada działania mapy (Teq, Feq), podział na klastry defektów: Internal Void, Corona, Surface, Cable, Noise.",
                 dark -> page(
                         "Klasyfikacja CIGRE T-F: Mapa czasowo-częstotliwościowa wyładowań",
@@ -876,7 +876,7 @@ public class SinglePulseScopeDoc {
                 "Diagnostyka i klasyfikacja",
                 "Tabela wartości referencyjnych (Czy dana wartość to dużo czy mało?)",
                 "Comprehensive Diagnostic Benchmarks & Numerical Reference Guide",
-                "[📋]",
+                "[Normy]",
                 "Zbiorcze porównanie liczbowe: szum tła, wyładowania wtrętowe, ulotowe, powierzchniowe, kable i generator AWG.",
                 dark -> page(
                         "Punkty odniesienia do analizy: Czy dana wartość to dużo czy mało?",
@@ -922,7 +922,7 @@ public class SinglePulseScopeDoc {
                 "Literatura i normy",
                 "Wykaz norm i publikacji źródłowych (Normy & Artykuły)",
                 "Authoritative Standards, CIGRE Technical Brochures & Academic Foundations",
-                "[📚]",
+                "[Literatura]",
                 "Szczegółowy wykaz norm IEC/PN-EN, biuletynów CIGRE i publikacji źródłowych zaimplementowanych w aplikacji.",
                 dark -> page(
                         "Wykaz norm i publikacji źródłowych aplikacji PRPD Tool",

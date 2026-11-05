@@ -69,8 +69,8 @@ public class HtmlReportGenerator {
         sb.append("    <strong>Raport Diagnostyczny WNZ (IEC 60270 / CIGRE)</strong> — ").append(escape(d.reportId)).append("\n");
         sb.append("  </div>\n");
         sb.append("  <div class=\"action-right\">\n");
-        sb.append("    <button class=\"btn btn-secondary\" onclick=\"copySummary()\">📋 Kopiuj podsumowanie</button>\n");
-        sb.append("    <button class=\"btn btn-primary\" onclick=\"window.print()\">🖨️ Drukuj / Zapisz jako PDF</button>\n");
+        sb.append("    <button class=\"btn btn-secondary\" onclick=\"copySummary()\">Kopiuj podsumowanie</button>\n");
+        sb.append("    <button class=\"btn btn-primary\" onclick=\"window.print()\">Drukuj / Zapisz jako PDF</button>\n");
         sb.append("  </div>\n");
         sb.append("</div>\n");
 
@@ -94,7 +94,7 @@ public class HtmlReportGenerator {
 
         // Card 1: Object & Test Setup
         sb.append("  <div class=\"card\">\n");
-        sb.append("    <div class=\"card-title\">📋 Dane Obiektu i Pomiary</div>\n");
+        sb.append("    <div class=\"card-title\">Dane Obiektu i Parametry Pomiaru</div>\n");
         sb.append("    <table class=\"table-kv\">\n");
         sb.append("      <tr><td>Obiekt badany:</td><td><strong>").append(escape(d.objectName)).append("</strong></td></tr>\n");
         sb.append("      <tr><td>Pole / Faza:</td><td>").append(escape(d.bayOrPhase)).append("</td></tr>\n");
@@ -102,14 +102,13 @@ public class HtmlReportGenerator {
         sb.append("      <tr><td>Napięcie probiercze U_test:</td><td><strong>").append(escape(d.testVoltageKv)).append(" kV</strong> (f0 = ").append(escape(d.lineFrequencyHz)).append(" Hz)</td></tr>\n");
         sb.append("      <tr><td>Tor pomiarowy:</td><td>").append(escape(d.sensorType)).append("</td></tr>\n");
         sb.append("      <tr><td>Przetwornik / Akwizycja:</td><td>").append(escape(d.samplingInfo)).append("</td></tr>\n");
-        sb.append("      <tr><td>Diagnosta / Operator:</td><td>").append(escape(d.operatorName)).append("</td></tr>\n");
-        sb.append("      <tr><td>Data i czas badania:</td><td>").append(dateStr).append("</td></tr>\n");
+        sb.append("      <tr><td>Data wykonania raportu:</td><td>").append(dateStr).append("</td></tr>\n");
         sb.append("    </table>\n");
         sb.append("  </div>\n");
 
         // Card 2: Calibration & Executive Summary
         sb.append("  <div class=\"card\">\n");
-        sb.append("    <div class=\"card-title\">⚖️ Kalibracja Ładunku Pozornego (IEC 60270)</div>\n");
+        sb.append("    <div class=\"card-title\">Kalibracja Ładunku Pozornego (IEC 60270)</div>\n");
         sb.append("    <table class=\"table-kv\">\n");
         sb.append("      <tr><td>Status kalibracji:</td><td>");
         if (d.isCalibrated) {
@@ -122,6 +121,7 @@ public class HtmlReportGenerator {
             sb.append("<span class=\"tag tag-warning\">Nieskalibrowany (tryb surowy mV)</span></td></tr>\n");
             sb.append("      <tr><td>Jednostka ładunku:</td><td>mV (napięcie szczytowe na wejściu ADC)</td></tr>\n");
             sb.append("      <tr><td>Współczynnik k_cal:</td><td>1.0000 (pomiar względny)</td></tr>\n");
+            sb.append("      <tr><td>Wzorzec kalibratora:</td><td>").append(escape(d.calibratorName)).append(" (niewykonano kalibracji w bieżącej sesji)</td></tr>\n");
         }
         sb.append("      <tr><td>Uwagi diagnostyczne:</td><td><em>").append(escape(d.notes)).append("</em></td></tr>\n");
         sb.append("    </table>\n");
@@ -165,7 +165,7 @@ public class HtmlReportGenerator {
         // CHARTS: PRPD & PROFILES
         if (d.includePrpd && d.prpdImage != null) {
             sb.append("<div class=\"card page-break-inside-avoid\">\n");
-            sb.append("  <div class=\"card-title\">📊 Obraz Fazowo-Rozdzielczy Wyładowań Niezupełnych (PRPD Pattern — φ-q-n)</div>\n");
+            sb.append("  <div class=\"card-title\">Obraz Fazowo-Rozdzielczy Wyładowań Niezupełnych (PRPD Pattern — φ-q-n)</div>\n");
             sb.append("  <div class=\"chart-box\">\n");
             sb.append("    <img class=\"report-img\" src=\"data:image/png;base64,").append(toBase64(d.prpdImage)).append("\" alt=\"Wykres PRPD\">\n");
             sb.append("  </div>\n");
@@ -175,7 +175,7 @@ public class HtmlReportGenerator {
 
         if (d.includeProfiles && d.profilesImage != null) {
             sb.append("<div class=\"card page-break-inside-avoid\">\n");
-            sb.append("  <div class=\"card-title\">📈 Profile Statystyczne Rozkładu Fazowego Hn(φ), Hqn(φ), Hqmax(φ)</div>\n");
+            sb.append("  <div class=\"card-title\">Profile Statystyczne Rozkładu Fazowego Hn(φ), Hqn(φ), Hqmax(φ)</div>\n");
             sb.append("  <div class=\"chart-box\">\n");
             sb.append("    <img class=\"report-img\" src=\"data:image/png;base64,").append(toBase64(d.profilesImage)).append("\" alt=\"Profile statystyczne\">\n");
             sb.append("  </div>\n");
@@ -187,7 +187,7 @@ public class HtmlReportGenerator {
         if (d.includePulseScope && d.pulseScopeImage != null && d.qmaxPulse != null) {
             PulseWaveform p = d.qmaxPulse;
             sb.append("<div class=\"card page-break-inside-avoid\">\n");
-            sb.append("  <div class=\"card-title\">⚡ Analiza Czasowo-Częstotliwościowa Impulsu Szczytowego Qmax (Time Domain & FFT Spectrum)</div>\n");
+            sb.append("  <div class=\"card-title\">Analiza Czasowo-Częstotliwościowa Impulsu Szczytowego Qmax (Time Domain & FFT Spectrum)</div>\n");
             sb.append("  <div class=\"chart-box\">\n");
             sb.append("    <img class=\"report-img\" src=\"data:image/png;base64,").append(toBase64(d.pulseScopeImage)).append("\" alt=\"Analiza oscyloskopowa i FFT\">\n");
             sb.append("  </div>\n");
@@ -219,7 +219,7 @@ public class HtmlReportGenerator {
             HalfCycleStats neg = sr.neg;
 
             sb.append("<div class=\"card page-break-inside-avoid\">\n");
-            sb.append("  <div class=\"card-title\">📑 Kompletny Odcisk Statystyczny WNZ (CIGRE Statistical Fingerprint)</div>\n");
+            sb.append("  <div class=\"card-title\">Kompletny Odcisk Statystyczny WNZ (CIGRE Statistical Fingerprint)</div>\n");
             sb.append("  <table class=\"table-grid\">\n");
             sb.append("    <thead>\n");
             sb.append("      <tr>\n");
@@ -326,7 +326,7 @@ public class HtmlReportGenerator {
         // AI DIAGNOSIS & EXPERT RECOMMENDATIONS
         if (d.includeAiDiagnosis) {
             sb.append("<div class=\"card page-break-inside-avoid\">\n");
-            sb.append("  <div class=\"card-title\">🧠 Diagnoza Sztucznej Inteligencji i Rekomendacje Eksploatacyjne</div>\n");
+            sb.append("  <div class=\"card-title\">Klasyfikacja Automatyczna AI i Rekomendacje Eksploatacyjne</div>\n");
 
             sb.append("  <div class=\"grid-2\">\n");
 
@@ -370,17 +370,7 @@ public class HtmlReportGenerator {
             sb.append("</div>\n");
         }
 
-        // SIGNATURES FOOTER
-        sb.append("<div class=\"signatures-card page-break-inside-avoid\">\n");
-        sb.append("  <div class=\"signature-box\">\n");
-        sb.append("    <div class=\"sig-line\"></div>\n");
-        sb.append("    <div class=\"sig-label\">Podpis Diagnosty / Pomiary wykonał:<br><strong>").append(escape(d.operatorName)).append("</strong></div>\n");
-        sb.append("  </div>\n");
-        sb.append("  <div class=\"signature-box\">\n");
-        sb.append("    <div class=\"sig-line\"></div>\n");
-        sb.append("    <div class=\"sig-label\">Podpis Osoby Zatwierdzającej / Główny Inżynier<br><strong>Data: ").append(dateStr.substring(0, 10)).append("</strong></div>\n");
-        sb.append("  </div>\n");
-        sb.append("</div>\n");
+
 
         sb.append("<footer class=\"report-footer\">\n");
         sb.append("  Raport wygenerowany automatycznie przez system <strong>PRPD Tool</strong> (Red Pitaya STEMlab 125-14 WNZ Monitor). Zgodność z IEC 60270 / IEC 62478.\n");

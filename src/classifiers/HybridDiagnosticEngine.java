@@ -18,7 +18,7 @@ public class HybridDiagnosticEngine {
         public final float primaryConfidence;
         public final String polishName;
         public final String riskLevel;       // NORMALNY, OSTRZEGAWCZY, KRYTYCZNY
-        public final String modelAgreement;  // PEŁNA ZGODNOŚĆ, CZĘŚCIOWA ZGODNOŚĆ, ROZBIEŻNOŚĆ
+        public final String modelAgreement;  // Pełna zgodność, Częściowa zgodność, Rozbieżność
 
         public final Map<String, Float> hybridProbabilities = new LinkedHashMap<>();
         public final Map<String, Float> visionProbabilities = new LinkedHashMap<>();
@@ -156,9 +156,9 @@ public class HybridDiagnosticEngine {
             case "corona -" -> "Ulot w półokresie ujemnym (Corona -)";
             case "corona +" -> "Ulot w półokresie dodatnim (Corona +)";
             case "surface" -> "Wyładowania powierzchniowe (Surface Tracking)";
-            case "void" -> "Wyładowania w pustce wewnętrznej (Internal Void)";
-            case "floating" -> "Potencjał pływający (Floating Element / Particle)";
-            case "noise" -> "Szum pomiarowy / Brak aktywnego defektu (Noise)";
+            case "void" -> "Wyładowania wtrącone w dielektryku (Internal Void)";
+            case "floating" -> "Potencjał pływający (Floating Particle)";
+            case "noise" -> "Szum tła / Brak defektu (Noise)";
             default -> className;
         };
     }

@@ -63,7 +63,7 @@ public class StatisticalProfilesDialog extends JDialog {
 
         helpDialog = new DescriptorHelpDialog(this, parent.isDarkMode());
 
-        chartPanel = new PhaseProfileChartPanel();
+        chartPanel = new PhaseProfileChartPanel(helpDialog);
         chartPanel.setMinimumSize(new Dimension(280, 200));
 
         // Table setup with custom tooltip provider
@@ -428,7 +428,7 @@ public class StatisticalProfilesDialog extends JDialog {
         addRow("Total Apparent Charge",
                 "-",
                 "-",
-                String.format(Locale.US, "%.1f %s*pts", cal.toDisplay(r.totalApparentEnergy), u));
+                String.format(Locale.US, "ΣQ = %.1f %s", cal.toDisplay(r.totalApparentEnergy), u));
 
         addRow("Total Pulses (N_total)",
                 "-",
@@ -526,27 +526,66 @@ public class StatisticalProfilesDialog extends JDialog {
      * and clean dedicated title headers positioned above the graph boxes.
      */
     private static class PhaseProfileChartPanel extends JPanel {
+        private final DescriptorHelpDialog helpDialog;
         private StatisticalResult result;
         private int hoverPhaseDeg = -1;
 
-        public PhaseProfileChartPanel() {
+        public PhaseProfileChartPanel(DescriptorHelpDialog helpDialog) {
+            this.helpDialog = helpDialog;
             setBackground(new Color(22, 24, 27));
             setDoubleBuffered(true);
 
             MouseAdapter ma = new MouseAdapter() {
                 @Override
                 public void mouseMoved(MouseEvent e) {
-                    handleMouse(e.getX());
+                    String hdr = getHeaderAt(e.getY());
+                    if (hdr != null) {
+                        setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                        setToolTipText("Kliknij [?], aby otworzyć objaśnienie profilu " + hdr + "(φ) i interpretację defektów");
+                    } else {
+                        setCursor(Cursor.getDefaultCursor());
+                        setToolTipText(null);
+                        handleMouse(e.getX());
+                    }
+                }
+
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    String hdr = getHeaderAt(e.getY());
+                    if (hdr != null && helpDialog != null) {
+                        helpDialog.showDescriptor(hdr);
+                    }
                 }
 
                 @Override
                 public void mouseExited(MouseEvent e) {
                     hoverPhaseDeg = -1;
+                    setCursor(Cursor.getDefaultCursor());
+                    setToolTipText(null);
                     repaint();
                 }
             };
             addMouseListener(ma);
             addMouseMotionListener(ma);
+        }
+
+        private int getSlotY(int slotIdx) {
+            int topMargin = 22;
+            int gap = 16;
+            int totalPlotH = getHeight() - topMargin - 42;
+            int singleSlotH = (totalPlotH - 2 * gap) / 3;
+            return topMargin + slotIdx * (singleSlotH + gap);
+        }
+
+        private String getHeaderAt(int my) {
+            int headerH = 18;
+            for (int i = 0; i < 3; i++) {
+                int sy = getSlotY(i);
+                if (my >= sy && my <= sy + headerH) {
+                    return (i == 0) ? "Hn" : ((i == 1) ? "Hqn" : "Hqmax");
+                }
+            }
+            return null;
         }
 
         public void setResult(StatisticalResult r) {
@@ -656,6 +695,13 @@ public class StatisticalProfilesDialog extends JDialog {
             // Title text above chart
             g.setColor(new Color(230, 235, 245));
             g.drawString(title, x0 + 15, slotY + 12);
+
+            // Clickable [?] badge
+            FontMetrics fm = g.getFontMetrics();
+            int titleW = fm.stringWidth(title);
+            int badgeX = x0 + 15 + titleW + 8;
+            g.setColor(new Color(0, 212, 255));
+            g.drawString("[?]", badgeX, slotY + 12);
         }
 
         private void drawProfileHn(Graphics2D g, int x0, int slotY, int w, int boxH, int headerH) {
@@ -807,12 +853,15 @@ public class StatisticalProfilesDialog extends JDialog {
             g.setStroke(new BasicStroke(1.0f));
             g.drawRect(x0, boxY, w, boxH);
 
-            // Y-axis labels
+            // Y-axis labels (right-aligned to avoid collision with chart borders)
             g.setFont(new Font("Segoe UI", Font.PLAIN, 10));
             g.setColor(new Color(160, 165, 175));
+            FontMetrics fmY = g.getFontMetrics();
             String topLabel = (maxY >= 10.0) ? String.format(Locale.US, "%.0f", maxY) : String.format(Locale.US, "%.2f", maxY);
-            g.drawString(topLabel, x0 - 35, boxY + 11);
-            g.drawString("0", x0 - 18, boxY + boxH);
+            int topW = fmY.stringWidth(topLabel);
+            g.drawString(topLabel, x0 - topW - 6, boxY + 11);
+            int zeroW = fmY.stringWidth("0");
+            g.drawString("0", x0 - zeroW - 6, boxY + boxH);
 
             // X-axis phase labels (only for bottom chart)
             if (isBottomChart) {

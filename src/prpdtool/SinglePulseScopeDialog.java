@@ -123,7 +123,7 @@ public class SinglePulseScopeDialog extends JDialog {
         JButton prevBtn = new JButton("◀ Poprzedni");
         JButton nextBtn = new JButton("Następny ▶");
         JButton maxBtn = new JButton("★ Najwyższy (Qmax)");
-        JButton randBtn = new JButton("⚄ Losowy");
+        JButton randBtn = new JButton("Losowy");
 
         maxBtn.setFont(maxBtn.getFont().deriveFont(Font.BOLD));
         maxBtn.setForeground(isDarkMode ? new Color(255, 204, 0) : new Color(180, 130, 0));

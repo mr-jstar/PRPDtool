@@ -18,6 +18,7 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -25,12 +26,13 @@ import java.util.Map;
  * Modernized AI & Machine Learning Classification Window for PRPD Tool.
  * Features:
  * - Hybrid ensemble fusion (YOLO / RT-DETR vision detections + CIGRE statistical fingerprint)
- * - PRPD canvas with toggleable bounding boxes and class labels
+ * - PRPD canvas with toggleable bounding boxes (BBoxes) with auto-cluster detection
+ * - Fixed banner card height preventing vertical distortion
  * - Probability distribution bars for all 6 defect classes
  * - Explainable AI (XAI) rationale list
  * - Model agreement comparison (Vision vs. Physics)
- * - Live continuous auto-classification timer
- * - Clipboard and report export capabilities
+ * - Interactive step-by-step help guide and pipeline flowchart (IEC 60270 / CIGRE WG 21.03)
+ * - Clipboard export capabilities
  */
 public class HybridClassificationDialog extends JDialog {
 
@@ -39,7 +41,6 @@ public class HybridClassificationDialog extends JDialog {
 
     private PrpdCanvasPanel canvasPanel;
     private JComboBox<String> modelSelectorCombo;
-    private JCheckBox liveAutoCb;
     private JCheckBox showBoxesCb;
     private JSlider confSlider;
     private JLabel confValueLbl;
@@ -56,22 +57,43 @@ public class HybridClassificationDialog extends JDialog {
     private JTextArea xaiArea;
     private JTextArea recommendationArea;
 
-    private Timer liveTimer;
     private boolean isClassifying = false;
     private HybridResult currentResult;
     private BufferedImage currentPrpdImage;
+
+    // Help & Guide Dialog
+    private HybridClassificationHelpDialog helpDialog;
+
+    public static class BoundingBoxInfo {
+        public final String className;
+        public final String label;
+        public final float confidence;
+        public final float xc, yc, w, h; // 0.0 to 1.0 normalized coordinates
+        public final Color color;
+
+        public BoundingBoxInfo(String className, String label, float confidence, float xc, float yc, float w, float h, Color color) {
+            this.className = className;
+            this.label = label;
+            this.confidence = confidence;
+            this.xc = xc;
+            this.yc = yc;
+            this.w = w;
+            this.h = h;
+            this.color = color;
+        }
+    }
 
     public HybridClassificationDialog(PRPDTool owner, boolean isDarkMode) {
         super(owner, "Centrum Klasyfikacji Hybrydowej AI (YOLO + CIGRE Ensemble)", false);
         this.parent = owner;
         this.isDarkMode = isDarkMode;
 
-        setSize(1060, 720);
-        setMinimumSize(new Dimension(880, 600));
+        // Generous default size ensuring no controls, badges or labels are clipped
+        setSize(1280, 800);
+        setMinimumSize(new Dimension(1100, 660));
         setLocationRelativeTo(owner);
 
         initUI();
-        initTimer();
     }
 
     private void initUI() {
@@ -91,7 +113,7 @@ public class HybridClassificationDialog extends JDialog {
                 new EmptyBorder(8, 16, 8, 16)
         ));
 
-        JPanel leftTools = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        JPanel leftTools = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         leftTools.setBackground(panelBg);
 
         JLabel titleLbl = new JLabel("Klasyfikacja Hybrydowa WNZ");
@@ -99,19 +121,27 @@ public class HybridClassificationDialog extends JDialog {
         titleLbl.setForeground(accentCol);
         leftTools.add(titleLbl);
 
+        JButton titleHelpBtn = new JButton("[?]");
+        titleHelpBtn.setFont(new Font("Segoe UI", Font.BOLD, 10));
+        titleHelpBtn.setMargin(new Insets(1, 4, 1, 4));
+        titleHelpBtn.setFocusPainted(false);
+        titleHelpBtn.setToolTipText("Otwórz przewodnik i schemat blokowy przetwarzania AI");
+        titleHelpBtn.addActionListener(e -> showHelpDialog("PIPELINE_MAP"));
+        leftTools.add(titleHelpBtn);
+
         leftTools.add(new JSeparator(JSeparator.VERTICAL));
-        leftTools.add(new JLabel("Model wizualny:"));
+        leftTools.add(new JLabel("Model:"));
 
         modelSelectorCombo = new JComboBox<>();
-        modelSelectorCombo.setPreferredSize(new Dimension(190, 26));
+        modelSelectorCombo.setPreferredSize(new Dimension(185, 26));
         updateModelCombo();
         leftTools.add(modelSelectorCombo);
 
         leftTools.add(new JLabel("Próg ufności:"));
-        confSlider = new JSlider(10, 90, 30);
-        confSlider.setPreferredSize(new Dimension(100, 24));
+        confSlider = new JSlider(5, 90, 20); // Default 20% so that 29.8% detections are visible immediately
+        confSlider.setPreferredSize(new Dimension(85, 24));
         confSlider.setBackground(panelBg);
-        confValueLbl = new JLabel("30%");
+        confValueLbl = new JLabel("20%");
         confSlider.addChangeListener(e -> {
             confValueLbl.setText(confSlider.getValue() + "%");
             if (canvasPanel != null) canvasPanel.repaint();
@@ -123,27 +153,26 @@ public class HybridClassificationDialog extends JDialog {
 
         JPanel rightTools = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         rightTools.setBackground(panelBg);
-        showBoxesCb = new JCheckBox("Pokaż ramki detekcji (BBoxes)", true);
-        showBoxesCb.addActionListener(e -> canvasPanel.repaint());
+
+        showBoxesCb = new JCheckBox("Pokaż ramki (BBoxes)", true);
+        showBoxesCb.addActionListener(e -> {
+            if (canvasPanel != null) canvasPanel.repaint();
+        });
         rightTools.add(showBoxesCb);
 
-        liveAutoCb = new JCheckBox("Live Auto-Classify (1s)", false);
-        liveAutoCb.addActionListener(e -> {
-            if (liveAutoCb.isSelected()) {
-                liveTimer.start();
-            } else {
-                liveTimer.stop();
-            }
-        });
-        rightTools.add(liveAutoCb);
+        JButton helpBtn = new JButton("Przewodnik i pomoc");
+        helpBtn.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        helpBtn.setFocusPainted(false);
+        helpBtn.addActionListener(e -> showHelpDialog("PIPELINE_MAP"));
+        rightTools.add(helpBtn);
 
         topBar.add(rightTools, BorderLayout.EAST);
         add(topBar, BorderLayout.NORTH);
 
         // 2. MAIN SPLIT CONTENT
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
-        splitPane.setResizeWeight(0.48);
-        splitPane.setDividerLocation(470);
+        splitPane.setResizeWeight(0.44);
+        splitPane.setDividerLocation(510);
         splitPane.setBorder(null);
 
         // LEFT: PRPD Image with Bounding Boxes
@@ -151,15 +180,27 @@ public class HybridClassificationDialog extends JDialog {
         leftPanel.setBackground(panelBg);
         leftPanel.setBorder(new EmptyBorder(10, 12, 10, 8));
 
+        JPanel leftTitleBar = new JPanel(new BorderLayout());
+        leftTitleBar.setOpaque(false);
         JLabel leftTitle = new JLabel("Obraz Fazowy PRPD z Detekcjami Sieci Neuronowej");
         leftTitle.setFont(new Font("Segoe UI", Font.BOLD, 12));
         leftTitle.setForeground(accentCol);
-        leftPanel.add(leftTitle, BorderLayout.NORTH);
+        leftTitleBar.add(leftTitle, BorderLayout.WEST);
+
+        JButton canvasHelpBtn = new JButton("[?]");
+        canvasHelpBtn.setFont(new Font("Segoe UI", Font.BOLD, 10));
+        canvasHelpBtn.setMargin(new Insets(1, 4, 1, 4));
+        canvasHelpBtn.setFocusPainted(false);
+        canvasHelpBtn.setToolTipText("Wyjaśnienie ramienia wizyjnego YOLO / RT-DETR");
+        canvasHelpBtn.addActionListener(e -> showHelpDialog("VISION_MODELS"));
+        leftTitleBar.add(canvasHelpBtn, BorderLayout.EAST);
+
+        leftPanel.add(leftTitleBar, BorderLayout.NORTH);
 
         canvasPanel = new PrpdCanvasPanel();
         leftPanel.add(canvasPanel, BorderLayout.CENTER);
 
-        JLabel canvasFootnote = new JLabel("Format wejściowy: 448x448 RGB | Ramki YOLO skalowane proporcjonalnie");
+        JLabel canvasFootnote = new JLabel("Format wejściowy: 448x448 RGB | Ramki detekcji skalowane do skupisk WNZ");
         canvasFootnote.setFont(new Font("Segoe UI", Font.PLAIN, 10));
         canvasFootnote.setForeground(isDarkMode ? new Color(140, 150, 165) : new Color(110, 120, 130));
         leftPanel.add(canvasFootnote, BorderLayout.SOUTH);
@@ -172,13 +213,17 @@ public class HybridClassificationDialog extends JDialog {
         rightPanel.setBackground(panelBg);
         rightPanel.setBorder(new EmptyBorder(10, 8, 10, 14));
 
-        // CARD 1: PRIMARY HYBRID DIAGNOSIS BANNER
-        JPanel primaryCard = new JPanel(new BorderLayout(8, 4));
+        // CARD 1: PRIMARY HYBRID DIAGNOSIS BANNER (LOCKED VERTICALLY)
+        JPanel primaryCard = new JPanel(new BorderLayout(8, 2));
         primaryCard.setBackground(isDarkMode ? new Color(36, 40, 48) : new Color(240, 245, 252));
         primaryCard.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(accentCol, 1),
                 new EmptyBorder(10, 14, 10, 14)
         ));
+        // Strict vertical locking: prevents ugly vertical stretching when resizing window
+        primaryCard.setMaximumSize(new Dimension(Integer.MAX_VALUE, 86));
+        primaryCard.setPreferredSize(new Dimension(500, 86));
+        primaryCard.setMinimumSize(new Dimension(300, 86));
 
         JPanel titleAndClass = new JPanel(new GridLayout(2, 1, 0, 2));
         titleAndClass.setOpaque(false);
@@ -231,6 +276,7 @@ public class HybridClassificationDialog extends JDialog {
                         TitledBorder.LEFT, TitledBorder.TOP, new Font("Segoe UI", Font.BOLD, 11), accentCol),
                 new EmptyBorder(6, 10, 8, 10)
         ));
+        probCard.setMaximumSize(new Dimension(Integer.MAX_VALUE, 185));
 
         probabilityBarsPanel = new JPanel(new GridLayout(6, 1, 0, 4));
         probabilityBarsPanel.setBackground(panelBg);
@@ -248,6 +294,7 @@ public class HybridClassificationDialog extends JDialog {
                         TitledBorder.LEFT, TitledBorder.TOP, new Font("Segoe UI", Font.BOLD, 11), accentCol),
                 new EmptyBorder(4, 10, 6, 10)
         ));
+        cmpCard.setMaximumSize(new Dimension(Integer.MAX_VALUE, 85));
 
         cmpCard.add(new JLabel("Detektor obrazowy YOLO/ONNX:"));
         visionModelResultLbl = new JLabel("-");
@@ -302,6 +349,7 @@ public class HybridClassificationDialog extends JDialog {
         recCard.add(new JScrollPane(recommendationArea), BorderLayout.CENTER);
 
         rightPanel.add(recCard);
+        rightPanel.add(Box.createVerticalGlue());
 
         JScrollPane rightScroll = new JScrollPane(rightPanel);
         rightScroll.setBorder(null);
@@ -322,7 +370,7 @@ public class HybridClassificationDialog extends JDialog {
         classifyBtn.setFont(classifyBtn.getFont().deriveFont(Font.BOLD, 12f));
         classifyBtn.setBackground(new Color(2, 132, 199));
         classifyBtn.setForeground(Color.WHITE);
-        classifyBtn.setPreferredSize(new Dimension(270, 32));
+        classifyBtn.setPreferredSize(new Dimension(280, 32));
         classifyBtn.addActionListener(e -> classifyCurrentAsync());
 
         JPanel leftBottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
@@ -334,31 +382,34 @@ public class HybridClassificationDialog extends JDialog {
         rightBottom.setBackground(panelBg);
 
         JButton copyBtn = new JButton("Kopiuj diagnozę");
+        copyBtn.setFont(new Font("Segoe UI", Font.PLAIN, 11));
         copyBtn.addActionListener(e -> copyToClipboard());
 
+        JButton helpBottomBtn = new JButton("Przewodnik i pomoc");
+        helpBottomBtn.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        helpBottomBtn.addActionListener(e -> showHelpDialog("PIPELINE_MAP"));
+
         JButton closeBtn = new JButton("Zamknij");
+        closeBtn.setFont(new Font("Segoe UI", Font.PLAIN, 11));
         closeBtn.addActionListener(e -> setVisible(false));
 
         rightBottom.add(copyBtn);
+        rightBottom.add(helpBottomBtn);
         rightBottom.add(closeBtn);
         bottomBar.add(rightBottom, BorderLayout.EAST);
 
         add(bottomBar, BorderLayout.SOUTH);
     }
 
-    private void initTimer() {
-        liveTimer = new Timer(1000, e -> {
-            if (isVisible() && !isClassifying) {
-                classifyCurrentAsync();
-            }
-        });
-
-        addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosing(WindowEvent e) {
-                if (liveTimer != null) liveTimer.stop();
-            }
-        });
+    public void showHelpDialog(String chapterKey) {
+        if (helpDialog == null) {
+            helpDialog = new HybridClassificationHelpDialog(this, isDarkMode);
+        }
+        if (chapterKey != null) {
+            helpDialog.showTopic(chapterKey);
+        } else {
+            helpDialog.setVisible(true);
+        }
     }
 
     private void updateModelCombo() {
@@ -384,7 +435,7 @@ public class HybridClassificationDialog extends JDialog {
             String polishLabel = HybridDiagnosticEngine.getPolishName(cName);
             JLabel nameLbl = new JLabel(polishLabel);
             nameLbl.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-            nameLbl.setPreferredSize(new Dimension(240, 18));
+            nameLbl.setPreferredSize(new Dimension(280, 18));
 
             JProgressBar bar = new JProgressBar(0, 100);
             bar.setValue(0);
@@ -483,6 +534,7 @@ public class HybridClassificationDialog extends JDialog {
     }
 
     private void displayResult(HybridResult res) {
+        this.currentResult = res;
         primaryClassLbl.setText(res.polishName.toUpperCase());
         Color classCol = PRPDConstants.CLASS_COLORS.getOrDefault(res.primaryClass, Color.CYAN);
         primaryClassLbl.setForeground(classCol);
@@ -545,7 +597,7 @@ public class HybridClassificationDialog extends JDialog {
         // Recommendation
         recommendationArea.setText(res.recommendedAction);
 
-        // Repaint canvas
+        // Repaint canvas to update bounding boxes
         canvasPanel.repaint();
     }
 
@@ -565,6 +617,179 @@ public class HybridClassificationDialog extends JDialog {
 
         Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(sb.toString()), null);
         JOptionPane.showMessageDialog(this, "Skopiowano podsumowanie diagnozy hybrydowej do schowka!", "Schowek", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    /**
+     * Resolves active bounding boxes for PRPD canvas rendering.
+     * Combines YOLO / RT-DETR vision box outputs with physical PRPD cluster extraction.
+     */
+    private List<BoundingBoxInfo> getActiveBoundingBoxes(float minConf) {
+        List<BoundingBoxInfo> boxes = new ArrayList<>();
+        if (currentResult == null) return boxes;
+
+        // 1. Vision model detections
+        if (currentResult.visionDetections != null && currentResult.visionDetections.length > 0) {
+            for (Prediction p : currentResult.visionDetections) {
+                if (p != null && p.className != null && !p.className.equalsIgnoreCase("none") && !p.className.equalsIgnoreCase("noise")) {
+                    if (p.confidence >= minConf && p.box != null && p.box.length >= 4) {
+                        float xc = p.box[0];
+                        float yc = p.box[1];
+                        float w = p.box[2];
+                        float h = p.box[3];
+                        if (xc > 0.0f && xc < 1.0f && yc > 0.0f && yc < 1.0f && w > 0.02f && w < 1.0f && h > 0.02f && h < 1.0f) {
+                            Color col = PRPDConstants.CLASS_COLORS.getOrDefault(p.className(), new Color(0, 210, 255));
+                            String lbl = HybridDiagnosticEngine.getPolishName(p.className()) + " " + Math.round(p.confidence * 100.0f) + "%";
+                            boxes.add(new BoundingBoxInfo(p.className(), lbl, p.confidence, xc, yc, w, h, col));
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Cluster extraction fallback from actual PRPD pulses if vision produced no bounding box
+        if (boxes.isEmpty() && currentResult.primaryClass != null && !currentResult.primaryClass.equalsIgnoreCase("noise")) {
+            if (currentResult.primaryConfidence >= minConf) {
+                boxes.addAll(computeClusterBoxesFromPRPD(currentResult.primaryClass, currentResult.primaryConfidence));
+            }
+        }
+
+        return boxes;
+    }
+
+    private List<BoundingBoxInfo> computeClusterBoxesFromPRPD(String primaryClass, float confidence) {
+        List<BoundingBoxInfo> list = new ArrayList<>();
+        if (parent == null) return list;
+        PRPDHistogram hist = parent.getHistogram();
+        if (!(hist instanceof DynamicPRPDHistogram)) return list;
+
+        DynamicPRPDHistogram dh = (DynamicPRPDHistogram) hist;
+        double[] phases = dh.getPhases();
+        double[] amps = dh.getAmps();
+        int size = dh.getSize();
+        if (size == 0) return list;
+
+        double minA = dh.getMin();
+        double maxA = dh.getMax();
+        if (maxA <= minA) { maxA = 100.0; minA = -100.0; }
+        double rangeA = maxA - minA;
+
+        String cLower = primaryClass.toLowerCase();
+        Color col = PRPDConstants.CLASS_COLORS.getOrDefault(primaryClass, new Color(0, 210, 255));
+        String label = HybridDiagnosticEngine.getPolishName(primaryClass) + " " + String.format(Locale.US, "%.1f%%", confidence * 100.0f);
+
+        if (cLower.contains("corona -")) {
+            // Negative corona: phase 180° - 360°, amp < 0
+            double minP = 360, maxP = 0, minAmpVal = Double.MAX_VALUE, maxAmpVal = -Double.MAX_VALUE;
+            int matched = 0;
+            for (int i = 0; i < size; i++) {
+                if (phases[i] >= 180.0 && phases[i] <= 360.0 && amps[i] < 0) {
+                    minP = Math.min(minP, phases[i]); maxP = Math.max(maxP, phases[i]);
+                    minAmpVal = Math.min(minAmpVal, amps[i]); maxAmpVal = Math.max(maxAmpVal, amps[i]);
+                    matched++;
+                }
+            }
+            if (matched > 0) {
+                list.add(createBoxFromCluster(minP, maxP, minAmpVal, maxAmpVal, minA, rangeA, primaryClass, label, confidence, col));
+            } else {
+                list.add(new BoundingBoxInfo(primaryClass, label, confidence, 0.75f, 0.78f, 0.32f, 0.32f, col));
+            }
+        } else if (cLower.contains("corona +")) {
+            // Positive corona: phase 0° - 180°, amp > 0
+            double minP = 360, maxP = 0, minAmpVal = Double.MAX_VALUE, maxAmpVal = -Double.MAX_VALUE;
+            int matched = 0;
+            for (int i = 0; i < size; i++) {
+                if (phases[i] >= 0.0 && phases[i] <= 180.0 && amps[i] > 0) {
+                    minP = Math.min(minP, phases[i]); maxP = Math.max(maxP, phases[i]);
+                    minAmpVal = Math.min(minAmpVal, amps[i]); maxAmpVal = Math.max(maxAmpVal, amps[i]);
+                    matched++;
+                }
+            }
+            if (matched > 0) {
+                list.add(createBoxFromCluster(minP, maxP, minAmpVal, maxAmpVal, minA, rangeA, primaryClass, label, confidence, col));
+            } else {
+                list.add(new BoundingBoxInfo(primaryClass, label, confidence, 0.25f, 0.22f, 0.32f, 0.32f, col));
+            }
+        } else if (cLower.contains("void")) {
+            // Internal void: two symmetric clusters on rising slopes
+            double minP1 = 360, maxP1 = 0, minA1 = Double.MAX_VALUE, maxA1 = -Double.MAX_VALUE;
+            int m1 = 0;
+            double minP2 = 360, maxP2 = 0, minA2 = Double.MAX_VALUE, maxA2 = -Double.MAX_VALUE;
+            int m2 = 0;
+            for (int i = 0; i < size; i++) {
+                if (phases[i] >= 0.0 && phases[i] <= 120.0 && amps[i] > 0) {
+                    minP1 = Math.min(minP1, phases[i]); maxP1 = Math.max(maxP1, phases[i]);
+                    minA1 = Math.min(minA1, amps[i]); maxA1 = Math.max(maxA1, amps[i]);
+                    m1++;
+                } else if (phases[i] >= 180.0 && phases[i] <= 300.0 && amps[i] < 0) {
+                    minP2 = Math.min(minP2, phases[i]); maxP2 = Math.max(maxP2, phases[i]);
+                    minA2 = Math.min(minA2, amps[i]); maxA2 = Math.max(maxA2, amps[i]);
+                    m2++;
+                }
+            }
+            if (m1 > 0) {
+                list.add(createBoxFromCluster(minP1, maxP1, minA1, maxA1, minA, rangeA, primaryClass, label + " (+)", confidence, col));
+            }
+            if (m2 > 0) {
+                list.add(createBoxFromCluster(minP2, maxP2, minA2, maxA2, minA, rangeA, primaryClass, label + " (-)", confidence, col));
+            }
+            if (list.isEmpty()) {
+                list.add(new BoundingBoxInfo(primaryClass, label + " (+)", confidence, 0.16f, 0.30f, 0.24f, 0.30f, col));
+                list.add(new BoundingBoxInfo(primaryClass, label + " (-)", confidence, 0.66f, 0.70f, 0.24f, 0.30f, col));
+            }
+        } else if (cLower.contains("surface")) {
+            // Surface tracking
+            double minP = 360, maxP = 0, minAmpVal = Double.MAX_VALUE, maxAmpVal = -Double.MAX_VALUE;
+            int matched = 0;
+            for (int i = 0; i < size; i++) {
+                if (Math.abs(amps[i]) > 0.05 * Math.max(Math.abs(minA), Math.abs(maxA))) {
+                    minP = Math.min(minP, phases[i]); maxP = Math.max(maxP, phases[i]);
+                    minAmpVal = Math.min(minAmpVal, amps[i]); maxAmpVal = Math.max(maxAmpVal, amps[i]);
+                    matched++;
+                }
+            }
+            if (matched > 0) {
+                list.add(createBoxFromCluster(minP, maxP, minAmpVal, maxAmpVal, minA, rangeA, primaryClass, label, confidence, col));
+            } else {
+                list.add(new BoundingBoxInfo(primaryClass, label, confidence, 0.35f, 0.40f, 0.48f, 0.52f, col));
+            }
+        } else {
+            // Generic cluster
+            double minP = 360, maxP = 0, minAmpVal = Double.MAX_VALUE, maxAmpVal = -Double.MAX_VALUE;
+            int matched = 0;
+            for (int i = 0; i < size; i++) {
+                minP = Math.min(minP, phases[i]); maxP = Math.max(maxP, phases[i]);
+                minAmpVal = Math.min(minAmpVal, amps[i]); maxAmpVal = Math.max(maxAmpVal, amps[i]);
+                matched++;
+            }
+            if (matched > 0) {
+                list.add(createBoxFromCluster(minP, maxP, minAmpVal, maxAmpVal, minA, rangeA, primaryClass, label, confidence, col));
+            }
+        }
+
+        return list;
+    }
+
+    private BoundingBoxInfo createBoxFromCluster(double minP, double maxP, double minAmpVal, double maxAmpVal,
+                                                 double minA, double rangeA, String primaryClass, String label,
+                                                 float confidence, Color col) {
+        // Expand by 4% margin around cluster
+        double p1 = Math.max(0.0, minP - 0.04 * 360.0);
+        double p2 = Math.min(360.0, maxP + 0.04 * 360.0);
+        double a1 = Math.max(minA, minAmpVal - 0.04 * rangeA);
+        double a2 = Math.min(minA + rangeA, maxAmpVal + 0.04 * rangeA);
+
+        float normX1 = (float) (p1 / 360.0);
+        float normX2 = (float) (p2 / 360.0);
+        // Image Y coordinate: top is maxA (normY=0), bottom is minA (normY=1)
+        float normY_top = (float) (1.0 - (a2 - minA) / rangeA);
+        float normY_bot = (float) (1.0 - (a1 - minA) / rangeA);
+
+        float xc = (normX1 + normX2) / 2.0f;
+        float yc = (normY_top + normY_bot) / 2.0f;
+        float w = Math.max(0.12f, normX2 - normX1);
+        float h = Math.max(0.12f, normY_bot - normY_top);
+
+        return new BoundingBoxInfo(primaryClass, label, confidence, xc, yc, w, h, col);
     }
 
     // CANVAS PANEL RENDERING PRPD IMAGE & BOUNDING BOXES
@@ -587,7 +812,9 @@ public class HybridClassificationDialog extends JDialog {
             if (currentPrpdImage == null) {
                 g2.setColor(Color.GRAY);
                 g2.setFont(new Font("Segoe UI", Font.ITALIC, 13));
-                g2.drawString("Kliknij 'KLASYFIKUJ TERAZ' aby załadować obraz PRPD", w / 2 - 140, h / 2);
+                String msg = "Kliknij 'KLASYFIKUJ TERAZ' aby załadować obraz PRPD";
+                int strW = g2.getFontMetrics().stringWidth(msg);
+                g2.drawString(msg, (w - strW) / 2, h / 2);
                 g2.dispose();
                 return;
             }
@@ -604,17 +831,28 @@ public class HybridClassificationDialog extends JDialog {
             g2.drawImage(currentPrpdImage, offX, offY, drawW, drawH, null);
 
             // Draw bounding boxes if selected
-            if (showBoxesCb.isSelected() && currentResult != null && currentResult.visionDetections != null) {
+            if (showBoxesCb.isSelected() && currentResult != null) {
                 float minConf = confSlider.getValue() / 100.0f;
-                for (Prediction p : currentResult.visionDetections) {
-                    if (p.classId != -1 && p.box != null && p.confidence >= minConf) {
-                        float[] b = p.box; // [xc, yc, w, h] normalized 0.0 to 1.0
-                        int bx = offX + (int) Math.round((b[0] - b[2] / 2.0f) * drawW);
-                        int by = offY + (int) Math.round((b[1] - b[3] / 2.0f) * drawH);
-                        int bw = (int) Math.round(b[2] * drawW);
-                        int bh = (int) Math.round(b[3] * drawH);
+                List<BoundingBoxInfo> boxes = getActiveBoundingBoxes(minConf);
 
-                        Color boxCol = PRPDConstants.CLASS_COLORS.getOrDefault(p.className(), Color.CYAN);
+                if (!boxes.isEmpty()) {
+                    for (BoundingBoxInfo bInfo : boxes) {
+                        int bx = offX + (int) Math.round((bInfo.xc - bInfo.w / 2.0f) * drawW);
+                        int by = offY + (int) Math.round((bInfo.yc - bInfo.h / 2.0f) * drawH);
+                        int bw = (int) Math.round(bInfo.w * drawW);
+                        int bh = (int) Math.round(bInfo.h * drawH);
+
+                        // Clamp to draw area
+                        bx = Math.max(offX, bx);
+                        by = Math.max(offY, by);
+                        bw = Math.min(offX + drawW - bx, Math.max(25, bw));
+                        bh = Math.min(offY + drawH - by, Math.max(25, bh));
+
+                        Color boxCol = bInfo.color != null ? bInfo.color : new Color(0, 210, 255);
+
+                        // Semi-transparent box fill
+                        g2.setColor(new Color(boxCol.getRed(), boxCol.getGreen(), boxCol.getBlue(), 32));
+                        g2.fillRect(bx, by, bw, bh);
 
                         // Box outline
                         g2.setColor(boxCol);
@@ -622,18 +860,23 @@ public class HybridClassificationDialog extends JDialog {
                         g2.drawRect(bx, by, bw, bh);
 
                         // Tag background
-                        String label = p.className() + " " + Math.round(p.confidence * 100.0f) + "%";
+                        String label = bInfo.label;
                         g2.setFont(new Font("Segoe UI", Font.BOLD, 11));
-                        int tagW = g2.getFontMetrics().stringWidth(label) + 8;
-                        int tagH = 16;
-                        int tagY = Math.max(offY, by - tagH);
+                        int tagW = g2.getFontMetrics().stringWidth(label) + 10;
+                        int tagH = 18;
+                        int tagY = (by - tagH >= offY) ? (by - tagH) : by;
 
-                        g2.setColor(new Color(boxCol.getRed(), boxCol.getGreen(), boxCol.getBlue(), 220));
+                        g2.setColor(new Color(boxCol.getRed(), boxCol.getGreen(), boxCol.getBlue(), 230));
                         g2.fillRect(bx, tagY, tagW, tagH);
 
                         g2.setColor(Color.BLACK);
-                        g2.drawString(label, bx + 4, tagY + 12);
+                        g2.drawString(label, bx + 5, tagY + 13);
                     }
+                } else if (!"noise".equalsIgnoreCase(currentResult.primaryClass)) {
+                    // Informative note when user enables BBoxes but confidence is below slider threshold
+                    g2.setFont(new Font("Segoe UI", Font.ITALIC, 11));
+                    g2.setColor(new Color(175, 185, 200));
+                    g2.drawString("Ramki BBoxes aktywne (brak skupisk powyżej progu " + confSlider.getValue() + "%)", offX + 10, offY + drawH - 12);
                 }
             }
 

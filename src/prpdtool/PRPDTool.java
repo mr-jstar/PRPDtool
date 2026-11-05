@@ -515,34 +515,12 @@ public class PRPDTool extends JFrame {
         fileM.add(fileMI);
         fileM.addSeparator();
 
-        JMenuItem exportMI = new JMenuItem("Export histogram data");
-        exportMI.addActionListener(e -> exportHistogram());
-        fileM.add(exportMI);
-
-        JMenuItem imageMI = new JMenuItem("Export histogram image");
-        imageMI.addActionListener(e -> exportImage());
-        fileM.add(imageMI);
-
-        JMenuItem exportCsvMI = new JMenuItem("Export raw pulses to CSV");
-        exportCsvMI.addActionListener(e -> exportRawPulsesCSV());
-        fileM.add(exportCsvMI);
-
-        JMenuItem prpdMI = new JMenuItem("Export YOLO image");
-        prpdMI.addActionListener(e -> exportPRPD4YOLODialog());
-        fileM.add(prpdMI);
-
-        fileM.addSeparator();
-
         JMenuItem exitMI = new JMenuItem("Exit");
         exitMI.addActionListener(e -> onExit());
         fileM.add(exitMI);
         mb.add(fileM);
 
         JMenu scriptsM = new JMenu("Machine Learning");
-        JMenuItem batchMI = new JMenuItem("Batch Export (Dir -> YOLO PNGs)");
-        batchMI.addActionListener(e -> dir2prpd());
-        scriptsM.add(batchMI);
-        
         JMenuItem classifyMI = new JMenuItem("Real-time Hybrid Classification (YOLO + CIGRE)");
         classifyMI.addActionListener(e -> {
             if (hybridClassificationDialog != null) {
@@ -573,16 +551,22 @@ public class PRPDTool extends JFrame {
             }
         });
         analysisM.add(pulseScopeMI);
+
+        JMenuItem denoisingMI = new JMenuItem("Advanced DSP Denoising & Notch Filters");
+        denoisingMI.addActionListener(e -> {
+            new AdvancedDenoisingDialog(PRPDTool.this, configuration, isDarkMode()).setVisible(true);
+        });
+        analysisM.add(denoisingMI);
         analysisM.addSeparator();
 
-        JMenuItem calWizardMI = new JMenuItem("Apparent Charge Calibration (IEC 60270)");
+        JMenuItem calWizardMI = new JMenuItem("Charge Calibration (mV->pC)");
         calWizardMI.addActionListener(e -> {
             ApparentChargeCalibrationDialog dlg = new ApparentChargeCalibrationDialog(PRPDTool.this, configuration, isDarkMode());
             dlg.setVisible(true);
         });
         analysisM.add(calWizardMI);
 
-        JMenu unitSubM = new JMenu("Jednostka ładunku (Charge Unit)");
+        JMenu unitSubM = new JMenu("Charge Unit (mV, pC, nC)");
         ButtonGroup unitGroup = new ButtonGroup();
         ChargeCalibrationManager calMgr = ChargeCalibrationManager.getInstance();
 
@@ -598,7 +582,7 @@ public class PRPDTool extends JFrame {
             if (!calMgr.isCalibrated()) {
                 JOptionPane.showMessageDialog(PRPDTool.this,
                         "Brak kalibracji ładunku pozornego!\n"
-                        + "Uruchom najpierw 'Apparent Charge Calibration (IEC 60270)' aby wyznaczyć współczynnik k_cal.",
+                        + "Uruchom najpierw 'Charge Calibration (mV->pC)' aby wyznaczyć współczynnik k_cal.",
                         "Wymagana kalibracja", JOptionPane.WARNING_MESSAGE);
                 mvItem.setSelected(true);
                 return;
@@ -610,7 +594,7 @@ public class PRPDTool extends JFrame {
             if (!calMgr.isCalibrated()) {
                 JOptionPane.showMessageDialog(PRPDTool.this,
                         "Brak kalibracji ładunku pozornego!\n"
-                        + "Uruchom najpierw 'Apparent Charge Calibration (IEC 60270)' aby wyznaczyć współczynnik k_cal.",
+                        + "Uruchom najpierw 'Charge Calibration (mV->pC)' aby wyznaczyć współczynnik k_cal.",
                         "Wymagana kalibracja", JOptionPane.WARNING_MESSAGE);
                 mvItem.setSelected(true);
                 return;
@@ -637,20 +621,13 @@ public class PRPDTool extends JFrame {
         analysisM.add(unitSubM);
         analysisM.addSeparator();
 
-        JMenuItem reportMI = new JMenuItem("Generuj Raport Diagnostyczny (IEC 60270 / CIGRE)");
+        JMenuItem reportMI = new JMenuItem("Generate Diagnostic Report");
         reportMI.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_R, java.awt.event.InputEvent.CTRL_DOWN_MASK));
         reportMI.addActionListener(e -> {
             reports.DiagnosticReportDialog dlg = new reports.DiagnosticReportDialog(PRPDTool.this, configuration, isDarkMode());
             dlg.setVisible(true);
         });
         analysisM.add(reportMI);
-        analysisM.addSeparator();
-
-        JMenuItem denoisingMI = new JMenuItem("Zaawansowane Odszumianie DSP & Filtry Notch (IEC 62478)");
-        denoisingMI.addActionListener(e -> {
-            new AdvancedDenoisingDialog(PRPDTool.this, configuration, isDarkMode()).setVisible(true);
-        });
-        analysisM.add(denoisingMI);
 
         mb.add(analysisM);
 

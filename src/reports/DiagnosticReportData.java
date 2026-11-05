@@ -18,21 +18,21 @@ public class DiagnosticReportData {
     // Document & Measurement Metadata
     public String reportId = "WNZ-REPORT-001";
     public Date timestamp = new Date();
-    public String objectName = "Transformator Mocy 110/15 kV";
-    public String bayOrPhase = "Pole 1 / Faza L1";
-    public String location = "Rozdzielnia WN Główna";
-    public String testVoltageKv = "110.0";
+    public String objectName = "Rozdzielnica SN w izolacji powietrznej (AIS) 15 kV";
+    public String bayOrPhase = "Pole probiercze / Faza L1";
+    public String location = "Hala Wysokich Napięć WE PW, Warszawa";
+    public String testVoltageKv = "12.0";
     public String lineFrequencyHz = "50.0";
-    public String operatorName = "Diagnosta WNZ";
-    public String sensorType = "Sprzęgacz pojemnościowy Ck (IEC 60270)";
+    public String operatorName = "";
+    public String sensorType = "Sprzęgacz pojemnościowy TEV / HFCT (IEC 62478)";
     public String samplingInfo = "125 MS/s, 14-bit (Red Pitaya STEMlab 125-14)";
-    public String notes = "Pomiar okresowy stanu izolacji. Warunki normalne.";
+    public String notes = "Stanowisko badawcze WNZ na Hali Wysokich Napięć WE PW. Transformator probierczy 100 kV z regulatorem indukcyjnym i rezystorem wodnym Ro = 40 kΩ. Akwizycja sygnału kartą Red Pitaya STEMlab 125-14.";
 
     // IEC 60270 Apparent Charge Calibration Details
     public boolean isCalibrated = false;
     public double calibrationFactor = 1.0;
     public String chargeUnit = "mV";
-    public String calibratorName = "Wzorzec IEC 60270";
+    public String calibratorName = "Omicron CAL 542";
     public String calibrationDate = "-";
     public double targetCharge = 0.0;
     public double measuredVoltage = 0.0;

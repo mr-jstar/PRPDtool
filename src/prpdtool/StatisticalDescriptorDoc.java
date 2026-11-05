@@ -184,6 +184,49 @@ public class StatisticalDescriptorDoc {
     private static final Map<String, Entry> ENTRIES = new LinkedHashMap<>();
 
     static {
+        // 0a. Hn
+        add("Hn",
+                "Pulse Count Profile Hn(φ)",
+                "Rozkład liczby wyładowań Hn(φ)",
+                "szt. / bin [counts]",
+                "Rozkład liczności impulsów WNZ w funkcji kąta fazowego napięcia sieciowego 50 Hz. Cały okres (0° - 360°) podzielony jest na M dyskretnych przedziałów (binów, np. 360 binów po 1°), a w każdym z nich zliczana jest łączna liczba zarejestrowanych zjawisk.",
+                "suma impulsów o kącie fazowym należącym do i-tego przedziału: φ_k ∈ [(i-1)·Δφ, i·Δφ).",
+                "Wskazuje, w których fazach napięcia pole elektryczne osiąga wartość krytyczną i jak chętnie dochodzi do zapłonu wyładowania. Kształt rozkładu (dzwonowy, ostre igły, rozlany) bezpośrednio charakteryzuje środowisko otaczające defekt.",
+                "• <b>Pęcherz gazowy w dielektryku (Internal Void):</b> Dwa symetryczne dzwonowe rozkłady (zbliżone do Gaussa) przesunięte względem siebie dokładnie o 180° w obu półokresach napięcia zasilającego.<br>"
+                + "• <b>Ulot / Korona w powietrzu (Corona):</b> Skrajna asymetria! Wyładowania pojawiają się niemal wyłącznie w jednym półokresie jako bardzo ostra 'igła' wokół szczytu napięcia (wysoka kurtoza fazowa).<br>"
+                + "• <b>Wyładowania powierzchniowe (Surface Creeping):</b> Nieregularne, poszarpane pasma fazowe o szerokim rozrzucie w pobliżu przejścia napięcia przez zero i na zboczach sinusoidy.",
+                dark -> eqSimple("<i>H</i><sub><i>n</i></sub>(<i>i</i>) = &sum; 1 &nbsp;&nbsp;<span style='font-size:11px; color:#94a3b8;'>[dla impulsów w przedziale fazowym bin <i>i</i>]</span>",
+                        "gdzie <i>i</i> to numer przedziału (binu) fazowego o szerokości &Delta;&phi; = 360&deg; / <i>M</i> (dla 360 binów: &Delta;&phi; = 1&deg;).", dark));
+
+        // 0b. Hqn
+        add("Hqn",
+                "Mean Magnitude Profile Hqn(φ)",
+                "Rozkład średniego ładunku Hqn(φ)",
+                "mV / pC / nC",
+                "Rozkład średniej wartości ładunku pozornego (amplitudy szczytowej wyładowań) w funkcji kąta fazowego napięcia 50 Hz. Stanowi iloraz sumy ładunków impulsów w danym binie do ich liczby Hn(i). Jest to kluczowy profil referencyjny wykorzystywany przez CIGRE do obliczania wskaźnika korelacji krzyżowej CC.",
+                "w torze skalibrowanym według IEC 60270 ładunek wyrażany jest bezpośrednio w pC lub nC.",
+                "Pokazuje, jak średnia energia pojedynczego wyładowania zmienia się wraz z chwilową wartością napięcia zasilania. Pozwala odróżnić zjawiska o stałej energii (ograniczone fizyczną pojemnością wtrącenia) od wyładowań, których siła zależy od chwilowego natężenia pola.",
+                "• <b>Pęcherz gazowy (Internal Void):</b> Profil Hqn(φ) jest niemal zupełnie PŁASKI (poziomy). Wynika to z faktu, że energia wyładowania w małym pęcherzyku jest limitowana stałą pojemnością geometryczną szczeliny i napięciem zapłonu gazu.<br>"
+                + "• <b>Ulot (Corona) i wyładowania powierzchniowe:</b> Profil Hqn(φ) ma wyraźny łukowaty lub trójkątny kształt ze szczytem w pobliżu maksimum fali zasilającej, ponieważ wyższe napięcie w szczycie pozwala na rozwój dłuższych i potężniejszych kanałów plazmowych w gazie.",
+                dark -> eqFraction("<i>H</i><sub><i>qn</i></sub>(<i>i</i>) =",
+                        "&sum;<sub><i>k</i> &isin; bin <i>i</i></sub> |<i>u</i><sub><i>k</i></sub>|", "<i>H</i><sub><i>n</i></sub>(<i>i</i>)",
+                        "<span style='font-size:11px; color:#94a3b8;'>&nbsp;(gdy <i>H<sub>n</sub>(i) > 0</i>, w p.p. 0)</span>",
+                        "w torze skalibrowanym według IEC 60270 ładunek wyrażany jest bezpośrednio w pC lub nC.", dark));
+
+        // 0c. Hqmax
+        add("Hqmax",
+                "Peak Magnitude Envelope Hqmax(φ)",
+                "Rozkład maksymalnego ładunku Hqmax(φ)",
+                "mV / pC / nC",
+                "Górna obwiednia ładunku pozornego — maksymalna zarejestrowana wartość szczytowa wyładowania w danym przedziale fazowym. Reprezentuje najsilniejsze pojedyncze zjawisko jonizacyjne odnotowane przy określonym kącie fazowym fali napięcia zasilającego.",
+                "górna obwiednia maksymalnych amplitud ładunku pozornego w i-tym przedziale fazowym.",
+                "Wskazuje doraźną niszczącą siłę wyładowań. Podczas gdy średnia Hqn może być niska przez dużą liczbę drobnych impulsów, Hqmax natychmiast ujawnia obecność groźnych, pojedynczych potężnych przeskoków niszczących dielektryk stały.",
+                "• <b>Drzewienie elektryczne (Electrical Treeing) / degradacja głowic kablowych:</b> Bardzo wysokie, poszarpane szpilki na profilu Hqmax, kilkukrotnie przewyższające średnią Hqn — objaw rozwijających się kanałów przewodzących wewnątrz stałego dielektryka (stan bezpośrednio przedprzebiciowy!).<br>"
+                + "• <b>Ulot na ostrych krawędziach (Corona):</b> Gładka, łukowata obwiednia powtarzająca wznoszenie i opadanie fali napięciowej w jednym półokresie.<br>"
+                + "• <b>Pęcherze wewnętrzne (Internal Void):</b> Względnie płaska i stabilna obwiednia w obu półokresach.",
+                dark -> eqSimple("<i>H</i><sub><i>qmax</i></sub>(<i>i</i>) = max { |<i>u</i><sub><i>k</i></sub>| : &phi;<sub><i>k</i></sub> &isin; bin <i>i</i> }",
+                        "górna obwiednia maksymalnych amplitud ładunku pozornego w <i>i</i>-tym przedziale fazowym.", dark));
+
         // 1. N
         add("N",
                 "Pulse Count (N)",
@@ -393,6 +436,23 @@ public class StatisticalDescriptorDoc {
                 "Wartości bliskie 1.0 świadczą o pustkach wewnętrznych, a wartości silnie odbiegające (> 3.0 lub < 0.33) o ulotach lub wadach montażowych głowic kablowych.",
                 dark -> eqFraction("<i>N</i><sub>ratio</sub> =", "<i>N</i><sup>+</sup>", "<i>N</i><sup>&minus;</sup>", null,
                         "iloraz liczności wyładowań pomiędzy połówkami sinusoidy napięcia zasilania.", dark));
+        // 17. BIBLIOGRAPHY
+        add("BIBLIOGRAPHY",
+                "Standards & Technical References",
+                "Źródła wiedzy, normy i literatura (CIGRE / IEC)",
+                "Normy i literatura",
+                "Wykaz międzynarodowych norm elektrotechnicznych, raportów technicznych CIGRE oraz recenzowanych publikacji naukowych, na których oparto algorytmy obliczeniowe, wzory matematyczne i kryteria diagnostyczne w niniejszym module.",
+                "normy i literatura naukowa stanowiące fundament formalny implementacji.",
+                "Metodyka analizy fazowo-rozdzielczej (PRPD / PRPHA), wyznaczania dyskretnych profili Hn(φ), Hqn(φ), Hqmax(φ) oraz momentów statystycznych wyższych rzędów (Skośność Sk, Kurtoza Ku, Korelacja krzyżowa CC) wywodzi się z wieloletnich badań komitetu CIGRE oraz norm IEC.",
+                "• <b>CIGRE Brochure 226 (Task Force 15.33.03.02, 2003):</b> <i>'Knowledge Rules for Partial Discharge Diagnosis in Service'</i> — fundamentalne zasady i reguły eksperckie wnioskowania o typie defektu w aparaturze WN (Cavallini, Montanari, Contin, Gulski).<br>"
+                + "• <b>CIGRE Brochure 444 (Working Group D1.33, 2010):</b> <i>'Guidelines for Unconventional Partial Discharge Measurements'</i> — wytyczne dla pomiarów szerokopasmowych w.cz., filtracji pasmowej i eliminacji zakłóceń.<br>"
+                + "• <b>PN-EN 60270:2003 + A1:2016 (IEC 60270):</b> <i>'Wysokonapięciowa technika probiercza — Pomiary wyładowań niezupełnych'</i> — definicje ładunku pozornego q, kalibracji ładunkowej, częstotliwości repetycji n.<br>"
+                + "• <b>IEC TS 62478:2016:</b> <i>'High voltage test techniques — Measurement of partial discharges by acoustic and electrical methods'</i> — wytyczne dla niekonwencjonalnych pomiarów HF/VHF/UHF, sensorów pojemnościowych i cewek Rogowskiego.<br>"
+                + "• <b>Buczko R. (2018):</b> Rozprawa doktorska: <i>'Bezinwazyjna detekcja defektów wysokonapięciowej aparatury rozdzielczej...'</i> (Politechnika Białostocka) — deskryptory statystyczne Sk, Ku, Qasym, Nasym.<br>"
+                + "• <b>Kluge M., Bilski P. (2021-2024):</b> Publikacje naukowe dotyczące ekstrakcji cech PRPD i modeli klasyfikacji uszkodzeń w sieciach SN.<br>"
+                + "• <b>Cavallini A., Montanari G.C., Contin A. (IEEE Trans. DEI):</b> Prace nad identyfikacją i separacją źródeł WNZ na podstawie parametrów kształtu impulsów T-F i profili fazowych.",
+                dark -> eqSimple("<b>PN-EN 60270</b> &bull; <b>IEC TS 62478</b> &bull; <b>CIGRE TB 226</b> &bull; <b>CIGRE TB 444</b>",
+                        "Wszystkie wzory matematyczne w aplikacji są w 100% zgodne z powyższymi publikacjami źródłowymi.", dark));
     }
 
     private static void add(String key, String nameEn, String namePl, String unit,
@@ -413,6 +473,18 @@ public class StatisticalDescriptorDoc {
     public static Entry findByRowName(String rowName) {
         if (rowName == null) return null;
         String lower = rowName.toLowerCase();
+        if (lower.contains("pulse count profile") || lower.contains("rozkład liczby") || lower.equals("hn") || lower.startsWith("hn(") || lower.startsWith("hn —")) {
+            return ENTRIES.get("Hn");
+        }
+        if (lower.contains("mean magnitude profile") || lower.contains("mean pulse magnitude") || lower.contains("rozkład średniego") || lower.equals("hqn") || lower.startsWith("hqn(") || lower.startsWith("hqn —")) {
+            return ENTRIES.get("Hqn");
+        }
+        if (lower.contains("peak magnitude envelope") || lower.contains("rozkład maksymalnego") || lower.equals("hqmax") || lower.startsWith("hqmax(") || lower.startsWith("hqmax —")) {
+            return ENTRIES.get("Hqmax");
+        }
+        if (lower.contains("biblio") || lower.contains("normy") || lower.contains("literatura") || lower.contains("standards")) {
+            return ENTRIES.get("BIBLIOGRAPHY");
+        }
         if (lower.contains("repetition rate") || lower.contains("[pps]")) {
             return ENTRIES.get("n");
         }

@@ -66,7 +66,7 @@ public class ChargeCalibrationManager {
     private double scaleFactor_pC_per_mV = 1.0;
     private double targetCharge_pC = 10.0;
     private double measuredMean_mV = 10.0;
-    private String calibratorName = "Wzorzec IEC 60270";
+    private String calibratorName = "Omicron CAL 542";
     private String calibrationDate = "-";
 
     private final List<Runnable> changeListeners = new CopyOnWriteArrayList<>();
@@ -154,7 +154,7 @@ public class ChargeCalibrationManager {
         this.scaleFactor_pC_per_mV = target_pC / measured_mV;
         this.calibratorName = (calibratorName != null && !calibratorName.trim().isEmpty())
                 ? calibratorName.trim()
-                : "Wzorzec IEC 60270";
+                : "Omicron CAL 542";
         this.calibrationDate = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(new Date());
         this.isCalibrated = true;
 
@@ -174,7 +174,7 @@ public class ChargeCalibrationManager {
         this.scaleFactor_pC_per_mV = 1.0;
         this.targetCharge_pC = 10.0;
         this.measuredMean_mV = 10.0;
-        this.calibratorName = "Wzorzec IEC 60270";
+        this.calibratorName = "Omicron CAL 542";
         this.calibrationDate = "-";
         notifyListeners();
     }
@@ -213,10 +213,11 @@ public class ChargeCalibrationManager {
     public void loadFromConfig(Configuration config) {
         if (config == null) return;
         try {
-            String enStr = config.getValue(CFG_CAL_ENABLED);
-            if (enStr != null) {
-                isCalibrated = Boolean.parseBoolean(enStr);
-            }
+            // IEC 60270 requirement:
+            // Calibration must be performed afresh for each measurement session.
+            // Historical factors are saved for reference, but active session state always starts as FALSE (uncalibrated / raw mV mode).
+            this.isCalibrated = false;
+            this.currentUnit = ChargeUnit.MV;
 
             String factorStr = config.getValue(CFG_CAL_FACTOR);
             if (factorStr != null) {
@@ -234,8 +235,10 @@ public class ChargeCalibrationManager {
             }
 
             String nameStr = config.getValue(CFG_CAL_NAME);
-            if (nameStr != null && !nameStr.isEmpty()) {
+            if (nameStr != null && !nameStr.isEmpty() && !nameStr.contains("Wzorzec IEC 60270")) {
                 calibratorName = nameStr;
+            } else {
+                calibratorName = "Omicron CAL 542";
             }
 
             String dateStr = config.getValue(CFG_CAL_DATE);
