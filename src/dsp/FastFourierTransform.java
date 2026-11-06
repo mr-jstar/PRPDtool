@@ -221,6 +221,29 @@ public class FastFourierTransform {
     }
 
     /**
+     * In-place Radix-2 Inverse Fast Fourier Transform (IFFT).
+     * Computes x[n] = (1/N) * sum_{k=0}^{N-1} X[k] * e^(j * 2pi * k * n / N).
+     */
+    public static void ifft(double[] real, double[] imag) {
+        int n = real.length;
+        if (n <= 1) return;
+
+        // Conjugate input
+        for (int i = 0; i < n; i++) {
+            imag[i] = -imag[i];
+        }
+
+        // Forward FFT on conjugate
+        fft(real, imag);
+
+        // Conjugate and normalize
+        for (int i = 0; i < n; i++) {
+            real[i] /= n;
+            imag[i] = -imag[i] / n;
+        }
+    }
+
+    /**
      * Returns window function array of specified length.
      */
     public static double[] getWindow(int length, WindowType type) {

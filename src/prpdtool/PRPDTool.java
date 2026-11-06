@@ -67,6 +67,8 @@ public class PRPDTool extends JFrame {
 
     private JDialog classifyDialog;
     private HybridClassificationDialog hybridClassificationDialog;
+    private AIModelBenchmarkDialog aiModelBenchmarkDialog;
+    private FiltrationLabDialog filtrationLabDialog;
     private StatisticalProfilesDialog statisticalProfilesDialog;
     private SinglePulseScopeDialog singlePulseScopeDialog;
     private volatile boolean inBatchMode;
@@ -521,7 +523,7 @@ public class PRPDTool extends JFrame {
         mb.add(fileM);
 
         JMenu scriptsM = new JMenu("Machine Learning");
-        JMenuItem classifyMI = new JMenuItem("Real-time Hybrid Classification (YOLO + CIGRE)");
+        JMenuItem classifyMI = new JMenuItem("AI Classification Center");
         classifyMI.addActionListener(e -> {
             if (hybridClassificationDialog != null) {
                 hybridClassificationDialog.updateAndShow();
@@ -530,6 +532,24 @@ public class PRPDTool extends JFrame {
             }
         });
         scriptsM.add(classifyMI);
+
+        JMenuItem benchmarkMI = new JMenuItem("AI Model comparison (1D, 2D, Sequential, CIGRE ML)");
+        benchmarkMI.addActionListener(e -> {
+            if (aiModelBenchmarkDialog == null) {
+                aiModelBenchmarkDialog = new AIModelBenchmarkDialog(PRPDTool.this, isDarkMode());
+            }
+            aiModelBenchmarkDialog.updateAndShow();
+        });
+        scriptsM.add(benchmarkMI);
+
+        JMenuItem filtrationLabMI = new JMenuItem("Filtration & Denoising comparison (RAW, FFT, Notch, Gate, DWT, EMD)");
+        filtrationLabMI.addActionListener(e -> {
+            if (filtrationLabDialog == null) {
+                filtrationLabDialog = new FiltrationLabDialog(PRPDTool.this, isDarkMode());
+            }
+            filtrationLabDialog.updateAndShow();
+        });
+        scriptsM.add(filtrationLabMI);
         
         mb.add(scriptsM);
 
@@ -856,6 +876,14 @@ public class PRPDTool extends JFrame {
 
     public HybridClassificationDialog getHybridClassificationDialog() {
         return hybridClassificationDialog;
+    }
+
+    public AIModelBenchmarkDialog getAIModelBenchmarkDialog() {
+        return aiModelBenchmarkDialog;
+    }
+
+    public FiltrationLabDialog getFiltrationLabDialog() {
+        return filtrationLabDialog;
     }
 
     public PRPDHistogram getHistogram() {
@@ -1656,6 +1684,8 @@ public class PRPDTool extends JFrame {
             
             hybridClassificationDialog = new HybridClassificationDialog(PRPDTool.this, isDarkMode());
             classifyDialog = hybridClassificationDialog;
+            aiModelBenchmarkDialog = new AIModelBenchmarkDialog(PRPDTool.this, isDarkMode());
+            filtrationLabDialog = new FiltrationLabDialog(PRPDTool.this, isDarkMode());
 
             statisticalProfilesDialog = new StatisticalProfilesDialog(PRPDTool.this);
             singlePulseScopeDialog = new SinglePulseScopeDialog(PRPDTool.this, isDarkMode());

@@ -4,6 +4,13 @@ import classifiers.Classifier;
 import classifiers.HybridDiagnosticEngine;
 import classifiers.HybridDiagnosticEngine.HybridResult;
 import classifiers.Prediction;
+import classifiers.PRPDModelRegistry;
+import classifiers.StatisticalFingerprintClassifier;
+import pipeline.PulseWaveform;
+import pipeline.PulseWaveformRepository;
+import java.util.Objects;
+import java.util.LinkedHashMap;
+import java.util.HashMap;
 import pipeline.DynamicPRPDHistogram;
 import pipeline.PRPDHistogram;
 import pipeline.StatisticalAnalyzer;
@@ -40,7 +47,26 @@ public class HybridClassificationDialog extends JDialog {
     private final boolean isDarkMode;
 
     private PrpdCanvasPanel canvasPanel;
-    private JComboBox<String> modelSelectorCombo;
+    private JComboBox<ModelComboItem> modelSelectorCombo;
+    private JLabel bannerTagLbl;
+    private boolean isUpdatingCombo = false;
+
+    public static class ModelComboItem {
+        public final String label;
+        public final PRPDModelRegistry.ModelId modelId;
+        public final Classifier customClassifier;
+
+        public ModelComboItem(String label, PRPDModelRegistry.ModelId modelId, Classifier customClassifier) {
+            this.label = label;
+            this.modelId = modelId;
+            this.customClassifier = customClassifier;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
+    }
     private JCheckBox showBoxesCb;
     private JSlider confSlider;
     private JLabel confValueLbl;
@@ -84,13 +110,13 @@ public class HybridClassificationDialog extends JDialog {
     }
 
     public HybridClassificationDialog(PRPDTool owner, boolean isDarkMode) {
-        super(owner, "Centrum Klasyfikacji Hybrydowej AI (YOLO + CIGRE Ensemble)", false);
+        super(owner, "AI Classification Center", false);
         this.parent = owner;
         this.isDarkMode = isDarkMode;
 
         // Generous default size ensuring no controls, badges or labels are clipped
-        setSize(1280, 800);
-        setMinimumSize(new Dimension(1100, 660));
+        setSize(1320, 820);
+        setMinimumSize(new Dimension(1120, 680));
         setLocationRelativeTo(owner);
 
         initUI();
@@ -116,7 +142,7 @@ public class HybridClassificationDialog extends JDialog {
         JPanel leftTools = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         leftTools.setBackground(panelBg);
 
-        JLabel titleLbl = new JLabel("Klasyfikacja Hybrydowa WNZ");
+        JLabel titleLbl = new JLabel("AI Classification Center");
         titleLbl.setFont(new Font("Segoe UI", Font.BOLD, 14));
         titleLbl.setForeground(accentCol);
         leftTools.add(titleLbl);
@@ -133,8 +159,13 @@ public class HybridClassificationDialog extends JDialog {
         leftTools.add(new JLabel("Model:"));
 
         modelSelectorCombo = new JComboBox<>();
-        modelSelectorCombo.setPreferredSize(new Dimension(185, 26));
+        modelSelectorCombo.setPreferredSize(new Dimension(315, 26));
         updateModelCombo();
+        modelSelectorCombo.addActionListener(e -> {
+            if (!isUpdatingCombo && !isClassifying) {
+                classifyCurrentAsync();
+            }
+        });
         leftTools.add(modelSelectorCombo);
 
         leftTools.add(new JLabel("Próg ufności:"));
@@ -227,15 +258,15 @@ public class HybridClassificationDialog extends JDialog {
 
         JPanel titleAndClass = new JPanel(new GridLayout(2, 1, 0, 2));
         titleAndClass.setOpaque(false);
-        JLabel tag = new JLabel("WIODĄCA DIAGNOZA HYBRYDOWA (AI + CIGRE):");
-        tag.setFont(new Font("Segoe UI", Font.BOLD, 10));
-        tag.setForeground(isDarkMode ? new Color(160, 175, 195) : new Color(100, 115, 135));
+        bannerTagLbl = new JLabel("WIODĄCA DIAGNOZA HYBRYDOWA (KOMITET AI + CIGRE):");
+        bannerTagLbl.setFont(new Font("Segoe UI", Font.BOLD, 10));
+        bannerTagLbl.setForeground(isDarkMode ? new Color(160, 175, 195) : new Color(100, 115, 135));
 
         primaryClassLbl = new JLabel("Brak aktywnej klasyfikacji");
         primaryClassLbl.setFont(new Font("Segoe UI", Font.BOLD, 16));
         primaryClassLbl.setForeground(accentCol);
 
-        titleAndClass.add(tag);
+        titleAndClass.add(bannerTagLbl);
         titleAndClass.add(primaryClassLbl);
         primaryCard.add(titleAndClass, BorderLayout.CENTER);
 
@@ -413,16 +444,42 @@ public class HybridClassificationDialog extends JDialog {
     }
 
     private void updateModelCombo() {
-        modelSelectorCombo.removeAllItems();
-        modelSelectorCombo.addItem("Wszystkie modele (Komitet)");
-        if (parent == null) return;
-        ArrayList<Classifier> list = parent.getClassifiers();
-        if (list != null) {
-            for (Classifier c : list) {
-                if (c != null && c.ok()) {
-                    modelSelectorCombo.addItem(c.name());
+        isUpdatingCombo = true;
+        try {
+            ModelComboItem prev = (ModelComboItem) modelSelectorCombo.getSelectedItem();
+            modelSelectorCombo.removeAllItems();
+
+            // 1. Committee (Ensemble)
+            modelSelectorCombo.addItem(new ModelComboItem("Komitet hybrydowy (Wszystkie modele AI + CIGRE)", null, null));
+
+            // 2. All 11 models from PRPDModelRegistry
+            for (PRPDModelRegistry.ModelId id : PRPDModelRegistry.ModelId.values()) {
+                modelSelectorCombo.addItem(new ModelComboItem(id.getDisplayName() + " [" + id.getFamily().getDisplayName() + "]", id, null));
+            }
+
+            // 3. Custom classifiers from disk if loaded
+            if (parent != null) {
+                ArrayList<Classifier> list = parent.getClassifiers();
+                if (list != null) {
+                    for (Classifier c : list) {
+                        if (c != null && c.ok()) {
+                            modelSelectorCombo.addItem(new ModelComboItem("Plik ONNX: " + c.name(), null, c));
+                        }
+                    }
                 }
             }
+
+            if (prev != null) {
+                for (int i = 0; i < modelSelectorCombo.getItemCount(); i++) {
+                    ModelComboItem it = modelSelectorCombo.getItemAt(i);
+                    if (it.modelId == prev.modelId && Objects.equals(it.label, prev.label)) {
+                        modelSelectorCombo.setSelectedIndex(i);
+                        break;
+                    }
+                }
+            }
+        } finally {
+            isUpdatingCombo = false;
         }
     }
 
@@ -463,55 +520,74 @@ public class HybridClassificationDialog extends JDialog {
         classifyBtn.setEnabled(false);
         classifyBtn.setText("Klasyfikowanie...");
 
+        final ModelComboItem selectedItem = (ModelComboItem) modelSelectorCombo.getSelectedItem();
+
         SwingWorker<HybridResult, Void> worker = new SwingWorker<>() {
             @Override
             protected HybridResult doInBackground() throws Exception {
-                PRPDHistogram hist = parent.getHistogram();
-                if (hist == null) return null;
-
-                // 1. Grab 448x448 PRPD image
-                currentPrpdImage = hist.getPRPD(448, 448);
-
-                // 2. Select classifier and run vision inference
-                ArrayList<Classifier> list = parent.getClassifiers();
-                Prediction[] bestPredictions = new Prediction[0];
-                float maxConf = -1.0f;
-
-                int selectedIdx = modelSelectorCombo.getSelectedIndex();
-                if (list != null && !list.isEmpty()) {
-                    if (selectedIdx > 0 && (selectedIdx - 1) < list.size()) {
-                        Classifier c = list.get(selectedIdx - 1);
-                        if (c != null && c.ok()) {
-                            bestPredictions = c.classify(currentPrpdImage);
-                        }
-                    } else {
-                        // Committee: evaluate all and pick highest-confidence detection set
-                        for (Classifier c : list) {
-                            if (c != null && c.ok()) {
-                                try {
-                                    Prediction[] preds = c.classify(currentPrpdImage);
-                                    for (Prediction p : preds) {
-                                        if (p.confidence > maxConf) {
-                                            maxConf = p.confidence;
-                                            bestPredictions = preds;
-                                        }
-                                    }
-                                } catch (Exception ignored) {}
-                            }
-                        }
-                    }
+                PRPDHistogram hist = (parent != null) ? parent.getHistogram() : null;
+                if (hist != null) {
+                    currentPrpdImage = hist.getPRPD(448, 448);
+                } else {
+                    currentPrpdImage = new BufferedImage(448, 448, BufferedImage.TYPE_INT_RGB);
+                    Graphics2D g = currentPrpdImage.createGraphics();
+                    g.setColor(new Color(20, 24, 30));
+                    g.fillRect(0, 0, 448, 448);
+                    g.dispose();
                 }
 
-                // 3. Compute statistical fingerprint
+                // 2. Compute statistical fingerprint
                 StatisticalResult sr = null;
                 if (hist instanceof DynamicPRPDHistogram) {
                     DynamicPRPDHistogram dh = (DynamicPRPDHistogram) hist;
                     sr = StatisticalAnalyzer.compute(dh.getPhases(), dh.getAmps(), dh.getTimes(),
-                            dh.getSize(), 360, parent.getF0());
+                            dh.getSize(), 360, (parent != null) ? parent.getF0() : 50.0);
                 }
 
-                // 4. Perform hybrid fusion
-                return HybridDiagnosticEngine.analyze(bestPredictions, sr);
+                // 3. Obtain pulse waveform
+                double[] pulse;
+                PulseWaveform maxP = PulseWaveformRepository.getInstance().getMaxPulse();
+                if (maxP != null && maxP.raw != null && maxP.raw.length >= 64) {
+                    pulse = maxP.raw.clone();
+                } else {
+                    pulse = generateSyntheticPDPulse();
+                }
+
+                // 4. Run vision detections (YOLO) so BBoxes can always be available
+                ArrayList<Classifier> list = (parent != null) ? parent.getClassifiers() : null;
+                Prediction[] visionDetections = new Prediction[0];
+                float maxConf = -1.0f;
+                if (list != null && !list.isEmpty()) {
+                    for (Classifier c : list) {
+                        if (c != null && c.ok()) {
+                            try {
+                                Prediction[] preds = c.classify(currentPrpdImage);
+                                for (Prediction p : preds) {
+                                    if (p.confidence > maxConf) {
+                                        maxConf = p.confidence;
+                                        visionDetections = preds;
+                                    }
+                                }
+                            } catch (Exception ignored) {}
+                        }
+                    }
+                }
+
+                // 5. Evaluate chosen model or committee
+                if (selectedItem == null || (selectedItem.modelId == null && selectedItem.customClassifier == null)) {
+                    // Full Committee Hybrid Fusion
+                    return HybridDiagnosticEngine.analyze(visionDetections, sr);
+                } else if (selectedItem.customClassifier != null) {
+                    // Specific custom ONNX classifier
+                    Prediction[] preds = selectedItem.customClassifier.classify(currentPrpdImage);
+                    return HybridDiagnosticEngine.analyze(preds, sr);
+                } else {
+                    // Specific Model from PRPDModelRegistry
+                    PRPDModelRegistry.ModelId mId = selectedItem.modelId;
+                    StatisticalFingerprintClassifier.Evaluation statEval = StatisticalFingerprintClassifier.evaluate(sr);
+                    PRPDModelRegistry.ModelOutput out = PRPDModelRegistry.evaluateModel(mId, sr, statEval, pulse, 125e6);
+                    return mapModelOutputToHybridResult(out, visionDetections, sr, statEval);
+                }
             }
 
             @Override
@@ -522,7 +598,7 @@ public class HybridClassificationDialog extends JDialog {
                 try {
                     currentResult = get();
                     if (currentResult != null) {
-                        displayResult(currentResult);
+                        displayResult(currentResult, selectedItem);
                     }
                 } catch (Exception ex) {
                     primaryClassLbl.setText("Błąd klasyfikacji: " + ex.getMessage());
@@ -533,8 +609,102 @@ public class HybridClassificationDialog extends JDialog {
         worker.execute();
     }
 
+    private HybridResult mapModelOutputToHybridResult(PRPDModelRegistry.ModelOutput out,
+                                                      Prediction[] visionDetections,
+                                                      StatisticalResult sr,
+                                                      StatisticalFingerprintClassifier.Evaluation statEval) {
+        String pClass = out.dominantClass;
+        float pConf = out.confidence;
+        String pName = out.polishName;
+
+        String risk;
+        if ("internal".equalsIgnoreCase(pClass) || "surface".equalsIgnoreCase(pClass)) {
+            risk = "KRYTYCZNY";
+        } else if ("noise".equalsIgnoreCase(pClass)) {
+            risk = "NORMALNY";
+        } else {
+            risk = "OSTRZEGAWCZY";
+        }
+
+        String agreement = String.format(Locale.US,
+                "Model aktywny: %s | Czas DSP/AI: %.2f ms | Rodzina: %s",
+                out.modelId.getDisplayName(), out.inferenceTimeMs, out.modelId.getFamily().getDisplayName());
+
+        Map<String, Float> hybridProbs = new LinkedHashMap<>(out.probabilities);
+
+        Map<String, Float> visionProbs = new LinkedHashMap<>();
+        if (out.modelId.getFamily() == PRPDModelRegistry.ModelFamily.VISION_2D) {
+            visionProbs.putAll(out.probabilities);
+        } else if (visionDetections != null && visionDetections.length > 0) {
+            for (Prediction p : visionDetections) {
+                if (p != null && p.className != null) {
+                    float cur = visionProbs.getOrDefault(p.className, 0.0f);
+                    visionProbs.put(p.className, Math.max(cur, p.confidence));
+                }
+            }
+        }
+        for (String c : PRPDConstants.CLASSES) {
+            if (!visionProbs.containsKey(c)) visionProbs.put(c, 0.05f);
+        }
+
+        Map<String, Float> statProbs = new LinkedHashMap<>();
+        if (out.modelId.getFamily() == PRPDModelRegistry.ModelFamily.CIGRE_FEATURE_ML ||
+            out.modelId.getFamily() == PRPDModelRegistry.ModelFamily.EXPERT_SYSTEM) {
+            statProbs.putAll(out.probabilities);
+        } else if (statEval != null && statEval.classProbabilities != null) {
+            statProbs.putAll(statEval.classProbabilities);
+        } else {
+            for (String c : PRPDConstants.CLASSES) statProbs.put(c, 0.05f);
+        }
+
+        List<String> xai = new ArrayList<>();
+        xai.add(String.format("Architektura i rodzina: %s [%s]", out.modelId.getDisplayName(), out.modelId.getFamily().getDisplayName()));
+        xai.add(String.format("Format danych wejściowych: %s", out.inputRepresentation));
+        xai.add(String.format("Uzasadnienie klasyfikacji: %s", out.diagnosticNote));
+        if (sr != null && sr.pos != null && sr.neg != null) {
+            double asym = (sr.neg.qMax > 0) ? (sr.pos.qMax / sr.neg.qMax) : sr.chargeAsymmetryQ;
+            xai.add(String.format(Locale.US,
+                    "Korelacja fizykalna CIGRE: Asymetria ładunku Q+ / Q- = %.2f, Fazy zapłonu φ_1+ = %.1f°, φ_1- = %.1f°, Skośność Sk = %.2f",
+                    asym, sr.pos.inceptionPhase, sr.neg.inceptionPhase, sr.pos.phaseSkewness));
+        }
+
+        String recAction;
+        if ("internal".equalsIgnoreCase(pClass)) {
+            recAction = "Zalecane natychmiastowe badanie lokalizacyjne (Acoustic / UHF) i planowanie rewizji komory. Wyładowania wtrąceniowe w stałym dielektryku prowadzą do erozji drzewkowej (treeing) i nieodwracalnego przebicia.";
+        } else if ("surface".equalsIgnoreCase(pClass)) {
+            recAction = "Zalecana inspekcja czystości powierzchni izolatorów przepustowych/wsparciowych oraz kontrola wilgotności względnej. Oczyszczenie powierzchni z depozytów solnych/kurzu.";
+        } else if ("floating".equalsIgnoreCase(pClass)) {
+            recAction = "Zalecana rewizja mocowań ekranów, śrub i połączeń uziemiających w strefie silnego pola. Skontrolować stan styków i zacisków.";
+        } else if ("corona_pos".equalsIgnoreCase(pClass)) {
+            recAction = "Skontrolować geometrię elementów pod napięciem (ostrza, zaciski, krawędzie śrub). Zainstalować lub wyregulować pierścienie antyulotowe (grading rings).";
+        } else if ("corona_neg".equalsIgnoreCase(pClass)) {
+            recAction = "Skontrolować odległości izolacyjne od elementów uziemionych w pobliżu krawędzi ostrzowych. Sprawdzić stan powłok ekranujących.";
+        } else {
+            recAction = "Poziom zakłóceń w normie tła stacji. Kontynuować standardowy monitoring okresowy bez konieczności interwencji.";
+        }
+
+        return new HybridResult(pClass, pConf, pName, risk, agreement,
+                hybridProbs, visionProbs, statProbs,
+                visionDetections, xai, recAction);
+    }
+
     private void displayResult(HybridResult res) {
+        displayResult(res, (ModelComboItem) modelSelectorCombo.getSelectedItem());
+    }
+
+    private void displayResult(HybridResult res, ModelComboItem selectedItem) {
         this.currentResult = res;
+
+        if (bannerTagLbl != null) {
+            if (selectedItem == null || (selectedItem.modelId == null && selectedItem.customClassifier == null)) {
+                bannerTagLbl.setText("WIODĄCA DIAGNOZA HYBRYDOWA (KOMITET AI + CIGRE):");
+            } else if (selectedItem.modelId != null) {
+                bannerTagLbl.setText("WIODĄCA DIAGNOZA: " + selectedItem.modelId.getDisplayName().toUpperCase() + ":");
+            } else {
+                bannerTagLbl.setText("WIODĄCA DIAGNOZA (" + selectedItem.label.toUpperCase() + "):");
+            }
+        }
+
         primaryClassLbl.setText(res.polishName.toUpperCase());
         Color classCol = PRPDConstants.CLASS_COLORS.getOrDefault(res.primaryClass, Color.CYAN);
         primaryClassLbl.setForeground(classCol);
@@ -599,6 +769,23 @@ public class HybridClassificationDialog extends JDialog {
 
         // Repaint canvas to update bounding boxes
         canvasPanel.repaint();
+    }
+
+    private static double[] generateSyntheticPDPulse() {
+        int n = 1024;
+        double[] p = new double[n];
+        double fOsc = 18e6;
+        double tau = 180e-9;
+        int t0 = 250;
+        double dt = 1.0 / 125e6;
+        for (int i = 0; i < n; i++) {
+            if (i >= t0) {
+                double t = (i - t0) * dt;
+                p[i] = 85.0 * Math.exp(-t / tau) * Math.sin(2 * Math.PI * fOsc * t);
+            }
+            p[i] += (Math.random() - 0.5) * 4.0;
+        }
+        return p;
     }
 
     private void copyToClipboard() {

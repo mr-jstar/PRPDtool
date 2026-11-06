@@ -64,4 +64,27 @@ public class PRPDConstants {
             "surface", new Color(0, 220, 120),
             "void", new Color(180, 0, 255)
     );
+
+    public static String getPolishDefectName(String className) {
+        if (className == null) return "Nieznany";
+        switch (className.toLowerCase().trim()) {
+            case "corona +":
+            case "corona+":
+                return "Ulot w półokresie dodatnim (Corona +)";
+            case "corona -":
+            case "corona-":
+                return "Ulot w półokresie ujemnym (Corona -)";
+            case "surface":
+                return "Wyładowania powierzchniowe (Surface Tracking)";
+            case "void":
+            case "internal":
+                return "Wyładowania wewnętrzne / wtrącenie (Internal / Void)";
+            case "floating":
+                return "Potencjał pływający (Floating Electrode)";
+            case "noise":
+                return "Szum stochastyczny / tło (Noise Floor)";
+            default:
+                return className;
+        }
+    }
 }
