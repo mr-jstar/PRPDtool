@@ -69,6 +69,7 @@ public class PRPDTool extends JFrame {
     private HybridClassificationDialog hybridClassificationDialog;
     private AIModelBenchmarkDialog aiModelBenchmarkDialog;
     private FiltrationLabDialog filtrationLabDialog;
+    private AIDecisionSpaceDialog aiDecisionSpaceDialog;
     private StatisticalProfilesDialog statisticalProfilesDialog;
     private SinglePulseScopeDialog singlePulseScopeDialog;
     private volatile boolean inBatchMode;
@@ -439,6 +440,7 @@ public class PRPDTool extends JFrame {
             setSize(1600, 1024);
         }
         setLocationRelativeTo(null);
+        setExtendedState(JFrame.MAXIMIZED_BOTH);
 
         try {
             int size = Integer.parseInt(configuration.getValue(FONTSIZE));
@@ -533,6 +535,8 @@ public class PRPDTool extends JFrame {
         });
         scriptsM.add(classifyMI);
 
+        scriptsM.addSeparator();
+
         JMenuItem benchmarkMI = new JMenuItem("AI Model comparison (1D, 2D, Sequential, CIGRE ML)");
         benchmarkMI.addActionListener(e -> {
             if (aiModelBenchmarkDialog == null) {
@@ -550,6 +554,17 @@ public class PRPDTool extends JFrame {
             filtrationLabDialog.updateAndShow();
         });
         scriptsM.add(filtrationLabMI);
+
+        scriptsM.addSeparator();
+
+        JMenuItem decisionSpaceMI = new JMenuItem("AI Decision Space (XAI Inspector)");
+        decisionSpaceMI.addActionListener(e -> {
+            if (aiDecisionSpaceDialog == null) {
+                aiDecisionSpaceDialog = new AIDecisionSpaceDialog(PRPDTool.this, isDarkMode());
+            }
+            aiDecisionSpaceDialog.updateAndShow();
+        });
+        scriptsM.add(decisionSpaceMI);
         
         mb.add(scriptsM);
 
@@ -884,6 +899,10 @@ public class PRPDTool extends JFrame {
 
     public FiltrationLabDialog getFiltrationLabDialog() {
         return filtrationLabDialog;
+    }
+
+    public AIDecisionSpaceDialog getAIDecisionSpaceDialog() {
+        return aiDecisionSpaceDialog;
     }
 
     public PRPDHistogram getHistogram() {
@@ -1572,7 +1591,7 @@ public class PRPDTool extends JFrame {
             rawPanel.add(rawHelp, BorderLayout.EAST);
             paramPanel.add(rawPanel);
 
-            useHwPhaseRefCb = new JCheckBox("Use HW Phase Ref (CH2)", false);
+            useHwPhaseRefCb = new JCheckBox("Use HW Phase Ref (CH2)", true);
             useHwPhaseRefCb.addActionListener(e -> {
                 if (useHwPhaseRefCb.isSelected()) {
                     java.util.List<String> problems = new java.util.ArrayList<>();
@@ -1686,6 +1705,7 @@ public class PRPDTool extends JFrame {
             classifyDialog = hybridClassificationDialog;
             aiModelBenchmarkDialog = new AIModelBenchmarkDialog(PRPDTool.this, isDarkMode());
             filtrationLabDialog = new FiltrationLabDialog(PRPDTool.this, isDarkMode());
+            aiDecisionSpaceDialog = new AIDecisionSpaceDialog(PRPDTool.this, isDarkMode());
 
             statisticalProfilesDialog = new StatisticalProfilesDialog(PRPDTool.this);
             singlePulseScopeDialog = new SinglePulseScopeDialog(PRPDTool.this, isDarkMode());
@@ -4716,7 +4736,9 @@ public class PRPDTool extends JFrame {
         }
         
         SwingUtilities.invokeLater(() -> {
-            new PRPDTool().setVisible(true);
+            PRPDTool tool = new PRPDTool();
+            tool.setExtendedState(JFrame.MAXIMIZED_BOTH);
+            tool.setVisible(true);
         });
     }
 }

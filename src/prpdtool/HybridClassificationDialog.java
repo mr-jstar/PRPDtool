@@ -191,6 +191,21 @@ public class HybridClassificationDialog extends JDialog {
         });
         rightTools.add(showBoxesCb);
 
+        JButton xaiSpaceBtn = new JButton("Przestrzeń Decyzyjna (XAI) >>");
+        xaiSpaceBtn.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        xaiSpaceBtn.setBackground(isDarkMode ? new Color(42, 52, 68) : new Color(220, 228, 238));
+        xaiSpaceBtn.setForeground(accentCol);
+        xaiSpaceBtn.setFocusPainted(false);
+        xaiSpaceBtn.addActionListener(e -> {
+            if (parent != null) {
+                AIDecisionSpaceDialog d = parent.getAIDecisionSpaceDialog();
+                if (d != null) {
+                    d.updateAndShow();
+                }
+            }
+        });
+        rightTools.add(xaiSpaceBtn);
+
         JButton helpBtn = new JButton("Przewodnik i pomoc");
         helpBtn.setFont(new Font("Segoe UI", Font.BOLD, 11));
         helpBtn.setFocusPainted(false);

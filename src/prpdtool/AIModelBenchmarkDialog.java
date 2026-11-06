@@ -30,6 +30,16 @@ public class AIModelBenchmarkDialog extends JDialog {
     private final PRPDTool parent;
     private final boolean isDarkMode;
     private final AIModelBenchmarkHelpDialog helpDialog;
+    private final DiagnosticCheatSheetDialog cheatSheetDialog;
+
+    private final ConfusionMatrixPanel confusionMatrixPanel;
+    private final MetricsBarChartPanel metricsBarChartPanel;
+    private final RocPrCurvePanel rocPrCurvePanel;
+    private final LearningCurvesPanel learningCurvesPanel;
+    private final JToggleButton lightModeToggleBtn;
+    private final JToggleButton langToggleBtn;
+    private final JTabbedPane tabbedPane;
+    private boolean isEnglishMode = false;
 
     private final JTable table;
     private final DefaultTableModel tableModel;
@@ -47,9 +57,14 @@ public class AIModelBenchmarkDialog extends JDialog {
         this.parent = parent;
         this.isDarkMode = isDarkMode;
         this.helpDialog = new AIModelBenchmarkHelpDialog(this, isDarkMode);
+        this.cheatSheetDialog = new DiagnosticCheatSheetDialog(this, isDarkMode);
+        this.confusionMatrixPanel = new ConfusionMatrixPanel(this, isDarkMode);
+        this.metricsBarChartPanel = new MetricsBarChartPanel(this, isDarkMode);
+        this.rocPrCurvePanel = new RocPrCurvePanel(this, isDarkMode);
+        this.learningCurvesPanel = new LearningCurvesPanel(this, isDarkMode);
 
-        setSize(1260, 780);
-        setMinimumSize(new Dimension(1080, 640));
+        setSize(1380, 850);
+        setMinimumSize(new Dimension(860, 520));
         setLocationRelativeTo(parent);
 
         Color bg = isDarkMode ? new Color(18, 22, 28) : new Color(245, 247, 250);
@@ -70,11 +85,11 @@ public class AIModelBenchmarkDialog extends JDialog {
         titleBox.setOpaque(false);
         titleBox.setLayout(new BoxLayout(titleBox, BoxLayout.Y_AXIS));
 
-        JLabel titleLbl = new JLabel("AI MODEL COMPARISON (1D, 2D, SEQUENTIAL & CIGRE ML)");
-        titleLbl.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        JLabel titleLbl = new JLabel("AI MODEL COMPARISON (11 ARCHITEKTUR)");
+        titleLbl.setFont(new Font("Segoe UI", Font.BOLD, 14));
         titleLbl.setForeground(isDarkMode ? new Color(0, 210, 255) : new Color(0, 102, 204));
 
-        JLabel subLbl = new JLabel("Wielomodelowe porównanie 11 architektur (2D Wizja, 1D Przebieg czasowy, Cechy CIGRE, Baza Wiedzy)");
+        JLabel subLbl = new JLabel("Porównanie 11 modeli (Wizja 2D, Przebiegi 1D, Cechy CIGRE, Baza Wiedzy)");
         subLbl.setFont(new Font("Segoe UI", Font.PLAIN, 11));
         subLbl.setForeground(isDarkMode ? new Color(170, 180, 195) : new Color(100, 110, 125));
 
@@ -82,10 +97,39 @@ public class AIModelBenchmarkDialog extends JDialog {
         titleBox.add(Box.createVerticalStrut(2));
         titleBox.add(subLbl);
 
-        JPanel topButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        JPanel topButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
         topButtons.setOpaque(false);
 
-        JButton helpBtn = new JButton("Poradnik modeli AI [?]");
+        lightModeToggleBtn = new JToggleButton("Wykresy do artykułu");
+        lightModeToggleBtn.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        lightModeToggleBtn.setFocusPainted(false);
+        lightModeToggleBtn.addActionListener(e -> {
+            boolean light = lightModeToggleBtn.isSelected();
+            lightModeToggleBtn.setText(light ? (isEnglishMode ? "Light Mode (Print)" : "Wykresy: Jasny (Druk)") : (isEnglishMode ? "Paper Mode" : "Wykresy do artykułu"));
+            confusionMatrixPanel.setLightMode(light);
+            metricsBarChartPanel.setLightMode(light);
+            rocPrCurvePanel.setLightMode(light);
+            learningCurvesPanel.setLightMode(light);
+        });
+        topButtons.add(lightModeToggleBtn);
+
+        langToggleBtn = new JToggleButton("Język: EN (Artykuł)");
+        langToggleBtn.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        langToggleBtn.setFocusPainted(false);
+        langToggleBtn.addActionListener(e -> {
+            setEnglishMode(langToggleBtn.isSelected());
+        });
+        topButtons.add(langToggleBtn);
+
+        JButton cheatSheetBtn = new JButton("Ściągawka [CIGRE]");
+        cheatSheetBtn.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        cheatSheetBtn.setBackground(isDarkMode ? new Color(48, 56, 72) : new Color(225, 235, 245));
+        cheatSheetBtn.setForeground(isDarkMode ? new Color(255, 185, 0) : new Color(180, 100, 0));
+        cheatSheetBtn.setFocusPainted(false);
+        cheatSheetBtn.addActionListener(e -> cheatSheetDialog.setVisible(true));
+        topButtons.add(cheatSheetBtn);
+
+        JButton helpBtn = new JButton("Poradnik [?]");
         helpBtn.setFont(new Font("Segoe UI", Font.BOLD, 11));
         helpBtn.setBackground(isDarkMode ? new Color(38, 45, 58) : new Color(225, 232, 242));
         helpBtn.setForeground(isDarkMode ? new Color(255, 224, 102) : new Color(140, 100, 0));
@@ -93,7 +137,7 @@ public class AIModelBenchmarkDialog extends JDialog {
         helpBtn.addActionListener(e -> helpDialog.setVisible(true));
         topButtons.add(helpBtn);
 
-        runBenchmarkBtn = new JButton("Uruchom Benchmark Wszystkich Modeli");
+        runBenchmarkBtn = new JButton("Uruchom Benchmark");
         runBenchmarkBtn.setFont(new Font("Segoe UI", Font.BOLD, 11));
         runBenchmarkBtn.setBackground(isDarkMode ? new Color(0, 120, 215) : new Color(0, 102, 204));
         runBenchmarkBtn.setForeground(Color.WHITE);
@@ -213,7 +257,16 @@ public class AIModelBenchmarkDialog extends JDialog {
         middleBox.add(tableScroll, BorderLayout.CENTER);
 
         centerPanel.add(middleBox, BorderLayout.CENTER);
-        getContentPane().add(centerPanel, BorderLayout.CENTER);
+        this.tabbedPane = new JTabbedPane();
+        tabbedPane.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        tabbedPane.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
+        tabbedPane.addTab("Arena Modeli (Tabela i Konsensus)", centerPanel);
+        tabbedPane.addTab("Macierz Pomyłek (Confusion Matrix)", confusionMatrixPanel);
+        tabbedPane.addTab("Wykres Słupkowy (Porównanie Metryk)", metricsBarChartPanel);
+        tabbedPane.addTab("Krzywe ROC & Precision-Recall", rocPrCurvePanel);
+        tabbedPane.addTab("Dynamika Uczenia (Learning Curves)", learningCurvesPanel);
+
+        getContentPane().add(tabbedPane, BorderLayout.CENTER);
 
         // --- BOTTOM BAR ---
         JPanel bottomBar = new JPanel(new BorderLayout(10, 0));
@@ -247,6 +300,30 @@ public class AIModelBenchmarkDialog extends JDialog {
         });
         group.add(b);
         return b;
+    }
+
+    public void setEnglishMode(boolean en) {
+        this.isEnglishMode = en;
+        if (langToggleBtn.isSelected() != en) {
+            langToggleBtn.setSelected(en);
+        }
+        langToggleBtn.setText(en ? "Język: EN (Artykuł)" : "Podpisy EN (Artykuł)");
+        lightModeToggleBtn.setText(lightModeToggleBtn.isSelected()
+                ? (en ? "Light Mode (Print)" : "Wykresy: Jasny (Druk)")
+                : (en ? "Paper Mode" : "Wykresy do artykułu"));
+        tabbedPane.setTitleAt(0, en ? "Model Arena (Table & Consensus)" : "Arena Modeli (Tabela i Konsensus)");
+        tabbedPane.setTitleAt(1, en ? "Confusion Matrix (Heatmap)" : "Macierz Pomyłek (Confusion Matrix)");
+        tabbedPane.setTitleAt(2, en ? "Metrics Bar Chart (Comparison)" : "Wykres Słupkowy (Porównanie Metryk)");
+        tabbedPane.setTitleAt(3, en ? "ROC & Precision-Recall Curves" : "Krzywe ROC & Precision-Recall");
+        tabbedPane.setTitleAt(4, en ? "Learning Curves (Dynamics)" : "Dynamika Uczenia (Learning Curves)");
+        confusionMatrixPanel.setEnglishMode(en);
+        metricsBarChartPanel.setEnglishMode(en);
+        rocPrCurvePanel.setEnglishMode(en);
+        learningCurvesPanel.setEnglishMode(en);
+    }
+
+    public boolean isEnglishMode() {
+        return isEnglishMode;
     }
 
     public void updateAndShow() {
